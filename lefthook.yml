@@ -1,0 +1,21 @@
+pre-commit:
+  parallel: false
+  commands:
+    001_fmt:
+      root: "runner/"
+      glob: "*.go"
+      stage_fixed: true
+      run: gofmt -w {staged_files}
+    002_fmt_check:
+      root: "runner/"
+      glob: "*.go"
+      run: gofmt -l {staged_files} | grep . && exit 1 || true
+    003_vet:
+      root: "runner/"
+      glob: "*.go"
+      run: go vet ./...
+    004_gitleaks:
+      run: gitleaks protect --staged
+    005_trivy:
+      glob: "Dockerfile"
+      run: trivy config runner/
