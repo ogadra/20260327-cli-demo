@@ -207,8 +207,6 @@ func TestStreamLongLine(t *testing.T) {
 
 // TestStreamOver100Lines verifies that commands producing more than 100 stdout
 // lines (exceeding the execStream helper's channel buffer) do not deadlock.
-// This test will deadlock with the current execStream implementation and only
-// pass after the helper is fixed to drain concurrently.
 func TestStreamOver100Lines(t *testing.T) {
 	s := newTestShell(t)
 	lines, exitCode, _ := execStream(t, s, `for i in $(seq 1 200); do echo "line $i"; done`)
