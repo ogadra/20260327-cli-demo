@@ -108,46 +108,6 @@ func (s *Shell) getStderr() string {
 	return s.stderrBuf.String()
 }
 
-// Execute runs a command in the persistent shell and returns stdout, exit code, stderr, and any error.
-func (s *Shell) Execute(command string) (string, int, string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.resetStderr()
-
-	marker := fmt.Sprintf("__MRK_%d_END__", time.Now().UnixNano())
-	script := fmt.Sprintf("%s\n__ec=$?\necho '%s'${__ec}\n", command, marker)
-
-	if _, err := io.WriteString(s.stdin, script); err != nil {
-		return "", -1, "", fmt.Errorf("write command: %w", err)
-	}
-
-	var stdoutLines []string
-	for s.stdout.Scan() {
-		line := s.stdout.Text()
-		if strings.HasPrefix(line, marker) {
-			ecStr := line[len(marker):]
-			exitCode, err := strconv.Atoi(ecStr)
-			if err != nil {
-				return "", -1, "", fmt.Errorf("parse exit code %q: %w", ecStr, err)
-			}
-			time.Sleep(50 * time.Millisecond)
-			stderr := s.getStderr()
-			stdout := strings.Join(stdoutLines, "\n")
-			if len(stdoutLines) > 0 {
-				stdout += "\n"
-			}
-			return stdout, exitCode, stderr, nil
-		}
-		stdoutLines = append(stdoutLines, line)
-	}
-
-	if err := s.stdout.Err(); err != nil {
-		return "", -1, "", fmt.Errorf("scan stdout: %w", err)
-	}
-	return "", -1, "", fmt.Errorf("unexpected end of stdout")
-}
-
 // ExecuteStream runs a command and sends each stdout line to the provided channel.
 // Returns exit code, stderr, and any error. The channel is closed when done.
 func (s *Shell) ExecuteStream(command string, stdoutCh chan<- string) (int, string, error) {

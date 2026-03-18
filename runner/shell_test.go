@@ -18,6 +18,21 @@ func newTestShell(t *testing.T) *Shell {
 	return s
 }
 
+// execStream is a test helper that runs ExecuteStream and collects stdout lines.
+func execStream(t *testing.T, s *Shell, command string) ([]string, int, string) {
+	t.Helper()
+	ch := make(chan string, 100)
+	exitCode, stderr, err := s.ExecuteStream(command, ch)
+	if err != nil {
+		t.Fatalf("ExecuteStream(%q) error: %v", command, err)
+	}
+	var lines []string
+	for line := range ch {
+		lines = append(lines, line)
+	}
+	return lines, exitCode, stderr
+}
+
 func TestNewShell(t *testing.T) {
 	s, err := NewShell()
 	if err != nil {
@@ -28,62 +43,50 @@ func TestNewShell(t *testing.T) {
 	}
 }
 
-func TestExecuteBasic(t *testing.T) {
+func TestStreamBasic(t *testing.T) {
 	s := newTestShell(t)
-	stdout, exitCode, stderr, err := s.Execute("echo hello")
-	if err != nil {
-		t.Fatalf("Execute() error: %v", err)
-	}
+	lines, exitCode, stderr := execStream(t, s, "echo hello")
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
-	if strings.TrimSpace(stdout) != "hello" {
-		t.Errorf("stdout = %q, want %q", stdout, "hello\n")
+	if len(lines) != 1 || lines[0] != "hello" {
+		t.Errorf("lines = %v, want [hello]", lines)
 	}
 	if stderr != "" {
 		t.Errorf("stderr = %q, want empty", stderr)
 	}
 }
 
-func TestExecuteExitCode(t *testing.T) {
+func TestStreamExitCode(t *testing.T) {
 	s := newTestShell(t)
-	_, exitCode, _, err := s.Execute("false")
-	if err != nil {
-		t.Fatalf("Execute() error: %v", err)
-	}
+	_, exitCode, _ := execStream(t, s, "false")
 	if exitCode != 1 {
 		t.Errorf("exitCode = %d, want 1", exitCode)
 	}
 }
 
-func TestExecuteStderr(t *testing.T) {
+func TestStreamStderr(t *testing.T) {
 	s := newTestShell(t)
-	stdout, exitCode, stderr, err := s.Execute("echo err >&2")
-	if err != nil {
-		t.Fatalf("Execute() error: %v", err)
-	}
+	lines, exitCode, stderr := execStream(t, s, "echo err >&2")
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
-	if stdout != "" {
-		t.Errorf("stdout = %q, want empty", stdout)
+	if len(lines) != 0 {
+		t.Errorf("lines = %v, want empty", lines)
 	}
 	if !strings.Contains(stderr, "err") {
 		t.Errorf("stderr = %q, want to contain %q", stderr, "err")
 	}
 }
 
-func TestExecuteStdoutAndStderr(t *testing.T) {
+func TestStreamStdoutAndStderr(t *testing.T) {
 	s := newTestShell(t)
-	stdout, exitCode, stderr, err := s.Execute("echo out && echo err >&2")
-	if err != nil {
-		t.Fatalf("Execute() error: %v", err)
-	}
+	lines, exitCode, stderr := execStream(t, s, "echo out && echo err >&2")
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
-	if !strings.Contains(stdout, "out") {
-		t.Errorf("stdout = %q, want to contain %q", stdout, "out")
+	if len(lines) != 1 || lines[0] != "out" {
+		t.Errorf("lines = %v, want [out]", lines)
 	}
 	if !strings.Contains(stderr, "err") {
 		t.Errorf("stderr = %q, want to contain %q", stderr, "err")
@@ -92,107 +95,51 @@ func TestExecuteStdoutAndStderr(t *testing.T) {
 
 func TestSessionPersistenceCd(t *testing.T) {
 	s := newTestShell(t)
-	_, _, _, err := s.Execute("cd /tmp")
-	if err != nil {
-		t.Fatalf("Execute(cd) error: %v", err)
-	}
-	stdout, exitCode, _, err := s.Execute("pwd")
-	if err != nil {
-		t.Fatalf("Execute(pwd) error: %v", err)
-	}
+	execStream(t, s, "cd /tmp")
+	lines, exitCode, _ := execStream(t, s, "pwd")
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
-	if strings.TrimSpace(stdout) != "/tmp" {
-		t.Errorf("stdout = %q, want %q", stdout, "/tmp\n")
+	if len(lines) != 1 || lines[0] != "/tmp" {
+		t.Errorf("lines = %v, want [/tmp]", lines)
 	}
 }
 
 func TestSessionPersistenceEnv(t *testing.T) {
 	s := newTestShell(t)
-	_, _, _, err := s.Execute("export FOO=bar")
-	if err != nil {
-		t.Fatalf("Execute(export) error: %v", err)
-	}
-	stdout, exitCode, _, err := s.Execute("echo $FOO")
-	if err != nil {
-		t.Fatalf("Execute(echo) error: %v", err)
-	}
+	execStream(t, s, "export FOO=bar")
+	lines, exitCode, _ := execStream(t, s, "echo $FOO")
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
-	if strings.TrimSpace(stdout) != "bar" {
-		t.Errorf("stdout = %q, want %q", stdout, "bar\n")
+	if len(lines) != 1 || lines[0] != "bar" {
+		t.Errorf("lines = %v, want [bar]", lines)
 	}
 }
 
 func TestSessionPersistenceAlias(t *testing.T) {
 	s := newTestShell(t)
-	_, _, _, err := s.Execute("alias greet='echo hi'")
-	if err != nil {
-		t.Fatalf("Execute(alias) error: %v", err)
-	}
-	_, _, _, err = s.Execute("shopt -s expand_aliases")
-	if err != nil {
-		t.Fatalf("Execute(shopt) error: %v", err)
-	}
-	stdout, exitCode, _, err := s.Execute("greet")
-	if err != nil {
-		t.Fatalf("Execute(greet) error: %v", err)
-	}
+	execStream(t, s, "alias greet='echo hi'")
+	execStream(t, s, "shopt -s expand_aliases")
+	lines, exitCode, _ := execStream(t, s, "greet")
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
-	if strings.TrimSpace(stdout) != "hi" {
-		t.Errorf("stdout = %q, want %q", stdout, "hi\n")
+	if len(lines) != 1 || lines[0] != "hi" {
+		t.Errorf("lines = %v, want [hi]", lines)
 	}
 }
 
-func TestExecuteMultilineOutput(t *testing.T) {
+func TestStreamMultilineOutput(t *testing.T) {
 	s := newTestShell(t)
-	stdout, exitCode, _, err := s.Execute("printf 'line1\nline2\nline3\n'")
-	if err != nil {
-		t.Fatalf("Execute() error: %v", err)
-	}
+	lines, exitCode, _ := execStream(t, s, "printf 'line1\nline2\nline3\n'")
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
-	}
-	lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")
-	if len(lines) != 3 {
-		t.Errorf("got %d lines, want 3: %q", len(lines), stdout)
-	}
-}
-
-func TestExecuteEmptyCommand(t *testing.T) {
-	s := newTestShell(t)
-	_, exitCode, _, err := s.Execute("")
-	if err != nil {
-		t.Fatalf("Execute() error: %v", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("exitCode = %d, want 0", exitCode)
-	}
-}
-
-func TestExecuteStream(t *testing.T) {
-	s := newTestShell(t)
-	ch := make(chan string, 10)
-	exitCode, _, err := s.ExecuteStream("printf 'a\nb\nc\n'", ch)
-	if err != nil {
-		t.Fatalf("ExecuteStream() error: %v", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("exitCode = %d, want 0", exitCode)
-	}
-
-	var lines []string
-	for line := range ch {
-		lines = append(lines, line)
 	}
 	if len(lines) != 3 {
 		t.Errorf("got %d lines, want 3: %v", len(lines), lines)
 	}
-	expected := []string{"a", "b", "c"}
+	expected := []string{"line1", "line2", "line3"}
 	for i, want := range expected {
 		if i < len(lines) && lines[i] != want {
 			t.Errorf("lines[%d] = %q, want %q", i, lines[i], want)
@@ -200,15 +147,11 @@ func TestExecuteStream(t *testing.T) {
 	}
 }
 
-func TestExecuteStreamExitCode(t *testing.T) {
+func TestStreamEmptyCommand(t *testing.T) {
 	s := newTestShell(t)
-	ch := make(chan string, 10)
-	exitCode, _, err := s.ExecuteStream("false", ch)
-	if err != nil {
-		t.Fatalf("ExecuteStream() error: %v", err)
-	}
-	if exitCode != 1 {
-		t.Errorf("exitCode = %d, want 1", exitCode)
+	_, exitCode, _ := execStream(t, s, "")
+	if exitCode != 0 {
+		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
 }
 
@@ -261,6 +204,10 @@ func (f *fakeCommander) StderrPipe() (io.ReadCloser, error) {
 func (f *fakeCommander) Start() error { return f.startErr }
 func (f *fakeCommander) Wait() error  { return f.waitErr }
 
+type nopWriteCloser struct{ io.Writer }
+
+func (nopWriteCloser) Close() error { return nil }
+
 func TestNewShellStdinPipeError(t *testing.T) {
 	_, err := newShellFromCommander(&fakeCommander{stdinErr: errFake})
 	if err == nil {
@@ -270,10 +217,6 @@ func TestNewShellStdinPipeError(t *testing.T) {
 		t.Errorf("error = %q, want to contain %q", err, "stdin pipe")
 	}
 }
-
-type nopWriteCloser struct{ io.Writer }
-
-func (nopWriteCloser) Close() error { return nil }
 
 func TestNewShellStdoutPipeError(t *testing.T) {
 	_, err := newShellFromCommander(&fakeCommander{
@@ -323,22 +266,7 @@ type failWriter struct{}
 func (failWriter) Write([]byte) (int, error) { return 0, errFake }
 func (failWriter) Close() error              { return nil }
 
-func TestExecuteWriteError(t *testing.T) {
-	s := &Shell{
-		stdin:  failWriter{},
-		stdout: bufio.NewScanner(strings.NewReader("")),
-		cmd:    &fakeCommander{},
-	}
-	_, _, _, err := s.Execute("echo hello")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "write command") {
-		t.Errorf("error = %q, want to contain %q", err, "write command")
-	}
-}
-
-func TestExecuteStreamWriteError(t *testing.T) {
+func TestStreamWriteError(t *testing.T) {
 	s := &Shell{
 		stdin:  failWriter{},
 		stdout: bufio.NewScanner(strings.NewReader("")),
@@ -354,22 +282,7 @@ func TestExecuteStreamWriteError(t *testing.T) {
 	}
 }
 
-func TestExecuteUnexpectedEOF(t *testing.T) {
-	s := &Shell{
-		stdin:  nopWriteCloser{&strings.Builder{}},
-		stdout: bufio.NewScanner(strings.NewReader("some output\n")),
-		cmd:    &fakeCommander{},
-	}
-	_, _, _, err := s.Execute("echo hello")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "unexpected end of stdout") {
-		t.Errorf("error = %q, want to contain %q", err, "unexpected end of stdout")
-	}
-}
-
-func TestExecuteStreamUnexpectedEOF(t *testing.T) {
+func TestStreamUnexpectedEOF(t *testing.T) {
 	s := &Shell{
 		stdin:  nopWriteCloser{&strings.Builder{}},
 		stdout: bufio.NewScanner(strings.NewReader("some output\n")),
@@ -390,22 +303,7 @@ type errReader struct{}
 
 func (errReader) Read([]byte) (int, error) { return 0, errFake }
 
-func TestExecuteScanError(t *testing.T) {
-	s := &Shell{
-		stdin:  nopWriteCloser{&strings.Builder{}},
-		stdout: bufio.NewScanner(errReader{}),
-		cmd:    &fakeCommander{},
-	}
-	_, _, _, err := s.Execute("echo hello")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "scan stdout") {
-		t.Errorf("error = %q, want to contain %q", err, "scan stdout")
-	}
-}
-
-func TestExecuteStreamScanError(t *testing.T) {
+func TestStreamScanError(t *testing.T) {
 	s := &Shell{
 		stdin:  nopWriteCloser{&strings.Builder{}},
 		stdout: bufio.NewScanner(errReader{}),
@@ -421,7 +319,7 @@ func TestExecuteStreamScanError(t *testing.T) {
 	}
 }
 
-// markerCapturingWriter captures what Execute writes to stdin so we can
+// markerCapturingWriter captures what ExecuteStream writes to stdin so we can
 // extract the marker and produce a fake stdout response with an invalid exit code.
 type markerCapturingWriter struct {
 	buf strings.Builder
@@ -433,7 +331,6 @@ func (w *markerCapturingWriter) Close() error                { return nil }
 func extractMarker(written string) string {
 	for _, line := range strings.Split(written, "\n") {
 		if strings.HasPrefix(line, "echo '__MRK_") {
-			// line is: echo '__MRK_<nano>_END__'${__ec}
 			start := strings.Index(line, "'") + 1
 			end := strings.LastIndex(line, "'")
 			if start > 0 && end > start {
@@ -444,51 +341,7 @@ func extractMarker(written string) string {
 	return ""
 }
 
-func TestExecuteInvalidExitCode(t *testing.T) {
-	// We need to capture the marker that Execute generates, then provide
-	// a stdout that has that marker followed by a non-numeric string.
-	// Use a pipe: Execute writes to stdin (captured), reads from stdout (we control).
-	stdinCapture := &markerCapturingWriter{}
-	stdoutR, stdoutW := io.Pipe()
-
-	s := &Shell{
-		stdin:  stdinCapture,
-		stdout: bufio.NewScanner(stdoutR),
-		cmd:    &fakeCommander{},
-	}
-
-	errCh := make(chan error, 1)
-	go func() {
-		_, _, _, err := s.Execute("echo hello")
-		errCh <- err
-	}()
-
-	// Wait a bit for Execute to write the script to stdin, then extract the marker
-	// and write a response with invalid exit code to stdout.
-	// Since stdinCapture is synchronous, by the time Execute calls stdout.Scan(),
-	// the script is already written.
-	// We need to give Execute a moment to write, then provide the response.
-	go func() {
-		for {
-			marker := extractMarker(stdinCapture.buf.String())
-			if marker != "" {
-				stdoutW.Write([]byte(marker + "notanumber\n"))
-				stdoutW.Close()
-				return
-			}
-		}
-	}()
-
-	err := <-errCh
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "parse exit code") {
-		t.Errorf("error = %q, want to contain %q", err, "parse exit code")
-	}
-}
-
-func TestExecuteStreamInvalidExitCode(t *testing.T) {
+func TestStreamInvalidExitCode(t *testing.T) {
 	stdinCapture := &markerCapturingWriter{}
 	stdoutR, stdoutW := io.Pipe()
 
