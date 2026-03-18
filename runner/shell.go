@@ -56,6 +56,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os/exec"
@@ -104,12 +105,14 @@ func (c *execCommander) StderrPipe() (io.ReadCloser, error) { return c.cmd.Stder
 // Shell manages a single persistent bash session.
 // Use [NewShell] to create an instance. Must be closed with [Shell.Close] when done.
 type Shell struct {
-	cmd       commander      // process lifecycle (Start/Wait/pipes)
-	stdin     io.WriteCloser // pipe to bash stdin; commands are written here
-	stdout    *bufio.Scanner // line scanner over bash stdout; used for marker detection
-	stderrBuf bytes.Buffer   // accumulates stderr output from the readStderr goroutine
-	stderrMu  sync.Mutex     // guards stderrBuf
-	mu        sync.Mutex     // serializes command execution (one command at a time)
+	cmd          commander      // process lifecycle (Start/Wait/pipes)
+	stdin        io.WriteCloser // pipe to bash stdin; commands are written here
+	stdout       *bufio.Scanner // line scanner over bash stdout; used for marker detection
+	stderrBuf    bytes.Buffer   // accumulates stderr output from the readStderr goroutine
+	stderrMu     sync.Mutex     // guards stderrBuf
+	stderrMarker string         // current marker string to detect in stderr
+	stderrDone   chan struct{}  // closed when stderr marker is detected
+	mu           sync.Mutex     // serializes command execution (one command at a time)
 }
 
 // newShellFromCommander creates a [Shell] from the given [commander].
@@ -123,22 +126,31 @@ func newShellFromCommander(cmd commander) (*Shell, error) {
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
+		stdin.Close()
 		return nil, fmt.Errorf("stdout pipe: %w", err)
 	}
 
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
+		stdin.Close()
+		stdoutPipe.Close()
 		return nil, fmt.Errorf("stderr pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
+		stdin.Close()
+		stdoutPipe.Close()
+		stderrPipe.Close()
 		return nil, fmt.Errorf("start bash: %w", err)
 	}
+
+	scanner := bufio.NewScanner(stdoutPipe)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024) // up to 1 MiB per line
 
 	s := &Shell{
 		cmd:    cmd,
 		stdin:  stdin,
-		stdout: bufio.NewScanner(stdoutPipe),
+		stdout: scanner,
 	}
 
 	go s.readStderr(stderrPipe)
@@ -156,6 +168,9 @@ func NewShell() (*Shell, error) {
 }
 
 // readStderr continuously reads from the stderr pipe and appends to stderrBuf.
+// When a stderr marker is set, it detects the marker line in the accumulated
+// output and signals stderrDone by closing the channel. The marker line itself
+// is stripped from the buffer.
 // It runs as a goroutine for the lifetime of the bash process.
 // Returns when the pipe is closed (i.e. bash exits).
 func (s *Shell) readStderr(r io.Reader) {
@@ -165,12 +180,36 @@ func (s *Shell) readStderr(r io.Reader) {
 		if n > 0 {
 			s.stderrMu.Lock()
 			s.stderrBuf.Write(buf[:n])
+			s.checkStderrMarker()
 			s.stderrMu.Unlock()
 		}
 		if err != nil {
 			return
 		}
 	}
+}
+
+// checkStderrMarker checks if the stderr buffer contains the current marker.
+// If found, it strips the marker line from the buffer and signals stderrDone.
+// Must be called with stderrMu held.
+func (s *Shell) checkStderrMarker() {
+	if s.stderrMarker == "" {
+		return
+	}
+	content := s.stderrBuf.String()
+	idx := strings.Index(content, s.stderrMarker)
+	if idx < 0 {
+		return
+	}
+	// Strip the marker line (marker + trailing newline) from the buffer.
+	markerEnd := idx + len(s.stderrMarker)
+	if markerEnd < len(content) && content[markerEnd] == '\n' {
+		markerEnd++
+	}
+	s.stderrBuf.Reset()
+	s.stderrBuf.WriteString(content[:idx] + content[markerEnd:])
+	s.stderrMarker = ""
+	close(s.stderrDone)
 }
 
 // resetStderr clears the stderr buffer. Called at the start of each command.
@@ -193,7 +232,7 @@ func (s *Shell) getStderr() string {
 //
 // Returns the exit code, accumulated stderr, and any error.
 // Calls are serialized: concurrent calls block until the previous one completes.
-func (s *Shell) ExecuteStream(command string, stdoutCh chan<- string) (int, string, error) {
+func (s *Shell) ExecuteStream(ctx context.Context, command string, stdoutCh chan<- string) (int, string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	defer close(stdoutCh)
@@ -201,12 +240,37 @@ func (s *Shell) ExecuteStream(command string, stdoutCh chan<- string) (int, stri
 	s.resetStderr()
 
 	marker := fmt.Sprintf("__MRK_%d_END__", time.Now().UnixNano())
-	script := fmt.Sprintf("%s\n__ec=$?\necho '%s'${__ec}\n", command, marker)
+
+	s.stderrMu.Lock()
+	s.stderrMarker = marker
+	s.stderrDone = make(chan struct{})
+	s.stderrMu.Unlock()
+
+	script := fmt.Sprintf("%s\n__ec=$?\nbuiltin echo '%s' >&2\nbuiltin echo ''\nbuiltin echo '%s'${__ec}\n", command, marker, marker)
+
+	if err := ctx.Err(); err != nil {
+		return -1, "", fmt.Errorf("context: %w", err)
+	}
 
 	if _, err := io.WriteString(s.stdin, script); err != nil {
 		return -1, "", fmt.Errorf("write command: %w", err)
 	}
 
+	// sendLine sends a line to stdoutCh, respecting context cancellation.
+	sendLine := func(line string) error {
+		select {
+		case stdoutCh <- line:
+			return nil
+		case <-ctx.Done():
+			return fmt.Errorf("context: %w", ctx.Err())
+		}
+	}
+
+	// The script emits an empty line before the marker to ensure a newline
+	// boundary after commands that produce output without a trailing newline
+	// (e.g. printf "no newline"). We track whether the previous line was
+	// empty so we can suppress it if it immediately precedes the marker.
+	var pendingEmpty bool
 	for s.stdout.Scan() {
 		line := s.stdout.Text()
 		if strings.HasPrefix(line, marker) {
@@ -215,11 +279,23 @@ func (s *Shell) ExecuteStream(command string, stdoutCh chan<- string) (int, stri
 			if err != nil {
 				return -1, "", fmt.Errorf("parse exit code %q: %w", ecStr, err)
 			}
-			time.Sleep(50 * time.Millisecond)
+			<-s.stderrDone
 			stderr := s.getStderr()
 			return exitCode, stderr, nil
 		}
-		stdoutCh <- line
+		if pendingEmpty {
+			if err := sendLine(""); err != nil {
+				return -1, "", err
+			}
+			pendingEmpty = false
+		}
+		if line == "" {
+			pendingEmpty = true
+		} else {
+			if err := sendLine(line); err != nil {
+				return -1, "", err
+			}
+		}
 	}
 
 	if err := s.stdout.Err(); err != nil {
@@ -230,7 +306,10 @@ func (s *Shell) ExecuteStream(command string, stdoutCh chan<- string) (int, stri
 
 // Close terminates the persistent shell session by sending "exit" to bash
 // and waiting for the process to finish.
+// It acquires mu to ensure no concurrent [Shell.ExecuteStream] is writing to stdin.
 func (s *Shell) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	_, err := io.WriteString(s.stdin, "exit\n")
 	if err != nil {
 		return fmt.Errorf("write exit: %w", err)

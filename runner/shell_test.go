@@ -2,12 +2,15 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 )
 
+// newTestShell creates a [Shell] for testing and registers cleanup.
 func newTestShell(t *testing.T) *Shell {
 	t.Helper()
 	s, err := NewShell()
@@ -18,11 +21,11 @@ func newTestShell(t *testing.T) *Shell {
 	return s
 }
 
-// execStream is a test helper that runs ExecuteStream and collects stdout lines.
+// execStream is a test helper that runs [Shell.ExecuteStream] and collects stdout lines.
 func execStream(t *testing.T, s *Shell, command string) ([]string, int, string) {
 	t.Helper()
 	ch := make(chan string, 100)
-	exitCode, stderr, err := s.ExecuteStream(command, ch)
+	exitCode, stderr, err := s.ExecuteStream(context.Background(), command, ch)
 	if err != nil {
 		t.Fatalf("ExecuteStream(%q) error: %v", command, err)
 	}
@@ -33,6 +36,7 @@ func execStream(t *testing.T, s *Shell, command string) ([]string, int, string) 
 	return lines, exitCode, stderr
 }
 
+// TestNewShell verifies that a Shell can be created and closed successfully.
 func TestNewShell(t *testing.T) {
 	s, err := NewShell()
 	if err != nil {
@@ -43,6 +47,7 @@ func TestNewShell(t *testing.T) {
 	}
 }
 
+// TestStreamBasic verifies basic command execution with stdout and exit code.
 func TestStreamBasic(t *testing.T) {
 	s := newTestShell(t)
 	lines, exitCode, stderr := execStream(t, s, "echo hello")
@@ -57,6 +62,7 @@ func TestStreamBasic(t *testing.T) {
 	}
 }
 
+// TestStreamExitCode verifies that a failing command returns exit code 1.
 func TestStreamExitCode(t *testing.T) {
 	s := newTestShell(t)
 	_, exitCode, _ := execStream(t, s, "false")
@@ -65,6 +71,7 @@ func TestStreamExitCode(t *testing.T) {
 	}
 }
 
+// TestStreamStderr verifies that stderr output is captured separately.
 func TestStreamStderr(t *testing.T) {
 	s := newTestShell(t)
 	lines, exitCode, stderr := execStream(t, s, "echo err >&2")
@@ -79,6 +86,7 @@ func TestStreamStderr(t *testing.T) {
 	}
 }
 
+// TestStreamStdoutAndStderr verifies that stdout and stderr are separated correctly.
 func TestStreamStdoutAndStderr(t *testing.T) {
 	s := newTestShell(t)
 	lines, exitCode, stderr := execStream(t, s, "echo out && echo err >&2")
@@ -93,6 +101,7 @@ func TestStreamStdoutAndStderr(t *testing.T) {
 	}
 }
 
+// TestSessionPersistenceCd verifies that cd persists across commands.
 func TestSessionPersistenceCd(t *testing.T) {
 	s := newTestShell(t)
 	execStream(t, s, "cd /tmp")
@@ -105,6 +114,7 @@ func TestSessionPersistenceCd(t *testing.T) {
 	}
 }
 
+// TestSessionPersistenceEnv verifies that exported env vars persist across commands.
 func TestSessionPersistenceEnv(t *testing.T) {
 	s := newTestShell(t)
 	execStream(t, s, "export FOO=bar")
@@ -117,6 +127,7 @@ func TestSessionPersistenceEnv(t *testing.T) {
 	}
 }
 
+// TestSessionPersistenceAlias verifies that aliases persist across commands.
 func TestSessionPersistenceAlias(t *testing.T) {
 	s := newTestShell(t)
 	execStream(t, s, "alias greet='echo hi'")
@@ -130,6 +141,7 @@ func TestSessionPersistenceAlias(t *testing.T) {
 	}
 }
 
+// TestStreamMultilineOutput verifies that multiple output lines are collected correctly.
 func TestStreamMultilineOutput(t *testing.T) {
 	s := newTestShell(t)
 	lines, exitCode, _ := execStream(t, s, "printf 'line1\nline2\nline3\n'")
@@ -147,6 +159,7 @@ func TestStreamMultilineOutput(t *testing.T) {
 	}
 }
 
+// TestStreamEmptyCommand verifies that an empty command succeeds with exit code 0.
 func TestStreamEmptyCommand(t *testing.T) {
 	s := newTestShell(t)
 	_, exitCode, _ := execStream(t, s, "")
@@ -155,6 +168,64 @@ func TestStreamEmptyCommand(t *testing.T) {
 	}
 }
 
+// TestStreamOutputWithEmptyLines verifies that empty lines in command output are preserved.
+func TestStreamOutputWithEmptyLines(t *testing.T) {
+	s := newTestShell(t)
+	lines, exitCode, _ := execStream(t, s, `printf 'a\n\nb\n'`)
+	if exitCode != 0 {
+		t.Errorf("exitCode = %d, want 0", exitCode)
+	}
+	expected := []string{"a", "", "b"}
+	if len(lines) != len(expected) {
+		t.Fatalf("got %d lines %v, want %v", len(lines), lines, expected)
+	}
+	for i, want := range expected {
+		if lines[i] != want {
+			t.Errorf("lines[%d] = %q, want %q", i, lines[i], want)
+		}
+	}
+}
+
+// TestStreamLongLine verifies that lines exceeding the default 64KiB scanner buffer work.
+func TestStreamLongLine(t *testing.T) {
+	s := newTestShell(t)
+	lines, exitCode, _ := execStream(t, s, `python3 -c "print('A'*100000)" 2>/dev/null || printf '%0100000d' 0`)
+	if exitCode != 0 {
+		t.Errorf("exitCode = %d, want 0", exitCode)
+	}
+	if len(lines) != 1 || len(lines[0]) != 100000 {
+		t.Errorf("got %d lines, first line length = %d, want 1 line of 100000 chars", len(lines), len(lines[0]))
+	}
+}
+
+// TestStreamStderrLargeOutput verifies that large stderr output is fully captured
+// via the stderr marker protocol (not lost by a fixed sleep).
+func TestStreamStderrLargeOutput(t *testing.T) {
+	s := newTestShell(t)
+	_, exitCode, stderr := execStream(t, s, `for i in $(seq 1 500); do echo "stderr line $i" >&2; done`)
+	if exitCode != 0 {
+		t.Errorf("exitCode = %d, want 0", exitCode)
+	}
+	lines := strings.Split(strings.TrimSpace(stderr), "\n")
+	if len(lines) != 500 {
+		t.Errorf("got %d stderr lines, want 500", len(lines))
+	}
+}
+
+// TestStreamNoTrailingNewline verifies that commands producing output without
+// a trailing newline do not hang the marker detection.
+func TestStreamNoTrailingNewline(t *testing.T) {
+	s := newTestShell(t)
+	lines, exitCode, _ := execStream(t, s, `printf "no newline"`)
+	if exitCode != 0 {
+		t.Errorf("exitCode = %d, want 0", exitCode)
+	}
+	if len(lines) != 1 || lines[0] != "no newline" {
+		t.Errorf("lines = %v, want [no newline]", lines)
+	}
+}
+
+// TestClose verifies that Close terminates the bash session cleanly.
 func TestClose(t *testing.T) {
 	s, err := NewShell()
 	if err != nil {
@@ -169,6 +240,8 @@ func TestClose(t *testing.T) {
 
 var errFake = errors.New("fake error")
 
+// fakeCommander is a test double for [commander] that injects errors
+// into pipe creation and process lifecycle methods.
 type fakeCommander struct {
 	stdinErr  error
 	stdoutErr error
@@ -180,6 +253,7 @@ type fakeCommander struct {
 	stderrR   io.ReadCloser
 }
 
+// StdinPipe returns the configured writer or error.
 func (f *fakeCommander) StdinPipe() (io.WriteCloser, error) {
 	if f.stdinErr != nil {
 		return nil, f.stdinErr
@@ -187,6 +261,7 @@ func (f *fakeCommander) StdinPipe() (io.WriteCloser, error) {
 	return f.stdinW, nil
 }
 
+// StdoutPipe returns the configured reader or error.
 func (f *fakeCommander) StdoutPipe() (io.ReadCloser, error) {
 	if f.stdoutErr != nil {
 		return nil, f.stdoutErr
@@ -194,6 +269,7 @@ func (f *fakeCommander) StdoutPipe() (io.ReadCloser, error) {
 	return f.stdoutR, nil
 }
 
+// StderrPipe returns the configured reader or error.
 func (f *fakeCommander) StderrPipe() (io.ReadCloser, error) {
 	if f.stderrErr != nil {
 		return nil, f.stderrErr
@@ -201,13 +277,40 @@ func (f *fakeCommander) StderrPipe() (io.ReadCloser, error) {
 	return f.stderrR, nil
 }
 
+// Start returns the configured error.
 func (f *fakeCommander) Start() error { return f.startErr }
-func (f *fakeCommander) Wait() error  { return f.waitErr }
 
+// Wait returns the configured error.
+func (f *fakeCommander) Wait() error { return f.waitErr }
+
+// nopWriteCloser wraps an [io.Writer] with a no-op Close method.
 type nopWriteCloser struct{ io.Writer }
 
+// Close is a no-op.
 func (nopWriteCloser) Close() error { return nil }
 
+// trackingCloser wraps an [io.Writer] and records whether Close was called.
+type trackingCloser struct {
+	io.Writer
+	closed bool
+}
+
+// Close records the call and returns nil.
+func (t *trackingCloser) Close() error { t.closed = true; return nil }
+
+// trackingReadCloser wraps an [io.Reader] and records whether Close was called.
+type trackingReadCloser struct {
+	io.Reader
+	closed bool
+}
+
+// Read delegates to the wrapped reader.
+func (t *trackingReadCloser) Read(p []byte) (int, error) { return t.Reader.Read(p) }
+
+// Close records the call and returns nil.
+func (t *trackingReadCloser) Close() error { t.closed = true; return nil }
+
+// TestNewShellStdinPipeError verifies that a stdin pipe error is reported correctly.
 func TestNewShellStdinPipeError(t *testing.T) {
 	_, err := newShellFromCommander(&fakeCommander{stdinErr: errFake})
 	if err == nil {
@@ -218,9 +321,12 @@ func TestNewShellStdinPipeError(t *testing.T) {
 	}
 }
 
+// TestNewShellStdoutPipeError verifies that a stdout pipe error is reported
+// and previously acquired pipes are closed (no FD leak).
 func TestNewShellStdoutPipeError(t *testing.T) {
+	stdinTracker := &trackingCloser{Writer: &strings.Builder{}}
 	_, err := newShellFromCommander(&fakeCommander{
-		stdinW:    nopWriteCloser{&strings.Builder{}},
+		stdinW:    stdinTracker,
 		stdoutErr: errFake,
 	})
 	if err == nil {
@@ -229,12 +335,19 @@ func TestNewShellStdoutPipeError(t *testing.T) {
 	if !strings.Contains(err.Error(), "stdout pipe") {
 		t.Errorf("error = %q, want to contain %q", err, "stdout pipe")
 	}
+	if !stdinTracker.closed {
+		t.Error("stdin pipe was not closed on stdout pipe error (FD leak)")
+	}
 }
 
+// TestNewShellStderrPipeError verifies that a stderr pipe error is reported
+// and previously acquired pipes are closed (no FD leak).
 func TestNewShellStderrPipeError(t *testing.T) {
+	stdinTracker := &trackingCloser{Writer: &strings.Builder{}}
+	stdoutTracker := &trackingReadCloser{Reader: strings.NewReader("")}
 	_, err := newShellFromCommander(&fakeCommander{
-		stdinW:    nopWriteCloser{&strings.Builder{}},
-		stdoutR:   io.NopCloser(strings.NewReader("")),
+		stdinW:    stdinTracker,
+		stdoutR:   stdoutTracker,
 		stderrErr: errFake,
 	})
 	if err == nil {
@@ -243,13 +356,24 @@ func TestNewShellStderrPipeError(t *testing.T) {
 	if !strings.Contains(err.Error(), "stderr pipe") {
 		t.Errorf("error = %q, want to contain %q", err, "stderr pipe")
 	}
+	if !stdinTracker.closed {
+		t.Error("stdin pipe was not closed on stderr pipe error (FD leak)")
+	}
+	if !stdoutTracker.closed {
+		t.Error("stdout pipe was not closed on stderr pipe error (FD leak)")
+	}
 }
 
+// TestNewShellStartError verifies that a process start error is reported
+// and all acquired pipes are closed (no FD leak).
 func TestNewShellStartError(t *testing.T) {
+	stdinTracker := &trackingCloser{Writer: &strings.Builder{}}
+	stdoutTracker := &trackingReadCloser{Reader: strings.NewReader("")}
+	stderrTracker := &trackingReadCloser{Reader: strings.NewReader("")}
 	_, err := newShellFromCommander(&fakeCommander{
-		stdinW:   nopWriteCloser{&strings.Builder{}},
-		stdoutR:  io.NopCloser(strings.NewReader("")),
-		stderrR:  io.NopCloser(strings.NewReader("")),
+		stdinW:   stdinTracker,
+		stdoutR:  stdoutTracker,
+		stderrR:  stderrTracker,
 		startErr: errFake,
 	})
 	if err == nil {
@@ -258,14 +382,147 @@ func TestNewShellStartError(t *testing.T) {
 	if !strings.Contains(err.Error(), "start bash") {
 		t.Errorf("error = %q, want to contain %q", err, "start bash")
 	}
+	if !stdinTracker.closed {
+		t.Error("stdin pipe was not closed on start error (FD leak)")
+	}
+	if !stdoutTracker.closed {
+		t.Error("stdout pipe was not closed on start error (FD leak)")
+	}
+	if !stderrTracker.closed {
+		t.Error("stderr pipe was not closed on start error (FD leak)")
+	}
+}
+
+// TestStreamContextCanceled verifies that a pre-canceled context returns immediately.
+func TestStreamContextCanceled(t *testing.T) {
+	s := newTestShell(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+	ch := make(chan string, 100)
+	_, _, err := s.ExecuteStream(ctx, `echo hello`, ch)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "context") {
+		t.Errorf("error = %q, want to contain %q", err, "context")
+	}
+}
+
+// TestStreamContextCanceledDuringSend verifies that cancellation during stdout
+// line sending returns a context error instead of deadlocking.
+func TestStreamContextCanceledDuringSend(t *testing.T) {
+	s := newTestShell(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := make(chan string)
+	errCh := make(chan error, 1)
+	go func() {
+		_, _, err := s.ExecuteStream(ctx, `echo line1; echo line2; echo line3`, ch)
+		errCh <- err
+	}()
+	<-ch
+	cancel()
+	for range ch {
+	}
+	err := <-errCh
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "context") {
+		t.Errorf("error = %q, want to contain %q", err, "context")
+	}
+}
+
+// TestStreamContextCanceledDuringEmptyLine verifies that cancellation during
+// an empty line send returns a context error.
+func TestStreamContextCanceledDuringEmptyLine(t *testing.T) {
+	s := newTestShell(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := make(chan string)
+	errCh := make(chan error, 1)
+	go func() {
+		_, _, err := s.ExecuteStream(ctx, `printf 'a\n\nb\n'`, ch)
+		errCh <- err
+	}()
+	<-ch // read "a"
+	cancel()
+	for range ch {
+	}
+	err := <-errCh
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "context") {
+		t.Errorf("error = %q, want to contain %q", err, "context")
+	}
+}
+
+// TestStreamSlowConsumer verifies that ExecuteStream works with an unbuffered channel.
+func TestStreamSlowConsumer(t *testing.T) {
+	s := newTestShell(t)
+	ch := make(chan string)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range ch {
+		}
+	}()
+	exitCode, _, err := s.ExecuteStream(context.Background(), `for i in $(seq 1 10); do echo "line $i"; done`, ch)
+	<-done
+	if err != nil {
+		t.Fatalf("ExecuteStream error: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("exitCode = %d, want 0", exitCode)
+	}
+}
+
+// TestCheckStderrMarkerNoMarkerSet verifies that checkStderrMarker is a no-op
+// when no marker is set.
+func TestCheckStderrMarkerNoMarkerSet(t *testing.T) {
+	s := &Shell{}
+	s.stderrMu.Lock()
+	s.stderrBuf.WriteString("some output")
+	s.checkStderrMarker()
+	s.stderrMu.Unlock()
+	if got := s.getStderr(); got != "some output" {
+		t.Errorf("stderr = %q, want %q", got, "some output")
+	}
+}
+
+// TestCheckStderrMarkerNoTrailingNewline verifies that checkStderrMarker handles
+// a marker at the end of the buffer without a trailing newline.
+func TestCheckStderrMarkerNoTrailingNewline(t *testing.T) {
+	s := &Shell{}
+	s.stderrMarker = "__MRK_TEST__"
+	s.stderrDone = make(chan struct{})
+
+	s.stderrMu.Lock()
+	s.stderrBuf.WriteString("some error\n__MRK_TEST__")
+	s.checkStderrMarker()
+	s.stderrMu.Unlock()
+
+	select {
+	case <-s.stderrDone:
+	default:
+		t.Fatal("stderrDone was not closed")
+	}
+
+	got := s.getStderr()
+	if got != "some error\n" {
+		t.Errorf("stderr = %q, want %q", got, "some error\n")
+	}
 }
 
 // failWriter always returns an error on Write.
 type failWriter struct{}
 
+// Write always returns errFake.
 func (failWriter) Write([]byte) (int, error) { return 0, errFake }
-func (failWriter) Close() error              { return nil }
 
+// Close is a no-op.
+func (failWriter) Close() error { return nil }
+
+// TestStreamWriteError verifies that a stdin write failure is reported.
 func TestStreamWriteError(t *testing.T) {
 	s := &Shell{
 		stdin:  failWriter{},
@@ -273,7 +530,7 @@ func TestStreamWriteError(t *testing.T) {
 		cmd:    &fakeCommander{},
 	}
 	ch := make(chan string, 10)
-	_, _, err := s.ExecuteStream("echo hello", ch)
+	_, _, err := s.ExecuteStream(context.Background(), "echo hello", ch)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -282,6 +539,7 @@ func TestStreamWriteError(t *testing.T) {
 	}
 }
 
+// TestStreamUnexpectedEOF verifies that stdout closing without a marker is reported.
 func TestStreamUnexpectedEOF(t *testing.T) {
 	s := &Shell{
 		stdin:  nopWriteCloser{&strings.Builder{}},
@@ -289,7 +547,7 @@ func TestStreamUnexpectedEOF(t *testing.T) {
 		cmd:    &fakeCommander{},
 	}
 	ch := make(chan string, 10)
-	_, _, err := s.ExecuteStream("echo hello", ch)
+	_, _, err := s.ExecuteStream(context.Background(), "echo hello", ch)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -301,8 +559,10 @@ func TestStreamUnexpectedEOF(t *testing.T) {
 // errReader returns an error on Read (for scanner error path).
 type errReader struct{}
 
+// Read always returns errFake.
 func (errReader) Read([]byte) (int, error) { return 0, errFake }
 
+// TestStreamScanError verifies that a scanner read error is reported.
 func TestStreamScanError(t *testing.T) {
 	s := &Shell{
 		stdin:  nopWriteCloser{&strings.Builder{}},
@@ -310,7 +570,7 @@ func TestStreamScanError(t *testing.T) {
 		cmd:    &fakeCommander{},
 	}
 	ch := make(chan string, 10)
-	_, _, err := s.ExecuteStream("echo hello", ch)
+	_, _, err := s.ExecuteStream(context.Background(), "echo hello", ch)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -319,18 +579,35 @@ func TestStreamScanError(t *testing.T) {
 	}
 }
 
-// markerCapturingWriter captures what ExecuteStream writes to stdin so we can
-// extract the marker and produce a fake stdout response with an invalid exit code.
+// markerCapturingWriter captures what [Shell.ExecuteStream] writes to stdin
+// so we can extract the marker and produce a fake stdout response.
+// All methods are safe for concurrent use.
 type markerCapturingWriter struct {
+	mu  sync.Mutex
 	buf strings.Builder
 }
 
-func (w *markerCapturingWriter) Write(p []byte) (int, error) { return w.buf.Write(p) }
-func (w *markerCapturingWriter) Close() error                { return nil }
+// Write appends data to the internal buffer.
+func (w *markerCapturingWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.buf.Write(p)
+}
 
+// Close is a no-op.
+func (w *markerCapturingWriter) Close() error { return nil }
+
+// String returns the current buffer contents.
+func (w *markerCapturingWriter) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.buf.String()
+}
+
+// extractMarker parses a marker string from the captured stdin script.
 func extractMarker(written string) string {
 	for _, line := range strings.Split(written, "\n") {
-		if strings.HasPrefix(line, "echo '__MRK_") {
+		if strings.HasPrefix(line, "builtin echo '__MRK_") {
 			start := strings.Index(line, "'") + 1
 			end := strings.LastIndex(line, "'")
 			if start > 0 && end > start {
@@ -341,6 +618,8 @@ func extractMarker(written string) string {
 	return ""
 }
 
+// TestStreamInvalidExitCode verifies that an unparseable exit code after the
+// marker is reported as an error.
 func TestStreamInvalidExitCode(t *testing.T) {
 	stdinCapture := &markerCapturingWriter{}
 	stdoutR, stdoutW := io.Pipe()
@@ -354,13 +633,13 @@ func TestStreamInvalidExitCode(t *testing.T) {
 	errCh := make(chan error, 1)
 	ch := make(chan string, 10)
 	go func() {
-		_, _, err := s.ExecuteStream("echo hello", ch)
+		_, _, err := s.ExecuteStream(context.Background(), "echo hello", ch)
 		errCh <- err
 	}()
 
 	go func() {
 		for {
-			marker := extractMarker(stdinCapture.buf.String())
+			marker := extractMarker(stdinCapture.String())
 			if marker != "" {
 				stdoutW.Write([]byte(marker + "notanumber\n"))
 				stdoutW.Close()
@@ -378,6 +657,7 @@ func TestStreamInvalidExitCode(t *testing.T) {
 	}
 }
 
+// TestCloseWriteError verifies that a stdin write failure during Close is reported.
 func TestCloseWriteError(t *testing.T) {
 	s := &Shell{
 		stdin: failWriter{},
@@ -392,6 +672,7 @@ func TestCloseWriteError(t *testing.T) {
 	}
 }
 
+// TestCloseWaitError verifies that a process wait error during Close is propagated.
 func TestCloseWaitError(t *testing.T) {
 	s := &Shell{
 		stdin: nopWriteCloser{&strings.Builder{}},
