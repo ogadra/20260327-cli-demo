@@ -26,6 +26,8 @@ func newTestShell(t *testing.T) *Shell {
 // It drains the channel concurrently to avoid deadlocks when output exceeds the buffer.
 func execStream(t *testing.T, s *Shell, command string) ([]string, int, string) {
 	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	ch := make(chan string, 100)
 	var lines []string
 	done := make(chan struct{})
@@ -35,7 +37,7 @@ func execStream(t *testing.T, s *Shell, command string) ([]string, int, string) 
 			lines = append(lines, line)
 		}
 	}()
-	exitCode, stderr, err := s.ExecuteStream(context.Background(), command, ch)
+	exitCode, stderr, err := s.ExecuteStream(ctx, command, ch)
 	if err != nil {
 		t.Fatalf("ExecuteStream(%q) error: %v", command, err)
 	}
@@ -196,7 +198,7 @@ func TestStreamOutputWithEmptyLines(t *testing.T) {
 // TestStreamLongLine verifies that lines exceeding the default 64KiB scanner buffer work.
 func TestStreamLongLine(t *testing.T) {
 	s := newTestShell(t)
-	lines, exitCode, _ := execStream(t, s, `python3 -c "print('A'*100000)" 2>/dev/null || printf '%0100000d' 0`)
+	lines, exitCode, _ := execStream(t, s, `python3 -c "print('A'*100000)" 2>/dev/null || printf '%0100000d\n' 0`)
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
