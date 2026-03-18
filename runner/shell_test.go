@@ -22,17 +22,23 @@ func newTestShell(t *testing.T) *Shell {
 }
 
 // execStream is a test helper that runs [Shell.ExecuteStream] and collects stdout lines.
+// It drains the channel concurrently to avoid deadlocks when output exceeds the buffer.
 func execStream(t *testing.T, s *Shell, command string) ([]string, int, string) {
 	t.Helper()
 	ch := make(chan string, 100)
+	var lines []string
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for line := range ch {
+			lines = append(lines, line)
+		}
+	}()
 	exitCode, stderr, err := s.ExecuteStream(context.Background(), command, ch)
 	if err != nil {
 		t.Fatalf("ExecuteStream(%q) error: %v", command, err)
 	}
-	var lines []string
-	for line := range ch {
-		lines = append(lines, line)
-	}
+	<-done
 	return lines, exitCode, stderr
 }
 
@@ -195,6 +201,21 @@ func TestStreamLongLine(t *testing.T) {
 	}
 	if len(lines) != 1 || len(lines[0]) != 100000 {
 		t.Errorf("got %d lines, first line length = %d, want 1 line of 100000 chars", len(lines), len(lines[0]))
+	}
+}
+
+// TestStreamOver100Lines verifies that commands producing more than 100 stdout
+// lines (exceeding the execStream helper's channel buffer) do not deadlock.
+// This test will deadlock with the current execStream implementation and only
+// pass after the helper is fixed to drain concurrently.
+func TestStreamOver100Lines(t *testing.T) {
+	s := newTestShell(t)
+	lines, exitCode, _ := execStream(t, s, `for i in $(seq 1 200); do echo "line $i"; done`)
+	if exitCode != 0 {
+		t.Errorf("exitCode = %d, want 0", exitCode)
+	}
+	if len(lines) != 200 {
+		t.Errorf("got %d lines, want 200", len(lines))
 	}
 }
 
@@ -539,6 +560,28 @@ func TestStreamWriteError(t *testing.T) {
 	}
 }
 
+// TestStreamWriteErrorMarksBroken verifies that a stdin write failure marks
+// the session as broken, preventing subsequent commands.
+func TestStreamWriteErrorMarksBroken(t *testing.T) {
+	s := &Shell{
+		stdin:  failWriter{},
+		stdout: bufio.NewScanner(strings.NewReader("")),
+		cmd:    &fakeCommander{},
+	}
+	ch := make(chan string, 10)
+	s.ExecuteStream(context.Background(), "echo hello", ch)
+
+	// Next call should fail with desynchronized error.
+	ch2 := make(chan string, 10)
+	_, _, err := s.ExecuteStream(context.Background(), "echo hello", ch2)
+	if err == nil {
+		t.Fatal("expected broken session error, got nil")
+	}
+	if !strings.Contains(err.Error(), "desynchronized") {
+		t.Errorf("error = %q, want to contain %q", err, "desynchronized")
+	}
+}
+
 // TestStreamUnexpectedEOF verifies that stdout closing without a marker is reported.
 func TestStreamUnexpectedEOF(t *testing.T) {
 	s := &Shell{
@@ -745,3 +788,49 @@ func TestCloseWaitError(t *testing.T) {
 		t.Errorf("error = %v, want %v", err, errFake)
 	}
 }
+
+// TestCloseCallsWaitOnWriteError verifies that Close calls Wait even when
+// writing "exit" to stdin fails, so the process is properly reaped.
+func TestCloseCallsWaitOnWriteError(t *testing.T) {
+	cmd := &fakeCommander{}
+	tc := &trackingCommander{inner: cmd}
+	s := &Shell{
+		stdin: failWriter{},
+		cmd:   tc,
+	}
+	s.Close()
+	if !tc.waitCalled {
+		t.Error("Wait() was not called after write exit failure")
+	}
+}
+
+// TestCloseWriteAndWaitError verifies that Close returns a combined error
+// when both writing "exit" and waiting for the process fail.
+func TestCloseWriteAndWaitError(t *testing.T) {
+	s := &Shell{
+		stdin: failWriter{},
+		cmd:   &fakeCommander{waitErr: errFake},
+	}
+	err := s.Close()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "write exit") {
+		t.Errorf("error = %q, want to contain %q", err, "write exit")
+	}
+	if !strings.Contains(err.Error(), "wait") {
+		t.Errorf("error = %q, want to contain %q", err, "wait")
+	}
+}
+
+// trackingCommander wraps a [commander] and records whether Wait was called.
+type trackingCommander struct {
+	inner      commander
+	waitCalled bool
+}
+
+func (t *trackingCommander) Start() error                       { return t.inner.Start() }
+func (t *trackingCommander) Wait() error                        { t.waitCalled = true; return t.inner.Wait() }
+func (t *trackingCommander) StdinPipe() (io.WriteCloser, error) { return t.inner.StdinPipe() }
+func (t *trackingCommander) StdoutPipe() (io.ReadCloser, error) { return t.inner.StdoutPipe() }
+func (t *trackingCommander) StderrPipe() (io.ReadCloser, error) { return t.inner.StderrPipe() }

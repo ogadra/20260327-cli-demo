@@ -260,7 +260,8 @@ func (s *Shell) ExecuteStream(ctx context.Context, command string, stdoutCh chan
 	}
 
 	if _, err := io.WriteString(s.stdin, script); err != nil {
-		return -1, "", fmt.Errorf("write command: %w", err)
+		s.broken = fmt.Errorf("shell session desynchronized: write command: %w", err)
+		return -1, "", s.broken
 	}
 
 	// sendLine sends a line to stdoutCh, respecting context cancellation.
@@ -332,9 +333,16 @@ func (s *Shell) ExecuteStream(ctx context.Context, command string, stdoutCh chan
 func (s *Shell) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err := io.WriteString(s.stdin, "exit\n")
-	if err != nil {
-		return fmt.Errorf("write exit: %w", err)
+	var writeErr error
+	if _, err := io.WriteString(s.stdin, "exit\n"); err != nil {
+		writeErr = fmt.Errorf("write exit: %w", err)
 	}
-	return s.cmd.Wait()
+	waitErr := s.cmd.Wait()
+	if writeErr != nil && waitErr != nil {
+		return fmt.Errorf("%v; wait: %w", writeErr, waitErr)
+	}
+	if writeErr != nil {
+		return writeErr
+	}
+	return waitErr
 }
