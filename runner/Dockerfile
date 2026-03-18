@@ -4,7 +4,8 @@ COPY go.mod *.go ./
 
 # test stage
 FROM build AS test
-RUN CGO_ENABLED=0 go test -v ./...
+RUN apk add --no-cache bash
+RUN CGO_ENABLED=0 go test -v -cover ./...
 
 # binary build
 FROM build AS binary
