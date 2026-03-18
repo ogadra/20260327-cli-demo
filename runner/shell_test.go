@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // newTestShell creates a [Shell] for testing and registers cleanup.
@@ -688,6 +689,7 @@ func TestStreamInvalidExitCode(t *testing.T) {
 				stdoutW.Close()
 				return
 			}
+			time.Sleep(time.Millisecond)
 		}
 	}()
 
