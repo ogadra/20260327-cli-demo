@@ -657,6 +657,65 @@ func TestStreamInvalidExitCode(t *testing.T) {
 	}
 }
 
+// TestStreamDrainMarkerOnContextCancel verifies that when a context is canceled
+// mid-stream, ExecuteStream drains stdout until the marker before returning,
+// keeping the session usable for subsequent calls.
+func TestStreamDrainMarkerOnContextCancel(t *testing.T) {
+	s := newTestShell(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := make(chan string)
+	errCh := make(chan error, 1)
+	go func() {
+		_, _, err := s.ExecuteStream(ctx, `echo line1; echo line2; echo line3`, ch)
+		errCh <- err
+	}()
+	<-ch // read first line
+	cancel()
+	for range ch {
+	}
+	err := <-errCh
+	if err == nil {
+		t.Fatal("expected error from canceled context, got nil")
+	}
+	if !strings.Contains(err.Error(), "context") {
+		t.Errorf("error = %q, want to contain %q", err, "context")
+	}
+
+	// Session should still be usable because the marker was drained.
+	lines, exitCode, _ := execStream(t, s, `echo recovered`)
+	if exitCode != 0 {
+		t.Errorf("exitCode = %d, want 0", exitCode)
+	}
+	if len(lines) != 1 || lines[0] != "recovered" {
+		t.Errorf("lines = %v, want [recovered]", lines)
+	}
+}
+
+// TestStreamBrokenOnUnexpectedEOF verifies that if stdout closes before the
+// marker is found (e.g. bash crashes), the session is marked as broken.
+func TestStreamBrokenOnUnexpectedEOF(t *testing.T) {
+	s := &Shell{
+		stdin:  nopWriteCloser{&strings.Builder{}},
+		stdout: bufio.NewScanner(strings.NewReader("some output\n")),
+		cmd:    &fakeCommander{},
+	}
+	ch := make(chan string, 10)
+	_, _, err := s.ExecuteStream(context.Background(), "echo hello", ch)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	// Session should be broken.
+	ch2 := make(chan string, 10)
+	_, _, err = s.ExecuteStream(context.Background(), "echo hello", ch2)
+	if err == nil {
+		t.Fatal("expected broken session error, got nil")
+	}
+	if !strings.Contains(err.Error(), "desynchronized") {
+		t.Errorf("error = %q, want to contain %q", err, "desynchronized")
+	}
+}
+
 // TestCloseWriteError verifies that a stdin write failure during Close is reported.
 func TestCloseWriteError(t *testing.T) {
 	s := &Shell{

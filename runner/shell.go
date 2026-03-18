@@ -113,6 +113,7 @@ type Shell struct {
 	stderrMarker string         // current marker string to detect in stderr
 	stderrDone   chan struct{}  // closed when stderr marker is detected
 	mu           sync.Mutex     // serializes command execution (one command at a time)
+	broken       error          // non-nil if session is desynchronized (e.g. context canceled mid-stream)
 }
 
 // newShellFromCommander creates a [Shell] from the given [commander].
@@ -145,6 +146,8 @@ func newShellFromCommander(cmd commander) (*Shell, error) {
 	}
 
 	scanner := bufio.NewScanner(stdoutPipe)
+	// TODO: Replace bufio.Scanner with a delimiter-based reader to remove the
+	// per-line size cap entirely. See https://github.com/ogadra/20260327-cli-demo/issues/2
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024) // up to 1 MiB per line
 
 	s := &Shell{
@@ -237,6 +240,10 @@ func (s *Shell) ExecuteStream(ctx context.Context, command string, stdoutCh chan
 	defer s.mu.Unlock()
 	defer close(stdoutCh)
 
+	if s.broken != nil {
+		return -1, "", s.broken
+	}
+
 	s.resetStderr()
 
 	marker := fmt.Sprintf("__MRK_%d_END__", time.Now().UnixNano())
@@ -271,6 +278,7 @@ func (s *Shell) ExecuteStream(ctx context.Context, command string, stdoutCh chan
 	// (e.g. printf "no newline"). We track whether the previous line was
 	// empty so we can suppress it if it immediately precedes the marker.
 	var pendingEmpty bool
+	var sendErr error
 	for s.stdout.Scan() {
 		line := s.stdout.Text()
 		if strings.HasPrefix(line, marker) {
@@ -281,11 +289,22 @@ func (s *Shell) ExecuteStream(ctx context.Context, command string, stdoutCh chan
 			}
 			<-s.stderrDone
 			stderr := s.getStderr()
+			if sendErr != nil {
+				// Marker was consumed successfully, so the session
+				// is still synchronized despite the send failure.
+				s.broken = nil
+				return -1, "", sendErr
+			}
 			return exitCode, stderr, nil
+		}
+		if sendErr != nil {
+			continue // drain until marker
 		}
 		if pendingEmpty {
 			if err := sendLine(""); err != nil {
-				return -1, "", err
+				sendErr = fmt.Errorf("shell session desynchronized: %w", err)
+				s.broken = sendErr
+				continue
 			}
 			pendingEmpty = false
 		}
@@ -293,14 +312,17 @@ func (s *Shell) ExecuteStream(ctx context.Context, command string, stdoutCh chan
 			pendingEmpty = true
 		} else {
 			if err := sendLine(line); err != nil {
-				return -1, "", err
+				sendErr = fmt.Errorf("shell session desynchronized: %w", err)
+				s.broken = sendErr
 			}
 		}
 	}
 
 	if err := s.stdout.Err(); err != nil {
+		s.broken = fmt.Errorf("shell session desynchronized: scan stdout: %w", err)
 		return -1, "", fmt.Errorf("scan stdout: %w", err)
 	}
+	s.broken = fmt.Errorf("shell session desynchronized: unexpected end of stdout")
 	return -1, "", fmt.Errorf("unexpected end of stdout")
 }
 
