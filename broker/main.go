@@ -2,11 +2,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,26 +24,51 @@ func newRouter() *gin.Engine {
 	return r
 }
 
-// listenAndServe はサーバーを起動する関数の型。テスト時に差し替える。
-type listenAndServe func(addr string, handler http.Handler) error
-
 // stdout はメインの出力先。テスト時に差し替える。
 var stdout io.Writer = os.Stdout
 
 // addr はサーバーのリッスンアドレス。テスト時に差し替える。
 var addr = ":8080"
 
-// serve はサーバーを起動する関数。テスト時に差し替える。
-var serve listenAndServe = http.ListenAndServe
+// shutdownTimeout はグレースフルシャットダウンのタイムアウト。テスト時に差し替える。
+var shutdownTimeout = 5 * time.Second
 
 // fatalf はエラー時の終了処理。テスト時に差し替える。
 var fatalf = log.Fatalf
 
-// run はサーバーの起動処理を行う。
+// signalNotify は os/signal.Notify のラッパー。テスト時に差し替える。
+var signalNotify = signal.Notify
+
+// run はサーバーの起動とグレースフルシャットダウンを行う。
 func run() error {
 	r := newRouter()
-	fmt.Fprintf(stdout, "broker listening on %s\n", addr)
-	return serve(addr, r)
+
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: r,
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		fmt.Fprintf(stdout, "broker listening on %s\n", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signalNotify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case err := <-errCh:
+		return err
+	case sig := <-quit:
+		fmt.Fprintf(stdout, "received signal %s, shutting down...\n", sig)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	return srv.Shutdown(ctx)
 }
 
 // main は broker の HTTP サーバーを起動する。

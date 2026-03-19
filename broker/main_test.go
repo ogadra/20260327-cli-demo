@@ -2,13 +2,14 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // saveAndRestore は全てのパッケージレベル変数を退避し、テスト終了時に復元する。
@@ -16,13 +17,15 @@ func saveAndRestore(t *testing.T) {
 	t.Helper()
 	origStdout := stdout
 	origAddr := addr
-	origServe := serve
+	origShutdownTimeout := shutdownTimeout
 	origFatalf := fatalf
+	origSignalNotify := signalNotify
 	t.Cleanup(func() {
 		stdout = origStdout
 		addr = origAddr
-		serve = origServe
+		shutdownTimeout = origShutdownTimeout
 		fatalf = origFatalf
+		signalNotify = origSignalNotify
 	})
 }
 
@@ -40,56 +43,88 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 }
 
-// TestRunSuccess は run がサーバー起動成功時に nil を返すことを検証する。
-func TestRunSuccess(t *testing.T) {
+// TestRunGracefulShutdown は run がシグナル受信時にグレースフルシャットダウンすることを検証する。
+func TestRunGracefulShutdown(t *testing.T) {
 	saveAndRestore(t)
 
 	var buf bytes.Buffer
 	stdout = &buf
-	addr = ":9999"
-	serve = func(a string, handler http.Handler) error {
-		return nil
+	addr = ":0"
+	shutdownTimeout = 1 * time.Second
+
+	sigCh := make(chan os.Signal, 1)
+	signalNotify = func(c chan<- os.Signal, _ ...os.Signal) {
+		go func() {
+			sig := <-sigCh
+			c <- sig
+		}()
 	}
 
-	err := run()
+	done := make(chan error, 1)
+	go func() {
+		done <- run()
+	}()
 
+	time.Sleep(100 * time.Millisecond)
+	sigCh <- os.Interrupt
+
+	err := <-done
 	if err != nil {
 		t.Errorf("expected nil error, got %v", err)
 	}
-	if !strings.Contains(buf.String(), "broker listening on :9999") {
+	if !strings.Contains(buf.String(), "broker listening on") {
 		t.Errorf("expected listening message, got %q", buf.String())
+	}
+	if !strings.Contains(buf.String(), "shutting down") {
+		t.Errorf("expected shutdown message, got %q", buf.String())
 	}
 }
 
-// TestRunServerError は run がサーバー起動失敗時にエラーを返すことを検証する。
-func TestRunServerError(t *testing.T) {
+// TestRunListenError は run がリッスン失敗時にエラーを返すことを検証する。
+func TestRunListenError(t *testing.T) {
 	saveAndRestore(t)
 
 	stdout = io.Discard
-	serve = func(a string, handler http.Handler) error {
-		return errors.New("bind failed")
-	}
+	shutdownTimeout = 1 * time.Second
+
+	// ポートを占有してリッスンエラーを発生させる
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer srv.Close()
+	addr = srv.Listener.Addr().String()
+
+	signalNotify = func(c chan<- os.Signal, _ ...os.Signal) {}
 
 	err := run()
-
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "bind failed") {
-		t.Errorf("expected bind failed error, got %v", err)
-	}
 }
 
-// TestMainSuccess は main がサーバー起動成功時に正常終了することを検証する。
+// TestMainSuccess は main がサーバー起動後シグナルで正常終了することを検証する。
 func TestMainSuccess(t *testing.T) {
 	saveAndRestore(t)
 
 	stdout = io.Discard
-	serve = func(a string, handler http.Handler) error {
-		return nil
+	addr = ":0"
+	shutdownTimeout = 1 * time.Second
+
+	sigCh := make(chan os.Signal, 1)
+	signalNotify = func(c chan<- os.Signal, _ ...os.Signal) {
+		go func() {
+			sig := <-sigCh
+			c <- sig
+		}()
 	}
 
-	main()
+	done := make(chan struct{})
+	go func() {
+		main()
+		close(done)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	sigCh <- os.Interrupt
+	<-done
 }
 
 // TestMainServerError は main がサーバー起動失敗時に fatalf を呼ぶことを検証する。
@@ -97,9 +132,14 @@ func TestMainServerError(t *testing.T) {
 	saveAndRestore(t)
 
 	stdout = io.Discard
-	serve = func(a string, handler http.Handler) error {
-		return errors.New("port in use")
-	}
+	shutdownTimeout = 1 * time.Second
+
+	// ポートを占有してリッスンエラーを発生させる
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer srv.Close()
+	addr = srv.Listener.Addr().String()
+
+	signalNotify = func(c chan<- os.Signal, _ ...os.Signal) {}
 
 	var got string
 	fatalf = func(format string, args ...any) {
@@ -108,7 +148,7 @@ func TestMainServerError(t *testing.T) {
 
 	main()
 
-	if !strings.Contains(got, "port in use") {
+	if !strings.Contains(got, "server error") {
 		t.Errorf("expected fatalf called with error, got %q", got)
 	}
 }
