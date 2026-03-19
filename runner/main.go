@@ -18,6 +18,7 @@ import (
 var fatalf = log.Fatalf
 
 // main starts the HTTP server on :3000 with graceful shutdown on SIGTERM/SIGINT.
+// The empty host binds to all interfaces, which is intentional for use inside a Docker container.
 func main() {
 	if err := start(":3000"); err != nil {
 		fatalf("server error: %v", err)

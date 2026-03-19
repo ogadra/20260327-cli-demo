@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -15,7 +14,8 @@ import (
 )
 
 // TestMainSuccess verifies that main completes without calling fatalf
-// when start succeeds. It sends SIGTERM to trigger graceful shutdown.
+// when start succeeds. It sends SIGTERM to the current process because
+// main hard-codes the address and signal handler, making injection impractical.
 func TestMainSuccess(t *testing.T) {
 	orig := fatalf
 	defer func() { fatalf = orig }()
@@ -265,14 +265,21 @@ func TestRunShutdownTimeout(t *testing.T) {
 // TestStartAndShutdown verifies that start binds to the given address and
 // shuts down when SIGTERM is delivered to the process.
 func TestStartAndShutdown(t *testing.T) {
+	// Reserve a free port, then release it so start can bind to it.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen error: %v", err)
+	}
+	addr := ln.Addr().String()
+	ln.Close()
+
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- start("127.0.0.1:0")
+		errCh <- start(addr)
 	}()
 
-	// start uses signal.Notify internally, so we send SIGTERM to the process.
-	// Give the server a moment to bind.
-	time.Sleep(200 * time.Millisecond)
+	// Poll until the server is accepting connections instead of using a fixed sleep.
+	waitForServer(t, addr)
 
 	proc, err := os.FindProcess(os.Getpid())
 	if err != nil {
@@ -308,13 +315,14 @@ func TestStartListenError(t *testing.T) {
 	}
 }
 
-// waitForServer polls the given address until it accepts a connection or times out.
+// waitForServer polls the given address with a TCP dial until it accepts a connection or times out.
+// It uses a raw TCP connection instead of an HTTP request to avoid side effects such as creating sessions.
 func waitForServer(t *testing.T, addr string) {
 	t.Helper()
 	for i := 0; i < 50; i++ {
-		resp, err := http.Post(fmt.Sprintf("http://%s/api/session", addr), "application/json", nil)
+		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
 		if err == nil {
-			resp.Body.Close()
+			conn.Close()
 			return
 		}
 		time.Sleep(100 * time.Millisecond)
