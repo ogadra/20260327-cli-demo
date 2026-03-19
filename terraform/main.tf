@@ -27,8 +27,8 @@ provider "aws" {
 # 両 GSI とも sparse index として機能する。
 # idle 時は idleBucket のみ存在し、busy 時は currentSessionId のみ存在する。
 #
-# trivy:ignore:AVD-AWS-0024
-# trivy:ignore:AVD-AWS-0025
+# trivy:ignore:AVD-AWS-0024 -- PITR is not required for ephemeral runner state
+# trivy:ignore:AVD-AWS-0025 -- AWS managed encryption is sufficient for this use case
 resource "aws_dynamodb_table" "runners" {
   # checkov:skip=CKV_AWS_28:PITR is not required for ephemeral runner state
   # checkov:skip=CKV_AWS_119:AWS managed encryption is sufficient for this use case

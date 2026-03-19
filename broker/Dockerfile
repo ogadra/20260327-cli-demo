@@ -1,7 +1,7 @@
 # checkov:skip=CKV_DOCKER_3:broker does not require non-root user at this stage
 # checkov:skip=CKV_DOCKER_2:health check is managed by compose/orchestrator
-# trivy:ignore:DS-0002
-# trivy:ignore:DS-0026
+# trivy:ignore:DS-0002 -- broker does not require non-root user at this stage
+# trivy:ignore:DS-0026 -- health check is managed by compose/orchestrator
 FROM golang:1.26-alpine AS build
 WORKDIR /app
 COPY go.mod go.sum ./
