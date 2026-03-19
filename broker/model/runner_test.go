@@ -1,65 +1,7 @@
-// Package model はドメインモデルと状態遷移ロジックのテストを提供する。
+// Package model はドメインモデルのテストを提供する。
 package model
 
 import "testing"
-
-// TestCanTransitionTo は全状態ペアの遷移可否を検証する。
-func TestCanTransitionTo(t *testing.T) {
-	tests := []struct {
-		from   RunnerStatus
-		to     RunnerStatus
-		expect bool
-	}{
-		// idle -> *
-		{StatusIdle, StatusIdle, false},
-		{StatusIdle, StatusBusy, true},
-		// busy -> *
-		{StatusBusy, StatusIdle, false},
-		{StatusBusy, StatusBusy, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(string(tt.from)+"->"+string(tt.to), func(t *testing.T) {
-			got := CanTransitionTo(tt.from, tt.to)
-			if got != tt.expect {
-				t.Errorf("CanTransitionTo(%s, %s) = %v, want %v", tt.from, tt.to, got, tt.expect)
-			}
-		})
-	}
-}
-
-// TestCanTransitionToUnknownStatus は未知の状態からの遷移が拒否されることを検証する。
-func TestCanTransitionToUnknownStatus(t *testing.T) {
-	unknown := RunnerStatus("unknown")
-	if CanTransitionTo(unknown, StatusIdle) {
-		t.Error("CanTransitionTo from unknown status should return false")
-	}
-}
-
-// TestValidateTransition は有効な遷移でエラーなし、無効な遷移でエラーありを検証する。
-func TestValidateTransition(t *testing.T) {
-	if err := ValidateTransition(StatusIdle, StatusBusy); err != nil {
-		t.Errorf("ValidateTransition(idle, busy) returned unexpected error: %v", err)
-	}
-
-	err := ValidateTransition(StatusBusy, StatusIdle)
-	if err == nil {
-		t.Fatal("ValidateTransition(busy, idle) should return error")
-	}
-
-	invalidErr, ok := err.(*ErrInvalidTransition)
-	if !ok {
-		t.Fatalf("expected *ErrInvalidTransition, got %T", err)
-	}
-	if invalidErr.From != StatusBusy || invalidErr.To != StatusIdle {
-		t.Errorf("ErrInvalidTransition = {%s, %s}, want {busy, idle}", invalidErr.From, invalidErr.To)
-	}
-
-	expected := "invalid transition from busy to idle"
-	if invalidErr.Error() != expected {
-		t.Errorf("Error() = %q, want %q", invalidErr.Error(), expected)
-	}
-}
 
 // TestSparseAttributes は状態ごとの sparse 属性値を検証する。
 func TestSparseAttributes(t *testing.T) {

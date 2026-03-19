@@ -1,7 +1,5 @@
-// Package model はドメインモデルと状態遷移ロジックを提供する。
+// Package model はドメインモデルを提供する。
 package model
-
-import "fmt"
 
 // RunnerStatus は Runner の状態を表す型。
 type RunnerStatus string
@@ -19,19 +17,12 @@ var allStatuses = map[RunnerStatus]bool{
 	StatusBusy: true,
 }
 
-// transitions は各状態から遷移可能な状態の集合を定義する。
-// idle と busy のどちらからも退役可能だが、退役はレコード削除で表現するため遷移マップには含まない。
-var transitions = map[RunnerStatus]map[RunnerStatus]bool{
-	StatusIdle: {StatusBusy: true},
-	StatusBusy: {},
-}
-
 // Runner は broker が管理する runner のドメインモデル。
 // runner は使い捨てであり、セッション終了時または異常終了時はレコードごと削除する。
 type Runner struct {
 	// RunnerID は runner の一意識別子であり DynamoDB の PK。
 	RunnerID string `dynamodbav:"runnerId"`
-	// Status は状態マシンの現在値。
+	// Status は現在の状態。
 	Status RunnerStatus `dynamodbav:"status"`
 	// CurrentSessionID は busy 時のセッション ID。sparse GSI session-index のキー。
 	CurrentSessionID string `dynamodbav:"currentSessionId,omitempty"`
@@ -51,34 +42,6 @@ func SparseAttributes(status RunnerStatus, sessionID string, bucket string) (cur
 	default:
 		return "", ""
 	}
-}
-
-// CanTransitionTo は from から to への状態遷移が許可されているかを返す。
-func CanTransitionTo(from, to RunnerStatus) bool {
-	allowed, ok := transitions[from]
-	if !ok {
-		return false
-	}
-	return allowed[to]
-}
-
-// ErrInvalidTransition は無効な状態遷移を示すエラー。
-type ErrInvalidTransition struct {
-	From RunnerStatus
-	To   RunnerStatus
-}
-
-// Error は ErrInvalidTransition のエラーメッセージを返す。
-func (e *ErrInvalidTransition) Error() string {
-	return fmt.Sprintf("invalid transition from %s to %s", e.From, e.To)
-}
-
-// ValidateTransition は from から to への状態遷移を検証し、無効な場合はエラーを返す。
-func ValidateTransition(from, to RunnerStatus) error {
-	if !CanTransitionTo(from, to) {
-		return &ErrInvalidTransition{From: from, To: to}
-	}
-	return nil
 }
 
 // IsValidStatus は文字列が有効な RunnerStatus かを返す。
