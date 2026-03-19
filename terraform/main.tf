@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.14"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -9,6 +11,25 @@ terraform {
 
 provider "aws" {
   region = "ap-northeast-1"
+}
+
+data "aws_caller_identity" "current" {}
+
+resource "aws_kms_key" "dynamodb" {
+  description         = "KMS key for DynamoDB Runners table encryption"
+  enable_key_rotation = true
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "EnableRootAccountAccess"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      }
+    ]
+  })
 }
 
 resource "aws_dynamodb_table" "runners" {
@@ -22,35 +43,33 @@ resource "aws_dynamodb_table" "runners" {
   }
 
   attribute {
-    name = "status"
-    type = "S"
-  }
-
-  global_secondary_index {
-    name            = "status-index"
-    hash_key        = "status"
-    projection_type = "ALL"
-  }
-}
-
-resource "aws_dynamodb_table" "sessions" {
-  name         = "Sessions"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "sessionId"
-
-  attribute {
-    name = "sessionId"
+    name = "currentSessionId"
     type = "S"
   }
 
   attribute {
-    name = "runnerId"
+    name = "idleBucket"
     type = "S"
   }
 
   global_secondary_index {
-    name            = "runner-index"
-    hash_key        = "runnerId"
+    name            = "session-index"
+    hash_key        = "currentSessionId"
     projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "idle-index"
+    hash_key        = "idleBucket"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled     = true
+    kms_key_arn = aws_kms_key.dynamodb.arn
   }
 }
