@@ -438,6 +438,31 @@ func TestStreamContextCanceled(t *testing.T) {
 	}
 }
 
+// cancelAndWaitStream cancels the context, drains stdoutCh, and waits for
+// ExecuteStream to return an error via errCh. Fails the test on timeout.
+func cancelAndWaitStream(t *testing.T, cancel context.CancelFunc, ch <-chan string, errCh <-chan error) error {
+	t.Helper()
+	cancel()
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		for range ch {
+		}
+	}()
+	select {
+	case <-drained:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for stdout channel to close")
+	}
+	select {
+	case err := <-errCh:
+		return err
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for ExecuteStream to return")
+		return nil
+	}
+}
+
 // TestStreamContextCanceledDuringSend verifies that cancellation during stdout
 // line sending returns a context error instead of deadlocking.
 func TestStreamContextCanceledDuringSend(t *testing.T) {
@@ -454,24 +479,7 @@ func TestStreamContextCanceledDuringSend(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("timeout waiting for first stdout line")
 	}
-	cancel()
-	drained := make(chan struct{})
-	go func() {
-		defer close(drained)
-		for range ch {
-		}
-	}()
-	select {
-	case <-drained:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for stdout channel to close")
-	}
-	var err error
-	select {
-	case err = <-errCh:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for ExecuteStream to return")
-	}
+	err := cancelAndWaitStream(t, cancel, ch, errCh)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -496,24 +504,7 @@ func TestStreamContextCanceledDuringEmptyLine(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("timeout waiting for first stdout line")
 	}
-	cancel()
-	drained := make(chan struct{})
-	go func() {
-		defer close(drained)
-		for range ch {
-		}
-	}()
-	select {
-	case <-drained:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for stdout channel to close")
-	}
-	var err error
-	select {
-	case err = <-errCh:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for ExecuteStream to return")
-	}
+	err := cancelAndWaitStream(t, cancel, ch, errCh)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -522,8 +513,8 @@ func TestStreamContextCanceledDuringEmptyLine(t *testing.T) {
 	}
 }
 
-// TestStreamSlowConsumer verifies that ExecuteStream works with an unbuffered channel.
-func TestStreamSlowConsumer(t *testing.T) {
+// TestStreamUnbufferedConsumer verifies that ExecuteStream works with an unbuffered channel.
+func TestStreamUnbufferedConsumer(t *testing.T) {
 	s := newTestShell(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -777,24 +768,7 @@ func TestStreamDrainMarkerOnContextCancel(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("timeout waiting for first stdout line")
 	}
-	cancel()
-	drained := make(chan struct{})
-	go func() {
-		defer close(drained)
-		for range ch {
-		}
-	}()
-	select {
-	case <-drained:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for stdout channel to close")
-	}
-	var err error
-	select {
-	case err = <-errCh:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for ExecuteStream to return")
-	}
+	err := cancelAndWaitStream(t, cancel, ch, errCh)
 	if err == nil {
 		t.Fatal("expected error from canceled context, got nil")
 	}
