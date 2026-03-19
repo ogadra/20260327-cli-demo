@@ -13,15 +13,9 @@ func TestCanTransitionTo(t *testing.T) {
 		// idle -> *
 		{StatusIdle, StatusIdle, false},
 		{StatusIdle, StatusBusy, true},
-		{StatusIdle, StatusDead, true},
 		// busy -> *
 		{StatusBusy, StatusIdle, true},
 		{StatusBusy, StatusBusy, false},
-		{StatusBusy, StatusDead, true},
-		// dead -> *
-		{StatusDead, StatusIdle, false},
-		{StatusDead, StatusBusy, false},
-		{StatusDead, StatusDead, false},
 	}
 
 	for _, tt := range tests {
@@ -94,8 +88,8 @@ func TestSparseAttributes(t *testing.T) {
 			wantIdleBucket: "",
 		},
 		{
-			name:           "dead clears both",
-			status:         StatusDead,
+			name:           "unknown status clears both",
+			status:         RunnerStatus("unknown"),
 			sessionID:      "sess-1",
 			bucket:         "bucket-0",
 			wantSessionID:  "",
@@ -118,31 +112,17 @@ func TestSparseAttributes(t *testing.T) {
 
 // TestIsValidStatus は有効な状態文字列と無効な状態文字列を検証する。
 func TestIsValidStatus(t *testing.T) {
-	validStatuses := []string{"idle", "busy", "dead"}
+	validStatuses := []string{"idle", "busy"}
 	for _, s := range validStatuses {
 		if !IsValidStatus(s) {
 			t.Errorf("IsValidStatus(%q) = false, want true", s)
 		}
 	}
 
-	invalidStatuses := []string{"", "unknown", "IDLE", "reserved", "draining", "stopped"}
+	invalidStatuses := []string{"", "unknown", "IDLE", "dead", "reserved", "draining", "stopped"}
 	for _, s := range invalidStatuses {
 		if IsValidStatus(s) {
 			t.Errorf("IsValidStatus(%q) = true, want false", s)
-		}
-	}
-}
-
-// TestIsTerminal は終端状態と非終端状態を検証する。
-func TestIsTerminal(t *testing.T) {
-	if !IsTerminal(StatusDead) {
-		t.Error("IsTerminal(dead) = false, want true")
-	}
-
-	nonTerminal := []RunnerStatus{StatusIdle, StatusBusy}
-	for _, s := range nonTerminal {
-		if IsTerminal(s) {
-			t.Errorf("IsTerminal(%s) = true, want false", s)
 		}
 	}
 }

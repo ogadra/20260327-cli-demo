@@ -11,25 +11,22 @@ const (
 	StatusIdle RunnerStatus = "idle"
 	// StatusBusy はビジー状態を表す。セッション処理中。
 	StatusBusy RunnerStatus = "busy"
-	// StatusDead は停止状態を表す。利用不可。
-	StatusDead RunnerStatus = "dead"
 )
 
 // allStatuses は全ての有効な RunnerStatus を保持する。
 var allStatuses = map[RunnerStatus]bool{
 	StatusIdle: true,
 	StatusBusy: true,
-	StatusDead: true,
 }
 
 // transitions は各状態から遷移可能な状態の集合を定義する。
 var transitions = map[RunnerStatus]map[RunnerStatus]bool{
-	StatusIdle: {StatusBusy: true, StatusDead: true},
-	StatusBusy: {StatusIdle: true, StatusDead: true},
-	StatusDead: {},
+	StatusIdle: {StatusBusy: true},
+	StatusBusy: {StatusIdle: true},
 }
 
 // Runner は broker が管理する runner のドメインモデル。
+// 退役時はレコードごと削除する。
 type Runner struct {
 	// RunnerID は runner の一意識別子であり DynamoDB の PK。
 	RunnerID string `dynamodbav:"runnerId"`
@@ -44,7 +41,6 @@ type Runner struct {
 // SparseAttributes は状態に応じた sparse 属性値を返す。
 // idle 時は idleBucket を設定し currentSessionID をクリアする。
 // busy 時は currentSessionID を設定し idleBucket をクリアする。
-// その他の状態では両方クリアする。
 func SparseAttributes(status RunnerStatus, sessionID string, bucket string) (currentSessionID string, idleBucket string) {
 	switch status {
 	case StatusIdle:
@@ -87,9 +83,4 @@ func ValidateTransition(from, to RunnerStatus) error {
 // IsValidStatus は文字列が有効な RunnerStatus かを返す。
 func IsValidStatus(s string) bool {
 	return allStatuses[RunnerStatus(s)]
-}
-
-// IsTerminal は指定の状態が終端状態かを返す。
-func IsTerminal(s RunnerStatus) bool {
-	return s == StatusDead
 }
