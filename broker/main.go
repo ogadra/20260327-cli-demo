@@ -48,9 +48,10 @@ func run() error {
 		Handler: r,
 	}
 
+	fmt.Fprintf(stdout, "broker listening on %s\n", addr)
+
 	errCh := make(chan error, 1)
 	go func() {
-		fmt.Fprintf(stdout, "broker listening on %s\n", addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errCh <- err
 		}
