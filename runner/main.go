@@ -1,11 +1,4 @@
 package main
 
-import "fmt"
-
-func hello() string {
-	return "Hello, World!"
-}
-
-func main() {
-	fmt.Println(hello())
-}
+// TODO: Implement HTTP server with session management and SSE streaming (PLAN.md step 6).
+func main() {}
