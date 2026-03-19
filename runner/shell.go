@@ -1,44 +1,51 @@
 // Package main implements a sandbox command execution server.
 //
-// shell.go: Shell manages a single persistent bash session for command execution.
+// shell.go: bashShell manages a single persistent bash session for command execution.
 //
 // # Architecture
 //
-//	┌─────────────────────────────────────────────────────────┐
-//	│                        Shell                            │
-//	│─────────────────────────────────────────────────────────│
-//	│  cmd        commander          ← interface              │
-//	│  stdin      io.WriteCloser     ← interface              │
-//	│  stdout     *bufio.Scanner     ← 具体型                 │
-//	│  stderrBuf  bytes.Buffer       ← 具体型                 │
-//	│  stderrMu   sync.Mutex         ← 具体型                 │
-//	│  mu         sync.Mutex         ← 具体型                 │
-//	├─────────────────────────────────────────────────────────┤
-//	│  ExecuteStream()  Close()                               │
-//	└────────┬──────────────┬─────────────────────────────────┘
-//	         │              │
-//	         ▼              ▼
-//	┌─────────────┐  ┌──────────────┐  ┌─────────────────────┐
-//	│  commander  │  │io.WriteCloser│  │  *bufio.Scanner     │
-//	│  (interface)│  │ (interface)  │  │  (具体型)            │
-//	├─────────────┤  └──────┬───────┘  └──────────┬──────────┘
-//	│ Start()     │         │                     │
-//	│ Wait()      │    stdin に直接          stdout に直接
-//	│ StdinPipe() │    Write する            Scan する
+//	┌─────────────────────────────────────────┐
+//	│         Shell (interface)               │
+//	├─────────────────────────────────────────┤
+//	│  ExecuteStream()   Close()              │
+//	└──────────┬─────────────────┬────────────┘
+//	           │                 │
+//	           │ 実装             │ 実装
+//	           ▼                 ▼
+//	┌────────────────┐  ┌────────────────┐
+//	│  bashShell     │  │  mockShell     │
+//	│  (本番)        │  │  (テスト用)     │
+//	├────────────────┤  └────────────────┘
+//	│  cmd       commander      ← interface │
+//	│  stdin     io.WriteCloser ← interface │
+//	│  stdout    *bufio.Scanner             │
+//	│  stderrBuf bytes.Buffer               │
+//	│  stderrMu  sync.Mutex                 │
+//	│  mu        sync.Mutex                 │
+//	└───────┬────────────┬──────────────────┘
+//	        │            │
+//	        ▼            ▼
+//	┌─────────────┐  ┌──────────────┐  ┌───────────────┐
+//	│  commander  │  │io.WriteCloser│  │*bufio.Scanner  │
+//	│  (interface)│  │  (interface) │  │  (具体型)       │
+//	├─────────────┤  └──────┬───────┘  └──────┬─────────┘
+//	│ Start()     │         │                 │
+//	│ Wait()      │   stdin に直接       stdout に直接
+//	│ StdinPipe() │   Write する        Scan する
 //	│ StdoutPipe()│
 //	│ StderrPipe()│
 //	└──────┬──────┘
 //	       │
 //	       │ 実装
 //	       ▼
-//	┌──────────────────┐     ┌──────────────────┐
-//	│  execCommander   │     │  fakeCommander   │
-//	│  (本番)          │     │  (テスト用)       │
-//	├──────────────────┤     ├──────────────────┤
-//	│  cmd *exec.Cmd   │     │  各種エラー注入   │
-//	└──────────────────┘     └──────────────────┘
+//	┌──────────────────┐  ┌──────────────────┐
+//	│  execCommander   │  │  fakeCommander   │
+//	│  (本番)          │  │  (テスト用)       │
+//	├──────────────────┤  ├──────────────────┤
+//	│  cmd *exec.Cmd   │  │  各種エラー注入   │
+//	└──────────────────┘  └──────────────────┘
 //
-// commander は初期化時 (newShellFromCommander) にパイプ取得とプロセス起動に使われる。
+// commander は初期化時 newBashShellFromCommander にパイプ取得とプロセス起動に使われる。
 // 実行時は stdin/stdout を直接操作し、commander の Wait() は Close() でのみ呼ばれる。
 //
 // # Marker Protocol
@@ -102,9 +109,9 @@ func (c *execCommander) StdoutPipe() (io.ReadCloser, error) { return c.cmd.Stdou
 // StderrPipe returns a pipe to the bash process's stderr.
 func (c *execCommander) StderrPipe() (io.ReadCloser, error) { return c.cmd.StderrPipe() }
 
-// Shell manages a single persistent bash session.
-// Use [NewShell] to create an instance. Must be closed with [Shell.Close] when done.
-type Shell struct {
+// bashShell manages a single persistent bash session.
+// Use [NewBashShell] to create an instance. Must be closed with [bashShell.Close] when done.
+type bashShell struct {
 	cmd          commander      // process lifecycle (Start/Wait/pipes)
 	stdin        io.WriteCloser // pipe to bash stdin; commands are written here
 	stdout       *bufio.Scanner // line scanner over bash stdout; used for marker detection
@@ -116,10 +123,10 @@ type Shell struct {
 	broken       error          // non-nil if session is desynchronized (e.g. context canceled mid-stream)
 }
 
-// newShellFromCommander creates a [Shell] from the given [commander].
+// newBashShellFromCommander creates a [bashShell] from the given [commander].
 // It obtains stdin/stdout/stderr pipes, starts the process, and launches
 // a goroutine to accumulate stderr.
-func newShellFromCommander(cmd commander) (*Shell, error) {
+func newBashShellFromCommander(cmd commander) (*bashShell, error) {
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, fmt.Errorf("stdin pipe: %w", err)
@@ -150,7 +157,7 @@ func newShellFromCommander(cmd commander) (*Shell, error) {
 	// per-line size cap entirely. See https://github.com/ogadra/20260327-cli-demo/issues/2
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024) // up to 1 MiB per line
 
-	s := &Shell{
+	s := &bashShell{
 		cmd:    cmd,
 		stdin:  stdin,
 		stdout: scanner,
@@ -161,11 +168,11 @@ func newShellFromCommander(cmd commander) (*Shell, error) {
 	return s, nil
 }
 
-// NewShell starts a new persistent bash session with "bash --norc --noprofile".
+// NewBashShell starts a new persistent bash session with "bash --norc --noprofile".
 // It returns an error if the bash process fails to start.
-// The caller must call [Shell.Close] to terminate the session.
-func NewShell() (*Shell, error) {
-	return newShellFromCommander(&execCommander{
+// The caller must call [bashShell.Close] to terminate the session.
+func NewBashShell() (*bashShell, error) {
+	return newBashShellFromCommander(&execCommander{
 		cmd: exec.Command("bash", "--norc", "--noprofile"),
 	})
 }
@@ -176,7 +183,7 @@ func NewShell() (*Shell, error) {
 // is stripped from the buffer.
 // It runs as a goroutine for the lifetime of the bash process.
 // Returns when the pipe is closed (i.e. bash exits).
-func (s *Shell) readStderr(r io.Reader) {
+func (s *bashShell) readStderr(r io.Reader) {
 	buf := make([]byte, 4096)
 	for {
 		n, err := r.Read(buf)
@@ -195,7 +202,7 @@ func (s *Shell) readStderr(r io.Reader) {
 // checkStderrMarker checks if the stderr buffer contains the current marker.
 // If found, it strips the marker line from the buffer and signals stderrDone.
 // Must be called with stderrMu held.
-func (s *Shell) checkStderrMarker() {
+func (s *bashShell) checkStderrMarker() {
 	if s.stderrMarker == "" {
 		return
 	}
@@ -216,14 +223,14 @@ func (s *Shell) checkStderrMarker() {
 }
 
 // resetStderr clears the stderr buffer. Called at the start of each command.
-func (s *Shell) resetStderr() {
+func (s *bashShell) resetStderr() {
 	s.stderrMu.Lock()
 	s.stderrBuf.Reset()
 	s.stderrMu.Unlock()
 }
 
 // getStderr returns the current contents of the stderr buffer.
-func (s *Shell) getStderr() string {
+func (s *bashShell) getStderr() string {
 	s.stderrMu.Lock()
 	defer s.stderrMu.Unlock()
 	return s.stderrBuf.String()
@@ -235,7 +242,7 @@ func (s *Shell) getStderr() string {
 //
 // Returns the exit code, accumulated stderr, and any error.
 // Calls are serialized: concurrent calls block until the previous one completes.
-func (s *Shell) ExecuteStream(ctx context.Context, command string, stdoutCh chan<- string) (int, string, error) {
+func (s *bashShell) ExecuteStream(ctx context.Context, command string, stdoutCh chan<- string) (int, string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	defer close(stdoutCh)
@@ -330,7 +337,7 @@ func (s *Shell) ExecuteStream(ctx context.Context, command string, stdoutCh chan
 // Close terminates the persistent shell session by sending "exit" to bash
 // and waiting for the process to finish.
 // It acquires mu to ensure no concurrent [Shell.ExecuteStream] is writing to stdin.
-func (s *Shell) Close() error {
+func (s *bashShell) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var writeErr error

@@ -34,13 +34,13 @@ func TestCreateAndGet(t *testing.T) {
 	}
 }
 
-// TestGetNotFound verifies that Get returns an error for a nonexistent session ID.
+// TestGetNotFound verifies that Get returns ErrSessionNotFound for a nonexistent session ID.
 func TestGetNotFound(t *testing.T) {
 	m := NewSessionManager()
 
 	_, err := m.Get("nonexistent")
-	if err == nil {
-		t.Fatal("Get(nonexistent) should return error")
+	if !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("Get(nonexistent) error = %v, want ErrSessionNotFound", err)
 	}
 }
 
@@ -63,13 +63,13 @@ func TestDelete(t *testing.T) {
 	}
 }
 
-// TestDeleteNotFound verifies that Delete returns an error for a nonexistent session ID.
+// TestDeleteNotFound verifies that Delete returns ErrSessionNotFound for a nonexistent session ID.
 func TestDeleteNotFound(t *testing.T) {
 	m := NewSessionManager()
 
 	err := m.Delete("nonexistent")
-	if err == nil {
-		t.Fatal("Delete(nonexistent) should return error")
+	if !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("Delete(nonexistent) error = %v, want ErrSessionNotFound", err)
 	}
 }
 
@@ -269,7 +269,7 @@ func TestCreateDuplicateID(t *testing.T) {
 // TestCreateNewShellError verifies that Create propagates errors from the shell factory.
 func TestCreateNewShellError(t *testing.T) {
 	m := NewSessionManager()
-	m.newShell = func() (*Shell, error) {
+	m.newShell = func() (Shell, error) {
 		return nil, errors.New("shell broken")
 	}
 
