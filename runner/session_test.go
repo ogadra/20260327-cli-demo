@@ -239,6 +239,33 @@ func TestCreateIDGeneratorError(t *testing.T) {
 	}
 }
 
+// TestCreateDuplicateID verifies that Create returns an error and closes the new shell
+// when genID returns an ID that already exists in the session map.
+func TestCreateDuplicateID(t *testing.T) {
+	m := NewSessionManager()
+	defer m.CloseAll()
+
+	m.genID = func() (string, error) {
+		return "fixed-id", nil
+	}
+
+	_, _, err := m.Create()
+	if err != nil {
+		t.Fatalf("first Create() error: %v", err)
+	}
+
+	_, _, err = m.Create()
+	if err == nil {
+		t.Fatal("second Create() with duplicate ID should return error")
+	}
+
+	// Original session should still be accessible.
+	_, err = m.Get("fixed-id")
+	if err != nil {
+		t.Fatalf("Get() after duplicate Create() error: %v", err)
+	}
+}
+
 // TestCreateNewShellError verifies that Create propagates errors from the shell factory.
 func TestCreateNewShellError(t *testing.T) {
 	m := NewSessionManager()

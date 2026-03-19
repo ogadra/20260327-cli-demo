@@ -47,6 +47,11 @@ func (m *SessionManager) Create() (string, *Shell, error) {
 	}
 
 	m.mu.Lock()
+	if _, exists := m.sessions[id]; exists {
+		m.mu.Unlock()
+		_ = shell.Close()
+		return "", nil, fmt.Errorf("create session: duplicate session id %q", id)
+	}
 	m.sessions[id] = shell
 	m.mu.Unlock()
 
