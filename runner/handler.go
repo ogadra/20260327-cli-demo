@@ -96,13 +96,10 @@ func handleExecute(sm *SessionManager) gin.HandlerFunc {
 			return
 		}
 
+		// Get only returns ErrSessionNotFound; no other error paths exist.
 		shell, err := sm.Get(id)
 		if err != nil {
-			if errors.Is(err, ErrSessionNotFound) {
-				c.String(http.StatusNotFound, err.Error())
-			} else {
-				c.String(http.StatusInternalServerError, err.Error())
-			}
+			c.String(http.StatusNotFound, err.Error())
 			return
 		}
 
