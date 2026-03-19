@@ -4,39 +4,46 @@
 //
 // # Architecture
 //
-//	┌─────────────────────────────────────────────────────────┐
-//	│                      bashShell                          │
-//	│─────────────────────────────────────────────────────────│
-//	│  cmd        commander          ← interface              │
-//	│  stdin      io.WriteCloser     ← interface              │
-//	│  stdout     *bufio.Scanner     ← 具体型                 │
-//	│  stderrBuf  bytes.Buffer       ← 具体型                 │
-//	│  stderrMu   sync.Mutex         ← 具体型                 │
-//	│  mu         sync.Mutex         ← 具体型                 │
-//	├─────────────────────────────────────────────────────────┤
-//	│  ExecuteStream()  Close()                               │
-//	└────────┬──────────────┬─────────────────────────────────┘
-//	         │              │
-//	         ▼              ▼
-//	┌─────────────┐  ┌──────────────┐  ┌─────────────────────┐
-//	│  commander  │  │io.WriteCloser│  │  *bufio.Scanner     │
-//	│  (interface)│  │ (interface)  │  │  (具体型)            │
-//	├─────────────┤  └──────┬───────┘  └──────────┬──────────┘
-//	│ Start()     │         │                     │
-//	│ Wait()      │    stdin に直接          stdout に直接
-//	│ StdinPipe() │    Write する            Scan する
+//	┌─────────────────────────────────────────┐
+//	│         Shell (interface)               │
+//	├─────────────────────────────────────────┤
+//	│  ExecuteStream()   Close()              │
+//	└──────────┬─────────────────┬────────────┘
+//	           │                 │
+//	           │ 実装             │ 実装
+//	           ▼                 ▼
+//	┌────────────────┐  ┌────────────────┐
+//	│  bashShell     │  │  mockShell     │
+//	│  (本番)        │  │  (テスト用)     │
+//	├────────────────┤  └────────────────┘
+//	│  cmd       commander      ← interface │
+//	│  stdin     io.WriteCloser ← interface │
+//	│  stdout    *bufio.Scanner             │
+//	│  stderrBuf bytes.Buffer               │
+//	│  stderrMu  sync.Mutex                 │
+//	│  mu        sync.Mutex                 │
+//	└───────┬────────────┬──────────────────┘
+//	        │            │
+//	        ▼            ▼
+//	┌─────────────┐  ┌──────────────┐  ┌───────────────┐
+//	│  commander  │  │io.WriteCloser│  │*bufio.Scanner  │
+//	│  (interface)│  │  (interface) │  │  (具体型)       │
+//	├─────────────┤  └──────┬───────┘  └──────┬─────────┘
+//	│ Start()     │         │                 │
+//	│ Wait()      │   stdin に直接       stdout に直接
+//	│ StdinPipe() │   Write する        Scan する
 //	│ StdoutPipe()│
 //	│ StderrPipe()│
 //	└──────┬──────┘
 //	       │
 //	       │ 実装
 //	       ▼
-//	┌──────────────────┐     ┌──────────────────┐
-//	│  execCommander   │     │  fakeCommander   │
-//	│  (本番)          │     │  (テスト用)       │
-//	├──────────────────┤     ├──────────────────┤
-//	│  cmd *exec.Cmd   │     │  各種エラー注入   │
-//	└──────────────────┘     └──────────────────┘
+//	┌──────────────────┐  ┌──────────────────┐
+//	│  execCommander   │  │  fakeCommander   │
+//	│  (本番)          │  │  (テスト用)       │
+//	├──────────────────┤  ├──────────────────┤
+//	│  cmd *exec.Cmd   │  │  各種エラー注入   │
+//	└──────────────────┘  └──────────────────┘
 //
 // commander は初期化時 newBashShellFromCommander にパイプ取得とプロセス起動に使われる。
 // 実行時は stdin/stdout を直接操作し、commander の Wait() は Close() でのみ呼ばれる。
