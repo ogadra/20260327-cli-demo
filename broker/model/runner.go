@@ -20,13 +20,14 @@ var allStatuses = map[RunnerStatus]bool{
 }
 
 // transitions は各状態から遷移可能な状態の集合を定義する。
+// idle と busy のどちらからも退役可能だが、退役はレコード削除で表現するため遷移マップには含まない。
 var transitions = map[RunnerStatus]map[RunnerStatus]bool{
 	StatusIdle: {StatusBusy: true},
-	StatusBusy: {StatusIdle: true},
+	StatusBusy: {},
 }
 
 // Runner は broker が管理する runner のドメインモデル。
-// 退役時はレコードごと削除する。
+// runner は使い捨てであり、セッション終了時または異常終了時はレコードごと削除する。
 type Runner struct {
 	// RunnerID は runner の一意識別子であり DynamoDB の PK。
 	RunnerID string `dynamodbav:"runnerId"`

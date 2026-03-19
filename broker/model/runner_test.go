@@ -14,7 +14,7 @@ func TestCanTransitionTo(t *testing.T) {
 		{StatusIdle, StatusIdle, false},
 		{StatusIdle, StatusBusy, true},
 		// busy -> *
-		{StatusBusy, StatusIdle, true},
+		{StatusBusy, StatusIdle, false},
 		{StatusBusy, StatusBusy, false},
 	}
 
@@ -42,20 +42,20 @@ func TestValidateTransition(t *testing.T) {
 		t.Errorf("ValidateTransition(idle, busy) returned unexpected error: %v", err)
 	}
 
-	err := ValidateTransition(StatusIdle, StatusIdle)
+	err := ValidateTransition(StatusBusy, StatusIdle)
 	if err == nil {
-		t.Fatal("ValidateTransition(idle, idle) should return error")
+		t.Fatal("ValidateTransition(busy, idle) should return error")
 	}
 
 	invalidErr, ok := err.(*ErrInvalidTransition)
 	if !ok {
 		t.Fatalf("expected *ErrInvalidTransition, got %T", err)
 	}
-	if invalidErr.From != StatusIdle || invalidErr.To != StatusIdle {
-		t.Errorf("ErrInvalidTransition = {%s, %s}, want {idle, idle}", invalidErr.From, invalidErr.To)
+	if invalidErr.From != StatusBusy || invalidErr.To != StatusIdle {
+		t.Errorf("ErrInvalidTransition = {%s, %s}, want {busy, idle}", invalidErr.From, invalidErr.To)
 	}
 
-	expected := "invalid transition from idle to idle"
+	expected := "invalid transition from busy to idle"
 	if invalidErr.Error() != expected {
 		t.Errorf("Error() = %q, want %q", invalidErr.Error(), expected)
 	}
