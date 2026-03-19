@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+// TestHealthEndpoint は GET /health が 200 OK を返すことを検証する。
 func TestHealthEndpoint(t *testing.T) {
 	mux := newMux()
 

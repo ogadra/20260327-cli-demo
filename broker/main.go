@@ -1,3 +1,4 @@
+// Package main は broker サービスのエントリポイントを提供する。
 package main
 
 import (
@@ -6,6 +7,7 @@ import (
 	"os"
 )
 
+// newMux は broker の HTTP ルーティングを構成した ServeMux を返す。
 func newMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {

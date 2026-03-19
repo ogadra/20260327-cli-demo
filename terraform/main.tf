@@ -7,28 +7,8 @@ terraform {
   }
 }
 
-variable "dynamodb_endpoint" {
-  description = "DynamoDB endpoint URL (for local development)"
-  type        = string
-  default     = null
-}
-
 provider "aws" {
   region = "ap-northeast-1"
-
-  dynamic "endpoints" {
-    for_each = var.dynamodb_endpoint != null ? [var.dynamodb_endpoint] : []
-    content {
-      dynamodb = endpoints.value
-    }
-  }
-
-  skip_credentials_validation = var.dynamodb_endpoint != null
-  skip_metadata_api_check     = var.dynamodb_endpoint != null
-  skip_requesting_account_id  = var.dynamodb_endpoint != null
-
-  access_key = var.dynamodb_endpoint != null ? "dummy" : null
-  secret_key = var.dynamodb_endpoint != null ? "dummy" : null
 }
 
 resource "aws_dynamodb_table" "runners" {
