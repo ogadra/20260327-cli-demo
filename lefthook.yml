@@ -1,21 +1,52 @@
 pre-commit:
   parallel: false
   commands:
-    001_fmt:
+    001_fmt_runner:
       root: "runner/"
       glob: "*.go"
       stage_fixed: true
       run: gofmt -w {staged_files}
-    002_fmt_check:
+    002_fmt_check_runner:
       root: "runner/"
       glob: "*.go"
       run: gofmt -l {staged_files} | grep . && exit 1 || true
-    003_vet:
+    003_vet_runner:
       root: "runner/"
       glob: "*.go"
       run: go vet ./...
+    011_fmt_broker:
+      root: "broker/"
+      glob: "*.go"
+      stage_fixed: true
+      run: gofmt -w {staged_files}
+    012_fmt_check_broker:
+      root: "broker/"
+      glob: "*.go"
+      run: gofmt -l {staged_files} | grep . && exit 1 || true
+    013_vet_broker:
+      root: "broker/"
+      glob: "*.go"
+      run: go vet ./...
+    021_terraform_fmt:
+      root: "terraform/"
+      glob: "*.tf"
+      stage_fixed: true
+      run: terraform fmt {staged_files}
+    022_terraform_fmt_check:
+      root: "terraform/"
+      glob: "*.tf"
+      run: terraform fmt -check {staged_files}
+    023_terraform_validate:
+      root: "terraform/"
+      glob: "*.tf"
+      run: terraform validate
+    024_tflint:
+      root: "terraform/"
+      glob: "*.tf"
+      run: tflint
+    025_checkov:
+      run: checkov -d .
     004_gitleaks:
       run: gitleaks protect --staged
     005_trivy:
-      glob: "Dockerfile"
-      run: trivy config runner/
+      run: trivy config .
