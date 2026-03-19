@@ -746,7 +746,12 @@ func TestStreamInvalidExitCode(t *testing.T) {
 		}
 	}()
 
-	err := <-errCh
+	var err error
+	select {
+	case err = <-errCh:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timeout waiting for ExecuteStream to return")
+	}
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
