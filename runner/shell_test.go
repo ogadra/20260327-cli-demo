@@ -481,6 +481,8 @@ func TestStreamContextCanceledDuringEmptyLine(t *testing.T) {
 // TestStreamSlowConsumer verifies that ExecuteStream works with an unbuffered channel.
 func TestStreamSlowConsumer(t *testing.T) {
 	s := newTestShell(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	ch := make(chan string)
 	done := make(chan struct{})
 	go func() {
@@ -488,7 +490,7 @@ func TestStreamSlowConsumer(t *testing.T) {
 		for range ch {
 		}
 	}()
-	exitCode, _, err := s.ExecuteStream(context.Background(), `for i in $(seq 1 10); do echo "line $i"; done`, ch)
+	exitCode, _, err := s.ExecuteStream(ctx, `for i in $(seq 1 10); do echo "line $i"; done`, ch)
 	<-done
 	if err != nil {
 		t.Fatalf("ExecuteStream error: %v", err)
