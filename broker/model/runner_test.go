@@ -12,22 +12,14 @@ func TestCanTransitionTo(t *testing.T) {
 	}{
 		// idle -> *
 		{StatusIdle, StatusIdle, false},
-		{StatusIdle, StatusReserved, true},
-		{StatusIdle, StatusBusy, false},
+		{StatusIdle, StatusBusy, true},
 		{StatusIdle, StatusDead, true},
-		// reserved -> *
-		{StatusReserved, StatusIdle, false},
-		{StatusReserved, StatusReserved, false},
-		{StatusReserved, StatusBusy, true},
-		{StatusReserved, StatusDead, true},
 		// busy -> *
 		{StatusBusy, StatusIdle, true},
-		{StatusBusy, StatusReserved, false},
 		{StatusBusy, StatusBusy, false},
 		{StatusBusy, StatusDead, true},
 		// dead -> *
 		{StatusDead, StatusIdle, false},
-		{StatusDead, StatusReserved, false},
 		{StatusDead, StatusBusy, false},
 		{StatusDead, StatusDead, false},
 	}
@@ -52,24 +44,24 @@ func TestCanTransitionToUnknownStatus(t *testing.T) {
 
 // TestValidateTransition は有効な遷移でエラーなし、無効な遷移でエラーありを検証する。
 func TestValidateTransition(t *testing.T) {
-	if err := ValidateTransition(StatusIdle, StatusReserved); err != nil {
-		t.Errorf("ValidateTransition(idle, reserved) returned unexpected error: %v", err)
+	if err := ValidateTransition(StatusIdle, StatusBusy); err != nil {
+		t.Errorf("ValidateTransition(idle, busy) returned unexpected error: %v", err)
 	}
 
-	err := ValidateTransition(StatusIdle, StatusBusy)
+	err := ValidateTransition(StatusIdle, StatusIdle)
 	if err == nil {
-		t.Fatal("ValidateTransition(idle, busy) should return error")
+		t.Fatal("ValidateTransition(idle, idle) should return error")
 	}
 
 	invalidErr, ok := err.(*ErrInvalidTransition)
 	if !ok {
 		t.Fatalf("expected *ErrInvalidTransition, got %T", err)
 	}
-	if invalidErr.From != StatusIdle || invalidErr.To != StatusBusy {
-		t.Errorf("ErrInvalidTransition = {%s, %s}, want {idle, busy}", invalidErr.From, invalidErr.To)
+	if invalidErr.From != StatusIdle || invalidErr.To != StatusIdle {
+		t.Errorf("ErrInvalidTransition = {%s, %s}, want {idle, idle}", invalidErr.From, invalidErr.To)
 	}
 
-	expected := "invalid transition from idle to busy"
+	expected := "invalid transition from idle to idle"
 	if invalidErr.Error() != expected {
 		t.Errorf("Error() = %q, want %q", invalidErr.Error(), expected)
 	}
@@ -102,14 +94,6 @@ func TestSparseAttributes(t *testing.T) {
 			wantIdleBucket: "",
 		},
 		{
-			name:           "reserved clears both",
-			status:         StatusReserved,
-			sessionID:      "sess-1",
-			bucket:         "bucket-0",
-			wantSessionID:  "",
-			wantIdleBucket: "",
-		},
-		{
 			name:           "dead clears both",
 			status:         StatusDead,
 			sessionID:      "sess-1",
@@ -134,14 +118,14 @@ func TestSparseAttributes(t *testing.T) {
 
 // TestIsValidStatus は有効な状態文字列と無効な状態文字列を検証する。
 func TestIsValidStatus(t *testing.T) {
-	validStatuses := []string{"idle", "reserved", "busy", "dead"}
+	validStatuses := []string{"idle", "busy", "dead"}
 	for _, s := range validStatuses {
 		if !IsValidStatus(s) {
 			t.Errorf("IsValidStatus(%q) = false, want true", s)
 		}
 	}
 
-	invalidStatuses := []string{"", "unknown", "IDLE", "running", "draining", "stopped"}
+	invalidStatuses := []string{"", "unknown", "IDLE", "reserved", "draining", "stopped"}
 	for _, s := range invalidStatuses {
 		if IsValidStatus(s) {
 			t.Errorf("IsValidStatus(%q) = true, want false", s)
@@ -155,7 +139,7 @@ func TestIsTerminal(t *testing.T) {
 		t.Error("IsTerminal(dead) = false, want true")
 	}
 
-	nonTerminal := []RunnerStatus{StatusIdle, StatusReserved, StatusBusy}
+	nonTerminal := []RunnerStatus{StatusIdle, StatusBusy}
 	for _, s := range nonTerminal {
 		if IsTerminal(s) {
 			t.Errorf("IsTerminal(%s) = true, want false", s)

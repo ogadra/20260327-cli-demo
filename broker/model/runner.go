@@ -9,8 +9,6 @@ type RunnerStatus string
 const (
 	// StatusIdle はアイドル状態を表す。セッション未割当。
 	StatusIdle RunnerStatus = "idle"
-	// StatusReserved は予約済み状態を表す。セッション割当処理中。
-	StatusReserved RunnerStatus = "reserved"
 	// StatusBusy はビジー状態を表す。セッション処理中。
 	StatusBusy RunnerStatus = "busy"
 	// StatusDead は停止状態を表す。利用不可。
@@ -19,18 +17,16 @@ const (
 
 // allStatuses は全ての有効な RunnerStatus を保持する。
 var allStatuses = map[RunnerStatus]bool{
-	StatusIdle:     true,
-	StatusReserved: true,
-	StatusBusy:     true,
-	StatusDead:     true,
+	StatusIdle: true,
+	StatusBusy: true,
+	StatusDead: true,
 }
 
 // transitions は各状態から遷移可能な状態の集合を定義する。
 var transitions = map[RunnerStatus]map[RunnerStatus]bool{
-	StatusIdle:     {StatusReserved: true, StatusDead: true},
-	StatusReserved: {StatusBusy: true, StatusDead: true},
-	StatusBusy:     {StatusIdle: true, StatusDead: true},
-	StatusDead:     {},
+	StatusIdle: {StatusBusy: true, StatusDead: true},
+	StatusBusy: {StatusIdle: true, StatusDead: true},
+	StatusDead: {},
 }
 
 // Runner は broker が管理する runner のドメインモデル。
