@@ -13,8 +13,6 @@ const (
 	StatusReserved RunnerStatus = "reserved"
 	// StatusBusy はビジー状態を表す。セッション処理中。
 	StatusBusy RunnerStatus = "busy"
-	// StatusDraining はドレイン状態を表す。セッション終了処理中。
-	StatusDraining RunnerStatus = "draining"
 	// StatusDead は停止状態を表す。利用不可。
 	StatusDead RunnerStatus = "dead"
 )
@@ -24,7 +22,6 @@ var allStatuses = map[RunnerStatus]bool{
 	StatusIdle:     true,
 	StatusReserved: true,
 	StatusBusy:     true,
-	StatusDraining: true,
 	StatusDead:     true,
 }
 
@@ -32,8 +29,7 @@ var allStatuses = map[RunnerStatus]bool{
 var transitions = map[RunnerStatus]map[RunnerStatus]bool{
 	StatusIdle:     {StatusReserved: true, StatusDead: true},
 	StatusReserved: {StatusBusy: true, StatusDead: true},
-	StatusBusy:     {StatusIdle: true, StatusDraining: true, StatusDead: true},
-	StatusDraining: {StatusDead: true},
+	StatusBusy:     {StatusIdle: true, StatusDead: true},
 	StatusDead:     {},
 }
 

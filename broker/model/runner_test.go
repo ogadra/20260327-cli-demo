@@ -14,31 +14,21 @@ func TestCanTransitionTo(t *testing.T) {
 		{StatusIdle, StatusIdle, false},
 		{StatusIdle, StatusReserved, true},
 		{StatusIdle, StatusBusy, false},
-		{StatusIdle, StatusDraining, false},
 		{StatusIdle, StatusDead, true},
 		// reserved -> *
 		{StatusReserved, StatusIdle, false},
 		{StatusReserved, StatusReserved, false},
 		{StatusReserved, StatusBusy, true},
-		{StatusReserved, StatusDraining, false},
 		{StatusReserved, StatusDead, true},
 		// busy -> *
 		{StatusBusy, StatusIdle, true},
 		{StatusBusy, StatusReserved, false},
 		{StatusBusy, StatusBusy, false},
-		{StatusBusy, StatusDraining, true},
 		{StatusBusy, StatusDead, true},
-		// draining -> *
-		{StatusDraining, StatusIdle, false},
-		{StatusDraining, StatusReserved, false},
-		{StatusDraining, StatusBusy, false},
-		{StatusDraining, StatusDraining, false},
-		{StatusDraining, StatusDead, true},
 		// dead -> *
 		{StatusDead, StatusIdle, false},
 		{StatusDead, StatusReserved, false},
 		{StatusDead, StatusBusy, false},
-		{StatusDead, StatusDraining, false},
 		{StatusDead, StatusDead, false},
 	}
 
@@ -120,14 +110,6 @@ func TestSparseAttributes(t *testing.T) {
 			wantIdleBucket: "",
 		},
 		{
-			name:           "draining clears both",
-			status:         StatusDraining,
-			sessionID:      "sess-1",
-			bucket:         "bucket-0",
-			wantSessionID:  "",
-			wantIdleBucket: "",
-		},
-		{
 			name:           "dead clears both",
 			status:         StatusDead,
 			sessionID:      "sess-1",
@@ -152,14 +134,14 @@ func TestSparseAttributes(t *testing.T) {
 
 // TestIsValidStatus は有効な状態文字列と無効な状態文字列を検証する。
 func TestIsValidStatus(t *testing.T) {
-	validStatuses := []string{"idle", "reserved", "busy", "draining", "dead"}
+	validStatuses := []string{"idle", "reserved", "busy", "dead"}
 	for _, s := range validStatuses {
 		if !IsValidStatus(s) {
 			t.Errorf("IsValidStatus(%q) = false, want true", s)
 		}
 	}
 
-	invalidStatuses := []string{"", "unknown", "IDLE", "running", "stopped"}
+	invalidStatuses := []string{"", "unknown", "IDLE", "running", "draining", "stopped"}
 	for _, s := range invalidStatuses {
 		if IsValidStatus(s) {
 			t.Errorf("IsValidStatus(%q) = true, want false", s)
@@ -173,7 +155,7 @@ func TestIsTerminal(t *testing.T) {
 		t.Error("IsTerminal(dead) = false, want true")
 	}
 
-	nonTerminal := []RunnerStatus{StatusIdle, StatusReserved, StatusBusy, StatusDraining}
+	nonTerminal := []RunnerStatus{StatusIdle, StatusReserved, StatusBusy}
 	for _, s := range nonTerminal {
 		if IsTerminal(s) {
 			t.Errorf("IsTerminal(%s) = true, want false", s)
