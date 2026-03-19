@@ -684,7 +684,14 @@ func TestStreamInvalidExitCode(t *testing.T) {
 	}()
 
 	go func() {
+		timeout := time.After(5 * time.Second)
 		for {
+			select {
+			case <-timeout:
+				stdoutW.Close()
+				return
+			default:
+			}
 			marker := extractMarker(stdinCapture.String())
 			if marker != "" {
 				stdoutW.Write([]byte(marker + "notanumber\n"))
