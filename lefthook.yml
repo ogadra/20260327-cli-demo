@@ -45,11 +45,8 @@ pre-commit:
       glob: "*.tf"
       run: tflint
     025_checkov:
-      root: "terraform/"
-      glob: "*.tf"
       run: checkov -d .
     004_gitleaks:
       run: gitleaks protect --staged
     005_trivy:
-      glob: "Dockerfile"
-      run: trivy config runner/ && trivy config broker/
+      run: trivy config .

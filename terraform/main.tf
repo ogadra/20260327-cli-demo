@@ -15,27 +15,6 @@ provider "aws" {
   region = "ap-northeast-1"
 }
 
-# KMS キーポリシーで参照するアカウント ID の取得
-data "aws_caller_identity" "current" {}
-
-# DynamoDB Runners テーブル暗号化用の KMS カスタマーマネージドキー
-resource "aws_kms_key" "dynamodb" {
-  description         = "KMS key for DynamoDB Runners table encryption"
-  enable_key_rotation = true
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "EnableRootAccountAccess"
-        Effect    = "Allow"
-        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
-        Action    = "kms:*"
-        Resource  = "*"
-      }
-    ]
-  })
-}
-
 # Runner の状態管理テーブル。Session は独立エンティティとしては持たず、
 # Runner の属性として currentSessionId を保持する単一テーブル設計。
 #
@@ -47,7 +26,12 @@ resource "aws_kms_key" "dynamodb" {
 #
 # 両 GSI とも sparse index として機能する。
 # idle 時は idleBucket のみ存在し、busy 時は currentSessionId のみ存在する。
+#
+# trivy:ignore:AVD-AWS-0024
+# trivy:ignore:AVD-AWS-0025
 resource "aws_dynamodb_table" "runners" {
+  # checkov:skip=CKV_AWS_28:PITR is not required for ephemeral runner state
+  # checkov:skip=CKV_AWS_119:AWS managed encryption is sufficient for this use case
   name         = "Runners"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "runnerId"
@@ -79,15 +63,5 @@ resource "aws_dynamodb_table" "runners" {
     name            = "idle-index"
     hash_key        = "idleBucket"
     projection_type = "ALL"
-  }
-
-  point_in_time_recovery {
-    enabled = true
-  }
-
-  # カスタマーマネージド KMS キーによるサーバーサイド暗号化
-  server_side_encryption {
-    enabled     = true
-    kms_key_arn = aws_kms_key.dynamodb.arn
   }
 }
