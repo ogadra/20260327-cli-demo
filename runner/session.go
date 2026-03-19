@@ -3,9 +3,13 @@ package main
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sync"
 )
+
+// ErrSessionNotFound is returned when the requested session ID does not exist.
+var ErrSessionNotFound = errors.New("session not found")
 
 // SessionManager manages multiple persistent bash sessions keyed by session ID.
 // It is safe for concurrent use.
@@ -71,7 +75,7 @@ func (m *SessionManager) Get(id string) (Shell, error) {
 
 	shell, ok := m.sessions[id]
 	if !ok {
-		return nil, fmt.Errorf("session not found: %s", id)
+		return nil, ErrSessionNotFound
 	}
 	return shell, nil
 }
@@ -83,7 +87,7 @@ func (m *SessionManager) Delete(id string) error {
 	shell, ok := m.sessions[id]
 	if !ok {
 		m.mu.Unlock()
-		return fmt.Errorf("session not found: %s", id)
+		return ErrSessionNotFound
 	}
 	delete(m.sessions, id)
 	m.mu.Unlock()

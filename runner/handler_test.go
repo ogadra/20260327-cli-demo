@@ -93,6 +93,30 @@ func TestDeleteSessionNotFound(t *testing.T) {
 	}
 }
 
+// TestDeleteSessionCloseError verifies that DELETE /api/session returns 500
+// when the session exists but Close fails.
+func TestDeleteSessionCloseError(t *testing.T) {
+	sm := NewSessionManager()
+	sm.newShell = func() (Shell, error) {
+		return &mockShell{closeErr: errors.New("close failed")}, nil
+	}
+	handler := newHandler(sm)
+
+	id, _, err := sm.Create()
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/session", nil)
+	req.Header.Set(sessionIDHeader, id)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusInternalServerError)
+	}
+}
+
 // TestExecuteWhitelisted verifies that POST /api/execute with a whitelisted command
 // streams SSE events for stdout and complete with exit code 0.
 func TestExecuteWhitelisted(t *testing.T) {
@@ -311,11 +335,12 @@ func TestCreateSessionError(t *testing.T) {
 }
 
 // mockShell is a test double for the Shell interface that returns
-// preconfigured values from ExecuteStream.
+// preconfigured values from ExecuteStream and Close.
 type mockShell struct {
 	exitCode int
 	stderr   string
 	err      error
+	closeErr error
 }
 
 // ExecuteStream sends no stdout lines and returns the preconfigured exit code, stderr, and error.
@@ -324,9 +349,9 @@ func (m *mockShell) ExecuteStream(_ context.Context, _ string, ch chan<- string)
 	return m.exitCode, m.stderr, m.err
 }
 
-// Close is a no-op for the mock.
+// Close returns the preconfigured close error.
 func (m *mockShell) Close() error {
-	return nil
+	return m.closeErr
 }
 
 // TestExecuteWhitelistedWithStderr verifies that stderr output from a whitelisted command
@@ -334,17 +359,15 @@ func (m *mockShell) Close() error {
 func TestExecuteWhitelistedWithStderr(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
+	sm.newShell = func() (Shell, error) {
+		return &mockShell{exitCode: 0, stderr: "warning: something"}, nil
+	}
 	handler := newHandler(sm)
 
 	id, _, err := sm.Create()
 	if err != nil {
 		t.Fatalf("Create() error: %v", err)
 	}
-
-	// Replace the real shell with a mock that returns stderr.
-	sm.mu.Lock()
-	sm.sessions[id] = &mockShell{exitCode: 0, stderr: "warning: something"}
-	sm.mu.Unlock()
 
 	body := strings.NewReader(`{"command":"ls"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
@@ -373,16 +396,15 @@ func TestExecuteWhitelistedWithStderr(t *testing.T) {
 func TestExecuteWhitelistedNonZeroExit(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
+	sm.newShell = func() (Shell, error) {
+		return &mockShell{exitCode: 2}, nil
+	}
 	handler := newHandler(sm)
 
 	id, _, err := sm.Create()
 	if err != nil {
 		t.Fatalf("Create() error: %v", err)
 	}
-
-	sm.mu.Lock()
-	sm.sessions[id] = &mockShell{exitCode: 2}
-	sm.mu.Unlock()
 
 	body := strings.NewReader(`{"command":"ls"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
@@ -402,16 +424,15 @@ func TestExecuteWhitelistedNonZeroExit(t *testing.T) {
 func TestExecuteWhitelistedWithExecError(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
+	sm.newShell = func() (Shell, error) {
+		return &mockShell{exitCode: -1, err: errors.New("broken")}, nil
+	}
 	handler := newHandler(sm)
 
 	id, _, err := sm.Create()
 	if err != nil {
 		t.Fatalf("Create() error: %v", err)
 	}
-
-	sm.mu.Lock()
-	sm.sessions[id] = &mockShell{exitCode: -1, err: errors.New("broken")}
-	sm.mu.Unlock()
 
 	body := strings.NewReader(`{"command":"ls"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)

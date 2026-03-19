@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -72,7 +73,11 @@ func handleDeleteSession(sm *SessionManager) gin.HandlerFunc {
 			return
 		}
 		if err := sm.Delete(id); err != nil {
-			c.String(http.StatusNotFound, err.Error())
+			if errors.Is(err, ErrSessionNotFound) {
+				c.String(http.StatusNotFound, err.Error())
+			} else {
+				c.String(http.StatusInternalServerError, err.Error())
+			}
 			return
 		}
 		c.Status(http.StatusNoContent)
@@ -93,7 +98,11 @@ func handleExecute(sm *SessionManager) gin.HandlerFunc {
 
 		shell, err := sm.Get(id)
 		if err != nil {
-			c.String(http.StatusNotFound, err.Error())
+			if errors.Is(err, ErrSessionNotFound) {
+				c.String(http.StatusNotFound, err.Error())
+			} else {
+				c.String(http.StatusInternalServerError, err.Error())
+			}
 			return
 		}
 
