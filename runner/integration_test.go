@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -32,12 +33,25 @@ func createSession(t *testing.T, ts *httptest.Server) string {
 	return sr.SessionID
 }
 
+// marshalCommand is a test helper that marshals a command string into a JSON request body.
+func marshalCommand(t *testing.T, command string) string {
+	t.Helper()
+	payload, err := json.Marshal(executeRequest{Command: command})
+	if err != nil {
+		t.Fatalf("marshal command: %v", err)
+	}
+	return string(payload)
+}
+
 // executeCommand is a test helper that executes a whitelisted command via the
 // HTTP API and returns the parsed SSE events.
 func executeCommand(t *testing.T, ts *httptest.Server, sessionID, command string) []sseEvent {
 	t.Helper()
-	body := strings.NewReader(`{"command":"` + command + `"}`)
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", body)
+	body := marshalCommand(t, command)
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
 	req.Header.Set(sessionIDHeader, sessionID)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -68,8 +82,19 @@ func firstStdoutData(t *testing.T, events []sseEvent) string {
 }
 
 // parseIntegrationSSEEvents parses a raw SSE response body into a slice of sseEvent.
+// It calls t.Fatalf on parse errors and must not be called from goroutines.
 func parseIntegrationSSEEvents(t *testing.T, body string) []sseEvent {
 	t.Helper()
+	events, err := parseSSEEventsRaw(body)
+	if err != nil {
+		t.Fatalf("parse SSE events: %v", err)
+	}
+	return events
+}
+
+// parseSSEEventsRaw parses a raw SSE response body into a slice of sseEvent.
+// It returns an error instead of calling t.Fatalf, making it safe for goroutines.
+func parseSSEEventsRaw(body string) ([]sseEvent, error) {
 	var events []sseEvent
 	scanner := bufio.NewScanner(strings.NewReader(body))
 	for scanner.Scan() {
@@ -80,11 +105,11 @@ func parseIntegrationSSEEvents(t *testing.T, body string) []sseEvent {
 		data := strings.TrimPrefix(line, "data: ")
 		var event sseEvent
 		if err := json.Unmarshal([]byte(data), &event); err != nil {
-			t.Fatalf("unmarshal SSE event %q: %v", data, err)
+			return nil, fmt.Errorf("unmarshal SSE event %q: %w", data, err)
 		}
 		events = append(events, event)
 	}
-	return events
+	return events, nil
 }
 
 // --- Integration tests ---
@@ -128,8 +153,11 @@ func TestIntegrationRejectedCommand(t *testing.T) {
 
 	sid := createSession(t, ts)
 
-	body := strings.NewReader(`{"command":"echo hello"}`)
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", body)
+	body := marshalCommand(t, "echo hello")
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
 	req.Header.Set(sessionIDHeader, sid)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -154,7 +182,10 @@ func TestIntegrationExecuteAfterDelete(t *testing.T) {
 	sid := createSession(t, ts)
 
 	// Delete the session.
-	delReq, _ := http.NewRequest(http.MethodDelete, ts.URL+"/api/session", nil)
+	delReq, err := http.NewRequest(http.MethodDelete, ts.URL+"/api/session", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
 	delReq.Header.Set(sessionIDHeader, sid)
 	delResp, err := http.DefaultClient.Do(delReq)
 	if err != nil {
@@ -163,8 +194,11 @@ func TestIntegrationExecuteAfterDelete(t *testing.T) {
 	delResp.Body.Close()
 
 	// Execute on the deleted session.
-	body := strings.NewReader(`{"command":"ls"}`)
-	execReq, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", body)
+	body := marshalCommand(t, "ls")
+	execReq, err := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
 	execReq.Header.Set(sessionIDHeader, sid)
 	execResp, err := http.DefaultClient.Do(execReq)
 	if err != nil {
@@ -217,13 +251,19 @@ func TestIntegrationCreateDeleteLifecycle(t *testing.T) {
 
 	// Execute.
 	events := executeCommand(t, ts, sid, "ls")
+	if len(events) == 0 {
+		t.Fatal("expected at least one event")
+	}
 	last := events[len(events)-1]
 	if last.Type != "complete" || last.ExitCode == nil || *last.ExitCode != 0 {
 		t.Fatalf("expected complete with exitCode=0, got %+v", last)
 	}
 
 	// Delete.
-	delReq, _ := http.NewRequest(http.MethodDelete, ts.URL+"/api/session", nil)
+	delReq, err := http.NewRequest(http.MethodDelete, ts.URL+"/api/session", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
 	delReq.Header.Set(sessionIDHeader, sid)
 	delResp, err := http.DefaultClient.Do(delReq)
 	if err != nil {
@@ -235,8 +275,11 @@ func TestIntegrationCreateDeleteLifecycle(t *testing.T) {
 	}
 
 	// Verify session is gone.
-	body := strings.NewReader(`{"command":"ls"}`)
-	execReq, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", body)
+	body := marshalCommand(t, "ls")
+	execReq, err := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
 	execReq.Header.Set(sessionIDHeader, sid)
 	execResp, err := http.DefaultClient.Do(execReq)
 	if err != nil {
@@ -259,6 +302,7 @@ func TestIntegrationConcurrentExecute(t *testing.T) {
 	defer ts.Close()
 
 	sid := createSession(t, ts)
+	body := marshalCommand(t, "pwd")
 
 	const n = 5
 	var wg sync.WaitGroup
@@ -269,8 +313,11 @@ func TestIntegrationConcurrentExecute(t *testing.T) {
 	for i := 0; i < n; i++ {
 		go func(i int) {
 			defer wg.Done()
-			body := strings.NewReader(`{"command":"pwd"}`)
-			req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", body)
+			req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", strings.NewReader(body))
+			if err != nil {
+				errs[i] = err
+				return
+			}
 			req.Header.Set(sessionIDHeader, sid)
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
@@ -287,7 +334,12 @@ func TestIntegrationConcurrentExecute(t *testing.T) {
 				errs[i] = err
 				return
 			}
-			results[i] = parseIntegrationSSEEvents(t, buf.String())
+			events, err := parseSSEEventsRaw(buf.String())
+			if err != nil {
+				errs[i] = err
+				return
+			}
+			results[i] = events
 		}(i)
 	}
 	wg.Wait()
@@ -295,6 +347,9 @@ func TestIntegrationConcurrentExecute(t *testing.T) {
 	for i := 0; i < n; i++ {
 		if errs[i] != nil {
 			t.Fatalf("request %d error: %v", i, errs[i])
+		}
+		if len(results[i]) == 0 {
+			t.Fatalf("request %d: no events received", i)
 		}
 		last := results[i][len(results[i])-1]
 		if last.Type != "complete" || last.ExitCode == nil || *last.ExitCode != 0 {
