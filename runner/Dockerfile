@@ -22,7 +22,10 @@ RUN CGO_ENABLED=0 go build -o /server .
 
 # production image
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends bash=5.2* coreutils && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash=5.2* \
+    coreutils=9.1* \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=binary /server /server
 EXPOSE 3000
 CMD ["/server"]

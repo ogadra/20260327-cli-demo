@@ -9,7 +9,7 @@
       pkgs = import nixpkgs {
         inherit system;
         config.allowUnfreePredicate = pkg:
-          builtins.elem (pkgs.lib.getName pkg) [ "terraform" ];
+          builtins.elem (nixpkgs.lib.getName pkg) [ "terraform" ];
       };
     in
     {
