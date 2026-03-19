@@ -3,5 +3,4 @@ runner/server
 terraform/.terraform/
 terraform/*.tfstate
 terraform/*.tfstate.backup
-terraform/.terraform.lock.hcl
 terraform/*_override.tf

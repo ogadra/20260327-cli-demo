@@ -17,6 +17,7 @@ func newMux() *http.ServeMux {
 	return mux
 }
 
+// main は broker の HTTP サーバーを起動する。
 func main() {
 	mux := newMux()
 	addr := ":8080"
