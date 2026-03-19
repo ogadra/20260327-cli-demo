@@ -13,6 +13,7 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
+    auto_incremental_review: false
     auto_pause_after_reviewed_commits: 0
   path_filters:
     - "!**/*.lock"
