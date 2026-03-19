@@ -449,11 +449,29 @@ func TestStreamContextCanceledDuringSend(t *testing.T) {
 		_, _, err := s.ExecuteStream(ctx, `echo line1; echo line2; echo line3`, ch)
 		errCh <- err
 	}()
-	<-ch
-	cancel()
-	for range ch {
+	select {
+	case <-ch:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for first stdout line")
 	}
-	err := <-errCh
+	cancel()
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		for range ch {
+		}
+	}()
+	select {
+	case <-drained:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for stdout channel to close")
+	}
+	var err error
+	select {
+	case err = <-errCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for ExecuteStream to return")
+	}
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -473,11 +491,29 @@ func TestStreamContextCanceledDuringEmptyLine(t *testing.T) {
 		_, _, err := s.ExecuteStream(ctx, `printf 'a\n\nb\n'`, ch)
 		errCh <- err
 	}()
-	<-ch // read "a"
-	cancel()
-	for range ch {
+	select {
+	case <-ch: // read "a"
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for first stdout line")
 	}
-	err := <-errCh
+	cancel()
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		for range ch {
+		}
+	}()
+	select {
+	case <-drained:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for stdout channel to close")
+	}
+	var err error
+	select {
+	case err = <-errCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for ExecuteStream to return")
+	}
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -731,11 +767,29 @@ func TestStreamDrainMarkerOnContextCancel(t *testing.T) {
 		_, _, err := s.ExecuteStream(ctx, `echo line1; echo line2; echo line3`, ch)
 		errCh <- err
 	}()
-	<-ch // read first line
-	cancel()
-	for range ch {
+	select {
+	case <-ch: // read first line
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for first stdout line")
 	}
-	err := <-errCh
+	cancel()
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		for range ch {
+		}
+	}()
+	select {
+	case <-drained:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for stdout channel to close")
+	}
+	var err error
+	select {
+	case err = <-errCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for ExecuteStream to return")
+	}
 	if err == nil {
 		t.Fatal("expected error from canceled context, got nil")
 	}
