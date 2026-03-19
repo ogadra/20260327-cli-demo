@@ -27,6 +27,27 @@ pre-commit:
       root: "broker/"
       glob: "*.go"
       run: go vet ./...
+    021_terraform_fmt:
+      root: "terraform/"
+      glob: "*.tf"
+      stage_fixed: true
+      run: terraform fmt {staged_files}
+    022_terraform_fmt_check:
+      root: "terraform/"
+      glob: "*.tf"
+      run: terraform fmt -check {staged_files}
+    023_terraform_validate:
+      root: "terraform/"
+      glob: "*.tf"
+      run: terraform validate
+    024_tflint:
+      root: "terraform/"
+      glob: "*.tf"
+      run: tflint
+    025_checkov:
+      root: "terraform/"
+      glob: "*.tf"
+      run: checkov -d .
     004_gitleaks:
       run: gitleaks protect --staged
     005_trivy:
