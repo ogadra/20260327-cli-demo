@@ -296,7 +296,7 @@ func TestExecuteMethodNotAllowed(t *testing.T) {
 // when the session manager fails to create a new shell.
 func TestCreateSessionError(t *testing.T) {
 	sm := NewSessionManager()
-	sm.newShell = func() (executor, error) {
+	sm.newShell = func() (Shell, error) {
 		return nil, errors.New("shell broken")
 	}
 	handler := newHandler(sm)
@@ -310,22 +310,22 @@ func TestCreateSessionError(t *testing.T) {
 	}
 }
 
-// mockExecutor is a test double for the executor interface that returns
+// mockShell is a test double for the Shell interface that returns
 // preconfigured values from ExecuteStream.
-type mockExecutor struct {
+type mockShell struct {
 	exitCode int
 	stderr   string
 	err      error
 }
 
 // ExecuteStream sends no stdout lines and returns the preconfigured exit code, stderr, and error.
-func (m *mockExecutor) ExecuteStream(_ context.Context, _ string, ch chan<- string) (int, string, error) {
+func (m *mockShell) ExecuteStream(_ context.Context, _ string, ch chan<- string) (int, string, error) {
 	close(ch)
 	return m.exitCode, m.stderr, m.err
 }
 
 // Close is a no-op for the mock.
-func (m *mockExecutor) Close() error {
+func (m *mockShell) Close() error {
 	return nil
 }
 
@@ -343,7 +343,7 @@ func TestExecuteWhitelistedWithStderr(t *testing.T) {
 
 	// Replace the real shell with a mock that returns stderr.
 	sm.mu.Lock()
-	sm.sessions[id] = &mockExecutor{exitCode: 0, stderr: "warning: something"}
+	sm.sessions[id] = &mockShell{exitCode: 0, stderr: "warning: something"}
 	sm.mu.Unlock()
 
 	body := strings.NewReader(`{"command":"ls"}`)
@@ -381,7 +381,7 @@ func TestExecuteWhitelistedNonZeroExit(t *testing.T) {
 	}
 
 	sm.mu.Lock()
-	sm.sessions[id] = &mockExecutor{exitCode: 2}
+	sm.sessions[id] = &mockShell{exitCode: 2}
 	sm.mu.Unlock()
 
 	body := strings.NewReader(`{"command":"ls"}`)
@@ -410,7 +410,7 @@ func TestExecuteWhitelistedWithExecError(t *testing.T) {
 	}
 
 	sm.mu.Lock()
-	sm.sessions[id] = &mockExecutor{exitCode: -1, err: errors.New("broken")}
+	sm.sessions[id] = &mockShell{exitCode: -1, err: errors.New("broken")}
 	sm.mu.Unlock()
 
 	body := strings.NewReader(`{"command":"ls"}`)

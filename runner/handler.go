@@ -10,9 +10,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// executor abstracts command execution and lifecycle for handler and session manager.
-// In production, *Shell implements this interface.
-type executor interface {
+// Shell abstracts command execution and lifecycle for handler and session manager.
+// In production, *bashShell implements this interface.
+type Shell interface {
 	ExecuteStream(ctx context.Context, command string, stdoutCh chan<- string) (int, string, error)
 	Close() error
 }

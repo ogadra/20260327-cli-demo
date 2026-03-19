@@ -269,7 +269,7 @@ func TestCreateDuplicateID(t *testing.T) {
 // TestCreateNewShellError verifies that Create propagates errors from the shell factory.
 func TestCreateNewShellError(t *testing.T) {
 	m := NewSessionManager()
-	m.newShell = func() (executor, error) {
+	m.newShell = func() (Shell, error) {
 		return nil, errors.New("shell broken")
 	}
 

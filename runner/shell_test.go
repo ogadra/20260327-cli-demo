@@ -11,12 +11,12 @@ import (
 	"time"
 )
 
-// newTestShell creates a [Shell] for testing and registers cleanup.
-func newTestShell(t *testing.T) *Shell {
+// newTestShell creates a [bashShell] for testing and registers cleanup.
+func newTestShell(t *testing.T) *bashShell {
 	t.Helper()
-	s, err := NewShell()
+	s, err := NewBashShell()
 	if err != nil {
-		t.Fatalf("NewShell() error: %v", err)
+		t.Fatalf("NewBashShell() error: %v", err)
 	}
 	t.Cleanup(func() {
 		if err := s.Close(); err != nil {
@@ -26,9 +26,9 @@ func newTestShell(t *testing.T) *Shell {
 	return s
 }
 
-// execStream is a test helper that runs [Shell.ExecuteStream] and collects stdout lines.
+// execStream is a test helper that runs [bashShell.ExecuteStream] and collects stdout lines.
 // It drains the channel concurrently to avoid deadlocks when output exceeds the buffer.
-func execStream(t *testing.T, s *Shell, command string) ([]string, int, string) {
+func execStream(t *testing.T, s *bashShell, command string) ([]string, int, string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -49,11 +49,11 @@ func execStream(t *testing.T, s *Shell, command string) ([]string, int, string) 
 	return lines, exitCode, stderr
 }
 
-// TestNewShell verifies that a Shell can be created and closed successfully.
+// TestNewShell verifies that a bashShell can be created and closed successfully.
 func TestNewShell(t *testing.T) {
-	s, err := NewShell()
+	s, err := NewBashShell()
 	if err != nil {
-		t.Fatalf("NewShell() error: %v", err)
+		t.Fatalf("NewBashShell() error: %v", err)
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close() error: %v", err)
@@ -257,9 +257,9 @@ func TestStreamNoTrailingNewline(t *testing.T) {
 
 // TestClose verifies that Close terminates the bash session cleanly.
 func TestClose(t *testing.T) {
-	s, err := NewShell()
+	s, err := NewBashShell()
 	if err != nil {
-		t.Fatalf("NewShell() error: %v", err)
+		t.Fatalf("NewBashShell() error: %v", err)
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close() error: %v", err)
@@ -342,7 +342,7 @@ func (t *trackingReadCloser) Close() error { t.closed = true; return nil }
 
 // TestNewShellStdinPipeError verifies that a stdin pipe error is reported correctly.
 func TestNewShellStdinPipeError(t *testing.T) {
-	_, err := newShellFromCommander(&fakeCommander{stdinErr: errFake})
+	_, err := newBashShellFromCommander(&fakeCommander{stdinErr: errFake})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -355,7 +355,7 @@ func TestNewShellStdinPipeError(t *testing.T) {
 // and previously acquired pipes are closed (no FD leak).
 func TestNewShellStdoutPipeError(t *testing.T) {
 	stdinTracker := &trackingCloser{Writer: &strings.Builder{}}
-	_, err := newShellFromCommander(&fakeCommander{
+	_, err := newBashShellFromCommander(&fakeCommander{
 		stdinW:    stdinTracker,
 		stdoutErr: errFake,
 	})
@@ -375,7 +375,7 @@ func TestNewShellStdoutPipeError(t *testing.T) {
 func TestNewShellStderrPipeError(t *testing.T) {
 	stdinTracker := &trackingCloser{Writer: &strings.Builder{}}
 	stdoutTracker := &trackingReadCloser{Reader: strings.NewReader("")}
-	_, err := newShellFromCommander(&fakeCommander{
+	_, err := newBashShellFromCommander(&fakeCommander{
 		stdinW:    stdinTracker,
 		stdoutR:   stdoutTracker,
 		stderrErr: errFake,
@@ -400,7 +400,7 @@ func TestNewShellStartError(t *testing.T) {
 	stdinTracker := &trackingCloser{Writer: &strings.Builder{}}
 	stdoutTracker := &trackingReadCloser{Reader: strings.NewReader("")}
 	stderrTracker := &trackingReadCloser{Reader: strings.NewReader("")}
-	_, err := newShellFromCommander(&fakeCommander{
+	_, err := newBashShellFromCommander(&fakeCommander{
 		stdinW:   stdinTracker,
 		stdoutR:  stdoutTracker,
 		stderrR:  stderrTracker,
@@ -538,7 +538,7 @@ func TestStreamUnbufferedConsumer(t *testing.T) {
 // TestCheckStderrMarkerNoMarkerSet verifies that checkStderrMarker is a no-op
 // when no marker is set.
 func TestCheckStderrMarkerNoMarkerSet(t *testing.T) {
-	s := &Shell{}
+	s := &bashShell{}
 	s.stderrMu.Lock()
 	s.stderrBuf.WriteString("some output")
 	s.checkStderrMarker()
@@ -551,7 +551,7 @@ func TestCheckStderrMarkerNoMarkerSet(t *testing.T) {
 // TestCheckStderrMarkerNoTrailingNewline verifies that checkStderrMarker handles
 // a marker at the end of the buffer without a trailing newline.
 func TestCheckStderrMarkerNoTrailingNewline(t *testing.T) {
-	s := &Shell{}
+	s := &bashShell{}
 	s.stderrMarker = "__MRK_TEST__"
 	s.stderrDone = make(chan struct{})
 
@@ -583,7 +583,7 @@ func (failWriter) Close() error { return nil }
 
 // TestStreamWriteError verifies that a stdin write failure is reported.
 func TestStreamWriteError(t *testing.T) {
-	s := &Shell{
+	s := &bashShell{
 		stdin:  failWriter{},
 		stdout: bufio.NewScanner(strings.NewReader("")),
 		cmd:    &fakeCommander{},
@@ -601,7 +601,7 @@ func TestStreamWriteError(t *testing.T) {
 // TestStreamWriteErrorMarksBroken verifies that a stdin write failure marks
 // the session as broken, preventing subsequent commands.
 func TestStreamWriteErrorMarksBroken(t *testing.T) {
-	s := &Shell{
+	s := &bashShell{
 		stdin:  failWriter{},
 		stdout: bufio.NewScanner(strings.NewReader("")),
 		cmd:    &fakeCommander{},
@@ -622,7 +622,7 @@ func TestStreamWriteErrorMarksBroken(t *testing.T) {
 
 // TestStreamUnexpectedEOF verifies that stdout closing without a marker is reported.
 func TestStreamUnexpectedEOF(t *testing.T) {
-	s := &Shell{
+	s := &bashShell{
 		stdin:  nopWriteCloser{&strings.Builder{}},
 		stdout: bufio.NewScanner(strings.NewReader("some output\n")),
 		cmd:    &fakeCommander{},
@@ -645,7 +645,7 @@ func (errReader) Read([]byte) (int, error) { return 0, errFake }
 
 // TestStreamScanError verifies that a scanner read error is reported.
 func TestStreamScanError(t *testing.T) {
-	s := &Shell{
+	s := &bashShell{
 		stdin:  nopWriteCloser{&strings.Builder{}},
 		stdout: bufio.NewScanner(errReader{}),
 		cmd:    &fakeCommander{},
@@ -660,7 +660,7 @@ func TestStreamScanError(t *testing.T) {
 	}
 }
 
-// markerCapturingWriter captures what [Shell.ExecuteStream] writes to stdin
+// markerCapturingWriter captures what [bashShell.ExecuteStream] writes to stdin
 // so we can extract the marker and produce a fake stdout response.
 // All methods are safe for concurrent use.
 type markerCapturingWriter struct {
@@ -705,7 +705,7 @@ func TestStreamInvalidExitCode(t *testing.T) {
 	stdinCapture := &markerCapturingWriter{}
 	stdoutR, stdoutW := io.Pipe()
 
-	s := &Shell{
+	s := &bashShell{
 		stdin:  stdinCapture,
 		stdout: bufio.NewScanner(stdoutR),
 		cmd:    &fakeCommander{},
@@ -789,7 +789,7 @@ func TestStreamDrainMarkerOnContextCancel(t *testing.T) {
 // TestStreamBrokenOnUnexpectedEOF verifies that if stdout closes before the
 // marker is found (e.g. bash crashes), the session is marked as broken.
 func TestStreamBrokenOnUnexpectedEOF(t *testing.T) {
-	s := &Shell{
+	s := &bashShell{
 		stdin:  nopWriteCloser{&strings.Builder{}},
 		stdout: bufio.NewScanner(strings.NewReader("some output\n")),
 		cmd:    &fakeCommander{},
@@ -813,7 +813,7 @@ func TestStreamBrokenOnUnexpectedEOF(t *testing.T) {
 
 // TestCloseWriteError verifies that a stdin write failure during Close is reported.
 func TestCloseWriteError(t *testing.T) {
-	s := &Shell{
+	s := &bashShell{
 		stdin: failWriter{},
 		cmd:   &fakeCommander{},
 	}
@@ -828,7 +828,7 @@ func TestCloseWriteError(t *testing.T) {
 
 // TestCloseWaitError verifies that a process wait error during Close is propagated.
 func TestCloseWaitError(t *testing.T) {
-	s := &Shell{
+	s := &bashShell{
 		stdin: nopWriteCloser{&strings.Builder{}},
 		cmd:   &fakeCommander{waitErr: errFake},
 	}
@@ -846,7 +846,7 @@ func TestCloseWaitError(t *testing.T) {
 func TestCloseCallsWaitOnWriteError(t *testing.T) {
 	cmd := &fakeCommander{}
 	tc := &trackingCommander{inner: cmd}
-	s := &Shell{
+	s := &bashShell{
 		stdin: failWriter{},
 		cmd:   tc,
 	}
@@ -859,7 +859,7 @@ func TestCloseCallsWaitOnWriteError(t *testing.T) {
 // TestCloseWriteAndWaitError verifies that Close returns a combined error
 // when both writing "exit" and waiting for the process fail.
 func TestCloseWriteAndWaitError(t *testing.T) {
-	s := &Shell{
+	s := &bashShell{
 		stdin: failWriter{},
 		cmd:   &fakeCommander{waitErr: errFake},
 	}
