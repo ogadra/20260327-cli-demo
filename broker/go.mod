@@ -2,9 +2,18 @@ module github.com/ogadra/20260327-cli-demo/broker
 
 go 1.26.1
 
-require github.com/gin-gonic/gin v1.12.0
+require (
+	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.56.2
+	github.com/gin-gonic/gin v1.12.0
+)
 
 require (
+	github.com/aws/aws-sdk-go-v2 v1.41.4 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.20 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.20 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.11.20 // indirect
+	github.com/aws/smithy-go v1.24.2 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect

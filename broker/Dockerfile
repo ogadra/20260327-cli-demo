@@ -12,6 +12,10 @@ COPY . .
 FROM build AS test
 RUN CGO_ENABLED=0 go test -v ./...
 
+# integration test stage
+FROM build AS test-integration
+CMD ["go", "test", "-v", "-count=1", "-tags=integration", "./..."]
+
 # test with race detector (requires cgo + gcc)
 FROM build AS test-race
 RUN apk add --no-cache gcc musl-dev \
