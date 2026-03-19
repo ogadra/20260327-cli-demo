@@ -3,6 +3,8 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"os"
 
@@ -18,13 +20,31 @@ func newRouter() *gin.Engine {
 	return r
 }
 
+// listenAndServe はサーバーを起動する関数の型。テスト時に差し替える。
+type listenAndServe func(addr string, handler http.Handler) error
+
+// stdout はメインの出力先。テスト時に差し替える。
+var stdout io.Writer = os.Stdout
+
+// addr はサーバーのリッスンアドレス。テスト時に差し替える。
+var addr = ":8080"
+
+// serve はサーバーを起動する関数。テスト時に差し替える。
+var serve listenAndServe = http.ListenAndServe
+
+// fatalf はエラー時の終了処理。テスト時に差し替える。
+var fatalf = log.Fatalf
+
+// run はサーバーの起動処理を行う。
+func run() error {
+	r := newRouter()
+	fmt.Fprintf(stdout, "broker listening on %s\n", addr)
+	return serve(addr, r)
+}
+
 // main は broker の HTTP サーバーを起動する。
 func main() {
-	r := newRouter()
-	addr := ":8080"
-	fmt.Fprintf(os.Stdout, "broker listening on %s\n", addr)
-	if err := r.Run(addr); err != nil {
-		fmt.Fprintf(os.Stderr, "server error: %v\n", err)
-		os.Exit(1)
+	if err := run(); err != nil {
+		fatalf("server error: %v", err)
 	}
 }
