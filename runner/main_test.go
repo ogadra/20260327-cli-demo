@@ -192,8 +192,8 @@ func TestIntegrationCreateExecuteDelete(t *testing.T) {
 		t.Fatal("empty session ID")
 	}
 
-	// Execute command.
-	body := strings.NewReader(`{"command":"echo integration"}`)
+	// Execute whitelisted command.
+	body := strings.NewReader(`{"command":"pwd"}`)
 	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", body)
 	req.Header.Set(sessionIDHeader, sr.SessionID)
 	resp2, err := http.DefaultClient.Do(req)
@@ -221,7 +221,7 @@ func TestIntegrationCreateExecuteDelete(t *testing.T) {
 }
 
 // TestRunShutdownTimeout verifies that run returns an error when the shutdown
-// context times out due to an in-flight request that does not complete in time.
+// context times out due to an in-flight connection that does not complete in time.
 func TestRunShutdownTimeout(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -243,23 +243,12 @@ func TestRunShutdownTimeout(t *testing.T) {
 
 	waitForServer(t, addr)
 
-	// Create a session and start a long-running request to keep the server busy.
-	id, _, err := sm.Create()
+	// Open a kept-alive connection so the server has active connections at shutdown.
+	conn, err := net.Dial("tcp", addr)
 	if err != nil {
-		t.Fatalf("Create error: %v", err)
+		t.Fatalf("Dial error: %v", err)
 	}
-
-	longReqDone := make(chan struct{})
-	go func() {
-		defer close(longReqDone)
-		body := strings.NewReader(`{"command":"sleep 10"}`)
-		req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/api/execute", addr), body)
-		req.Header.Set(sessionIDHeader, id)
-		http.DefaultClient.Do(req)
-	}()
-
-	// Give the request a moment to start.
-	time.Sleep(100 * time.Millisecond)
+	defer conn.Close()
 
 	sigCh <- os.Interrupt
 
