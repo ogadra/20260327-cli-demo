@@ -11,17 +11,22 @@ import (
 // It is safe for concurrent use.
 type SessionManager struct {
 	mu       sync.Mutex
-	sessions map[string]*Shell
-	genID    func() (string, error) // ID generator; defaults to generateID
-	newShell func() (*Shell, error) // shell factory; defaults to NewShell
+	sessions map[string]executor
+	genID    func() (string, error)   // ID generator; defaults to generateID
+	newShell func() (executor, error) // shell factory; defaults to newDefaultShell
+}
+
+// newDefaultShell wraps NewShell to satisfy the executor factory signature.
+func newDefaultShell() (executor, error) {
+	return NewShell()
 }
 
 // NewSessionManager creates an empty SessionManager.
 func NewSessionManager() *SessionManager {
 	return &SessionManager{
-		sessions: make(map[string]*Shell),
+		sessions: make(map[string]executor),
 		genID:    generateID,
-		newShell: NewShell,
+		newShell: newDefaultShell,
 	}
 }
 
@@ -34,8 +39,8 @@ func generateID() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// Create starts a new bash session and returns its ID.
-func (m *SessionManager) Create() (string, *Shell, error) {
+// Create starts a new bash session and returns its ID and the executor.
+func (m *SessionManager) Create() (string, executor, error) {
 	id, err := m.genID()
 	if err != nil {
 		return "", nil, err
@@ -58,9 +63,9 @@ func (m *SessionManager) Create() (string, *Shell, error) {
 	return id, shell, nil
 }
 
-// Get returns the Shell for the given session ID.
+// Get returns the executor for the given session ID.
 // Returns an error if the session does not exist.
-func (m *SessionManager) Get(id string) (*Shell, error) {
+func (m *SessionManager) Get(id string) (executor, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -91,7 +96,7 @@ func (m *SessionManager) Delete(id string) error {
 func (m *SessionManager) CloseAll() error {
 	m.mu.Lock()
 	sessions := m.sessions
-	m.sessions = make(map[string]*Shell)
+	m.sessions = make(map[string]executor)
 	m.mu.Unlock()
 
 	var firstErr error

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -8,6 +9,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// executor abstracts command execution and lifecycle for handler and session manager.
+// In production, *Shell implements this interface.
+type executor interface {
+	ExecuteStream(ctx context.Context, command string, stdoutCh chan<- string) (int, string, error)
+	Close() error
+}
 
 // sessionIDHeader is the HTTP header name used to pass the session ID.
 const sessionIDHeader = "X-Session-Id"
@@ -72,8 +80,9 @@ func handleDeleteSession(sm *SessionManager) gin.HandlerFunc {
 }
 
 // handleExecute returns a gin handler for POST /api/execute.
-// It executes the command in the session specified by X-Session-Id and streams
-// the result as Server-Sent Events.
+// It classifies the command and rejects it with 403 if not whitelisted.
+// Whitelisted commands are executed in the session specified by X-Session-Id
+// and the result is streamed as Server-Sent Events.
 func handleExecute(sm *SessionManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.GetHeader(sessionIDHeader)
@@ -95,6 +104,13 @@ func handleExecute(sm *SessionManager) gin.HandlerFunc {
 		}
 
 		class := classifyCommand(req.Command)
+		remote := c.ClientIP() + ":" + c.GetHeader("X-Forwarded-Port")
+		auditLog(id, remote, class, req.Command, nil, nil)
+
+		if class != "whitelisted" {
+			c.String(http.StatusForbidden, "command not allowed")
+			return
+		}
 
 		c.Header("Content-Type", "text/event-stream")
 		c.Header("Cache-Control", "no-cache")
@@ -121,12 +137,21 @@ func handleExecute(sm *SessionManager) gin.HandlerFunc {
 		writeSSE(c.Writer, sseEvent{Type: "complete", ExitCode: &exitCode})
 		c.Writer.Flush()
 
-		if execErr != nil {
-			log.Printf("[AUDIT] command=%q class=%s error=%v", req.Command, class, execErr)
-		} else {
-			log.Printf("[AUDIT] command=%q class=%s exitCode=%d", req.Command, class, exitCode)
-		}
+		auditLog(id, remote, class, req.Command, &exitCode, execErr)
 	}
+}
+
+// auditLog writes a structured audit log line.
+// exitCode and err are optional and only appended when non-nil.
+func auditLog(session, remote, class, command string, exitCode *int, err error) {
+	msg := fmt.Sprintf("[AUDIT] session=%s remote=%s class=%s command=%q", session, remote, class, command)
+	if exitCode != nil {
+		msg += fmt.Sprintf(" exitCode=%d", *exitCode)
+	}
+	if err != nil {
+		msg += fmt.Sprintf(" error=%v", err)
+	}
+	log.Print(msg)
 }
 
 // writeSSE marshals an sseEvent to JSON and writes it as a Server-Sent Event line.

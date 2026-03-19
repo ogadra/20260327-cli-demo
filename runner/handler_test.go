@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -92,9 +93,9 @@ func TestDeleteSessionNotFound(t *testing.T) {
 	}
 }
 
-// TestExecuteBasic verifies that POST /api/execute with a valid session
-// streams SSE events for stdout and complete.
-func TestExecuteBasic(t *testing.T) {
+// TestExecuteWhitelisted verifies that POST /api/execute with a whitelisted command
+// streams SSE events for stdout and complete with exit code 0.
+func TestExecuteWhitelisted(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
 	handler := newHandler(sm)
@@ -104,7 +105,7 @@ func TestExecuteBasic(t *testing.T) {
 		t.Fatalf("Create() error: %v", err)
 	}
 
-	body := strings.NewReader(`{"command":"echo hello"}`)
+	body := strings.NewReader(`{"command":"ls"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
 	req.Header.Set(sessionIDHeader, id)
 	w := httptest.NewRecorder()
@@ -119,8 +120,8 @@ func TestExecuteBasic(t *testing.T) {
 	}
 
 	events := parseSSEEvents(t, w.Body.String())
-	if len(events) < 2 {
-		t.Fatalf("expected at least 2 events, got %d", len(events))
+	if len(events) < 1 {
+		t.Fatalf("expected at least 1 event, got %d", len(events))
 	}
 
 	last := events[len(events)-1]
@@ -130,21 +131,11 @@ func TestExecuteBasic(t *testing.T) {
 	if last.ExitCode == nil || *last.ExitCode != 0 {
 		t.Fatalf("last event exitCode = %v, want 0", last.ExitCode)
 	}
-
-	foundHello := false
-	for _, e := range events {
-		if e.Type == "stdout" && e.Data == "hello" {
-			foundHello = true
-		}
-	}
-	if !foundHello {
-		t.Fatalf("did not find stdout event with data 'hello' in %v", events)
-	}
 }
 
-// TestExecuteWithStderr verifies that stderr output is sent as an SSE event
-// of type "stderr" before the complete event.
-func TestExecuteWithStderr(t *testing.T) {
+// TestExecuteRejected verifies that POST /api/execute with a non-whitelisted command
+// returns 403 Forbidden without executing the command.
+func TestExecuteRejected(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
 	handler := newHandler(sm)
@@ -154,27 +145,24 @@ func TestExecuteWithStderr(t *testing.T) {
 		t.Fatalf("Create() error: %v", err)
 	}
 
-	body := strings.NewReader(`{"command":"echo err >&2"}`)
+	body := strings.NewReader(`{"command":"echo hello"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
 	req.Header.Set(sessionIDHeader, id)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	events := parseSSEEvents(t, w.Body.String())
-	foundStderr := false
-	for _, e := range events {
-		if e.Type == "stderr" && strings.Contains(e.Data, "err") {
-			foundStderr = true
-		}
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
 	}
-	if !foundStderr {
-		t.Fatalf("did not find stderr event in %v", events)
+
+	if !strings.Contains(w.Body.String(), "command not allowed") {
+		t.Fatalf("body = %q, want to contain %q", w.Body.String(), "command not allowed")
 	}
 }
 
-// TestExecuteNonZeroExit verifies that a failing command returns
-// a complete event with a non-zero exit code.
-func TestExecuteNonZeroExit(t *testing.T) {
+// TestExecuteRejectedWithArgs verifies that a whitelisted command name with arguments
+// is rejected with 403 because it does not exactly match the whitelist.
+func TestExecuteRejectedWithArgs(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
 	handler := newHandler(sm)
@@ -184,16 +172,14 @@ func TestExecuteNonZeroExit(t *testing.T) {
 		t.Fatalf("Create() error: %v", err)
 	}
 
-	body := strings.NewReader(`{"command":"false"}`)
+	body := strings.NewReader(`{"command":"ls -la"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
 	req.Header.Set(sessionIDHeader, id)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	events := parseSSEEvents(t, w.Body.String())
-	last := events[len(events)-1]
-	if last.Type != "complete" || last.ExitCode == nil || *last.ExitCode == 0 {
-		t.Fatalf("expected non-zero exit code, got %v", last)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
 	}
 }
 
@@ -203,7 +189,7 @@ func TestExecuteMissingSessionHeader(t *testing.T) {
 	sm := NewSessionManager()
 	handler := newHandler(sm)
 
-	body := strings.NewReader(`{"command":"echo hello"}`)
+	body := strings.NewReader(`{"command":"ls"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -219,7 +205,7 @@ func TestExecuteSessionNotFound(t *testing.T) {
 	sm := NewSessionManager()
 	handler := newHandler(sm)
 
-	body := strings.NewReader(`{"command":"echo hello"}`)
+	body := strings.NewReader(`{"command":"ls"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
 	req.Header.Set(sessionIDHeader, "nonexistent")
 	w := httptest.NewRecorder()
@@ -310,7 +296,7 @@ func TestExecuteMethodNotAllowed(t *testing.T) {
 // when the session manager fails to create a new shell.
 func TestCreateSessionError(t *testing.T) {
 	sm := NewSessionManager()
-	sm.newShell = func() (*Shell, error) {
+	sm.newShell = func() (executor, error) {
 		return nil, errors.New("shell broken")
 	}
 	handler := newHandler(sm)
@@ -324,28 +310,115 @@ func TestCreateSessionError(t *testing.T) {
 	}
 }
 
-// TestExecuteWithExecError verifies that the audit log records an error
-// when ExecuteStream fails on a broken session.
-func TestExecuteWithExecError(t *testing.T) {
+// mockExecutor is a test double for the executor interface that returns
+// preconfigured values from ExecuteStream.
+type mockExecutor struct {
+	exitCode int
+	stderr   string
+	err      error
+}
+
+// ExecuteStream sends no stdout lines and returns the preconfigured exit code, stderr, and error.
+func (m *mockExecutor) ExecuteStream(_ context.Context, _ string, ch chan<- string) (int, string, error) {
+	close(ch)
+	return m.exitCode, m.stderr, m.err
+}
+
+// Close is a no-op for the mock.
+func (m *mockExecutor) Close() error {
+	return nil
+}
+
+// TestExecuteWhitelistedWithStderr verifies that stderr output from a whitelisted command
+// is sent as an SSE event of type "stderr" before the complete event.
+func TestExecuteWhitelistedWithStderr(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
 	handler := newHandler(sm)
 
-	id, shell, err := sm.Create()
+	id, _, err := sm.Create()
 	if err != nil {
 		t.Fatalf("Create() error: %v", err)
 	}
 
-	// Close the shell to make ExecuteStream return an error.
-	shell.Close()
+	// Replace the real shell with a mock that returns stderr.
+	sm.mu.Lock()
+	sm.sessions[id] = &mockExecutor{exitCode: 0, stderr: "warning: something"}
+	sm.mu.Unlock()
 
-	body := strings.NewReader(`{"command":"echo hello"}`)
+	body := strings.NewReader(`{"command":"ls"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
 	req.Header.Set(sessionIDHeader, id)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	// Should still return 200 with SSE events since headers are sent before execution.
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	events := parseSSEEvents(t, w.Body.String())
+	foundStderr := false
+	for _, e := range events {
+		if e.Type == "stderr" && strings.Contains(e.Data, "warning") {
+			foundStderr = true
+		}
+	}
+	if !foundStderr {
+		t.Fatalf("did not find stderr event in %v", events)
+	}
+}
+
+// TestExecuteWhitelistedNonZeroExit verifies that a whitelisted command returning
+// a non-zero exit code sends the correct exit code in the complete event.
+func TestExecuteWhitelistedNonZeroExit(t *testing.T) {
+	sm := NewSessionManager()
+	defer sm.CloseAll()
+	handler := newHandler(sm)
+
+	id, _, err := sm.Create()
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	sm.mu.Lock()
+	sm.sessions[id] = &mockExecutor{exitCode: 2}
+	sm.mu.Unlock()
+
+	body := strings.NewReader(`{"command":"ls"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
+	req.Header.Set(sessionIDHeader, id)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	events := parseSSEEvents(t, w.Body.String())
+	last := events[len(events)-1]
+	if last.Type != "complete" || last.ExitCode == nil || *last.ExitCode != 2 {
+		t.Fatalf("expected exitCode=2, got %v", last)
+	}
+}
+
+// TestExecuteWhitelistedWithExecError verifies that when ExecuteStream returns an error
+// on a whitelisted command, the audit log records the error via auditLog.
+func TestExecuteWhitelistedWithExecError(t *testing.T) {
+	sm := NewSessionManager()
+	defer sm.CloseAll()
+	handler := newHandler(sm)
+
+	id, _, err := sm.Create()
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	sm.mu.Lock()
+	sm.sessions[id] = &mockExecutor{exitCode: -1, err: errors.New("broken")}
+	sm.mu.Unlock()
+
+	body := strings.NewReader(`{"command":"ls"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
+	req.Header.Set(sessionIDHeader, id)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
