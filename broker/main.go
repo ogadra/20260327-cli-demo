@@ -5,24 +5,25 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+
+	"github.com/gin-gonic/gin"
 )
 
-// newMux は broker の HTTP ルーティングを構成した ServeMux を返す。
-func newMux() *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "ok")
+// newRouter は broker の HTTP ルーティングを構成した gin.Engine を返す。
+func newRouter() *gin.Engine {
+	r := gin.Default()
+	r.GET("/health", func(c *gin.Context) {
+		c.String(http.StatusOK, "ok\n")
 	})
-	return mux
+	return r
 }
 
 // main は broker の HTTP サーバーを起動する。
 func main() {
-	mux := newMux()
+	r := newRouter()
 	addr := ":8080"
 	fmt.Fprintf(os.Stdout, "broker listening on %s\n", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := r.Run(addr); err != nil {
 		fmt.Fprintf(os.Stderr, "server error: %v\n", err)
 		os.Exit(1)
 	}
