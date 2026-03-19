@@ -18,7 +18,11 @@ func newTestShell(t *testing.T) *Shell {
 	if err != nil {
 		t.Fatalf("NewShell() error: %v", err)
 	}
-	t.Cleanup(func() { s.Close() })
+	t.Cleanup(func() {
+		if err := s.Close(); err != nil {
+			t.Errorf("Close() error: %v", err)
+		}
+	})
 	return s
 }
 
@@ -202,8 +206,12 @@ func TestStreamLongLine(t *testing.T) {
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
-	if len(lines) != 1 || len(lines[0]) != 100000 {
-		t.Errorf("got %d lines, first line length = %d, want 1 line of 100000 chars", len(lines), len(lines[0]))
+	gotLen := 0
+	if len(lines) > 0 {
+		gotLen = len(lines[0])
+	}
+	if len(lines) != 1 || gotLen != 100000 {
+		t.Errorf("got %d lines, first line length = %d, want 1 line of 100000 chars", len(lines), gotLen)
 	}
 }
 
