@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+// TestCreateAndGet verifies that Create returns a valid session ID and shell,
+// and that Get retrieves the same shell instance by ID.
 func TestCreateAndGet(t *testing.T) {
 	m := NewSessionManager()
 	defer m.CloseAll()
@@ -32,6 +34,7 @@ func TestCreateAndGet(t *testing.T) {
 	}
 }
 
+// TestGetNotFound verifies that Get returns an error for a nonexistent session ID.
 func TestGetNotFound(t *testing.T) {
 	m := NewSessionManager()
 
@@ -41,6 +44,7 @@ func TestGetNotFound(t *testing.T) {
 	}
 }
 
+// TestDelete verifies that Delete removes a session and that subsequent Get fails.
 func TestDelete(t *testing.T) {
 	m := NewSessionManager()
 
@@ -59,6 +63,7 @@ func TestDelete(t *testing.T) {
 	}
 }
 
+// TestDeleteNotFound verifies that Delete returns an error for a nonexistent session ID.
 func TestDeleteNotFound(t *testing.T) {
 	m := NewSessionManager()
 
@@ -68,6 +73,7 @@ func TestDeleteNotFound(t *testing.T) {
 	}
 }
 
+// TestCloseAll verifies that CloseAll closes all sessions and clears the map.
 func TestCloseAll(t *testing.T) {
 	m := NewSessionManager()
 
@@ -92,6 +98,8 @@ func TestCloseAll(t *testing.T) {
 	}
 }
 
+// TestSessionExecute verifies that a command can be executed through a session-managed shell
+// and that stdout and exit code are returned correctly.
 func TestSessionExecute(t *testing.T) {
 	m := NewSessionManager()
 	defer m.CloseAll()
@@ -128,6 +136,8 @@ func TestSessionExecute(t *testing.T) {
 	}
 }
 
+// TestSessionIsolation verifies that environment variables set in one session
+// are not visible in another session.
 func TestSessionIsolation(t *testing.T) {
 	m := NewSessionManager()
 	defer m.CloseAll()
@@ -182,6 +192,8 @@ func TestSessionIsolation(t *testing.T) {
 	}
 }
 
+// TestConcurrentCreate verifies that concurrent Create calls produce unique session IDs
+// without data races.
 func TestConcurrentCreate(t *testing.T) {
 	m := NewSessionManager()
 	defer m.CloseAll()
@@ -214,6 +226,7 @@ func TestConcurrentCreate(t *testing.T) {
 	}
 }
 
+// TestCreateIDGeneratorError verifies that Create propagates errors from the ID generator.
 func TestCreateIDGeneratorError(t *testing.T) {
 	m := NewSessionManager()
 	m.genID = func() (string, error) {
@@ -226,6 +239,7 @@ func TestCreateIDGeneratorError(t *testing.T) {
 	}
 }
 
+// TestCreateNewShellError verifies that Create propagates errors from the shell factory.
 func TestCreateNewShellError(t *testing.T) {
 	m := NewSessionManager()
 	m.newShell = func() (*Shell, error) {
@@ -238,6 +252,8 @@ func TestCreateNewShellError(t *testing.T) {
 	}
 }
 
+// TestCloseAllWithError verifies that CloseAll returns an error when a session's Close fails,
+// such as when the shell has already been closed.
 func TestCloseAllWithError(t *testing.T) {
 	m := NewSessionManager()
 
@@ -257,6 +273,8 @@ func TestCloseAllWithError(t *testing.T) {
 	}
 }
 
+// TestDeleteThenCreate verifies that a new session can be created after deleting an existing one,
+// and that the new session receives a different ID.
 func TestDeleteThenCreate(t *testing.T) {
 	m := NewSessionManager()
 	defer m.CloseAll()

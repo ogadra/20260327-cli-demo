@@ -25,8 +25,9 @@ func NewSessionManager() *SessionManager {
 	}
 }
 
-// generateID returns a cryptographically random 16-byte hex string.
-// crypto/rand.Read always returns len(b) and a nil error on supported platforms.
+// generateID returns a cryptographically random 16-byte hex string of 32 characters.
+// crypto/rand.Read always returns len(b) and a nil error on supported platforms,
+// so the error return exists only to satisfy the genID function signature for testability.
 func generateID() (string, error) {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
