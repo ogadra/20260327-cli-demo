@@ -5,6 +5,7 @@ import "testing"
 
 // TestSparseAttributes は状態ごとの sparse 属性値を検証する。
 func TestSparseAttributes(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name           string
 		status         RunnerStatus
@@ -41,6 +42,7 @@ func TestSparseAttributes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			gotSessionID, gotBucket := SparseAttributes(tt.status, tt.sessionID, tt.bucket)
 			if gotSessionID != tt.wantSessionID {
 				t.Errorf("currentSessionID = %q, want %q", gotSessionID, tt.wantSessionID)
@@ -54,6 +56,7 @@ func TestSparseAttributes(t *testing.T) {
 
 // TestIsValidStatus は有効な状態文字列と無効な状態文字列を検証する。
 func TestIsValidStatus(t *testing.T) {
+	t.Parallel()
 	validStatuses := []string{"idle", "busy"}
 	for _, s := range validStatuses {
 		if !IsValidStatus(s) {

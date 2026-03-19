@@ -12,9 +12,9 @@ const (
 )
 
 // allStatuses は全ての有効な RunnerStatus を保持する。
-var allStatuses = map[RunnerStatus]bool{
-	StatusIdle: true,
-	StatusBusy: true,
+var allStatuses = map[RunnerStatus]struct{}{
+	StatusIdle: {},
+	StatusBusy: {},
 }
 
 // Runner は broker が管理する runner のドメインモデル。
@@ -46,5 +46,6 @@ func SparseAttributes(status RunnerStatus, sessionID string, bucket string) (cur
 
 // IsValidStatus は文字列が有効な RunnerStatus かを返す。
 func IsValidStatus(s string) bool {
-	return allStatuses[RunnerStatus(s)]
+	_, ok := allStatuses[RunnerStatus(s)]
+	return ok
 }
