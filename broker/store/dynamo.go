@@ -84,9 +84,10 @@ func (r *DynamoRepository) AcquireIdle(ctx context.Context, sessionID string) (*
 				runner.IdleBucket = ""
 				return runner, nil
 			}
-			if !errors.Is(err, ErrConditionFailed) {
-				return nil, err
+			if errors.Is(err, ErrConditionFailed) {
+				continue
 			}
+			return nil, err
 		}
 	}
 	return nil, ErrNoIdleRunner
