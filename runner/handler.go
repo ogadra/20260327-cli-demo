@@ -31,6 +31,11 @@ type sessionResponse struct {
 	SessionID string `json:"sessionId"`
 }
 
+// errorResponse is the JSON body returned for error responses.
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
 // sseEvent represents a single Server-Sent Event sent during command execution.
 type sseEvent struct {
 	Type     string `json:"type"`
@@ -58,7 +63,7 @@ func handleCreateSession(sm *SessionManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, _, err := sm.Create()
 		if err != nil {
-			c.String(http.StatusInternalServerError, err.Error())
+			c.JSON(http.StatusInternalServerError, errorResponse{Error: err.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, sessionResponse{SessionID: id})
@@ -71,14 +76,14 @@ func handleDeleteSession(sm *SessionManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.GetHeader(sessionIDHeader)
 		if id == "" {
-			c.String(http.StatusBadRequest, "missing X-Session-Id header")
+			c.JSON(http.StatusBadRequest, errorResponse{Error: "missing X-Session-Id header"})
 			return
 		}
 		if err := sm.Delete(id); err != nil {
 			if errors.Is(err, ErrSessionNotFound) {
-				c.String(http.StatusNotFound, err.Error())
+				c.JSON(http.StatusNotFound, errorResponse{Error: err.Error()})
 			} else {
-				c.String(http.StatusInternalServerError, err.Error())
+				c.JSON(http.StatusInternalServerError, errorResponse{Error: err.Error()})
 			}
 			return
 		}
@@ -94,20 +99,20 @@ func handleExecute(sm *SessionManager, v Validator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.GetHeader(sessionIDHeader)
 		if id == "" {
-			c.String(http.StatusBadRequest, "missing X-Session-Id header")
+			c.JSON(http.StatusBadRequest, errorResponse{Error: "missing X-Session-Id header"})
 			return
 		}
 
 		// Get only returns ErrSessionNotFound; no other error paths exist.
 		shell, err := sm.Get(id)
 		if err != nil {
-			c.String(http.StatusNotFound, err.Error())
+			c.JSON(http.StatusNotFound, errorResponse{Error: err.Error()})
 			return
 		}
 
 		var req executeRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.String(http.StatusBadRequest, "invalid request: %s", err.Error())
+			c.JSON(http.StatusBadRequest, errorResponse{Error: fmt.Sprintf("invalid request: %s", err.Error())})
 			return
 		}
 
@@ -117,18 +122,18 @@ func handleExecute(sm *SessionManager, v Validator) gin.HandlerFunc {
 
 		if class == "validated" {
 			if v == nil {
-				c.String(http.StatusForbidden, "command not allowed")
+				c.JSON(http.StatusForbidden, errorResponse{Error: "command not allowed"})
 				return
 			}
 			result, err := v.Validate(c.Request.Context(), req.Command)
 			if err != nil {
 				auditLog(id, remote, class, req.Command, nil, err)
-				c.String(http.StatusForbidden, "command not allowed")
+				c.JSON(http.StatusForbidden, errorResponse{Error: "command not allowed"})
 				return
 			}
 			if !result.Safe {
 				auditLog(id, remote, "rejected", req.Command, nil, fmt.Errorf("reason: %s", result.Reason))
-				c.String(http.StatusForbidden, "command not allowed: %s", result.Reason)
+				c.JSON(http.StatusForbidden, errorResponse{Error: fmt.Sprintf("command not allowed: %s", result.Reason)})
 				return
 			}
 		}

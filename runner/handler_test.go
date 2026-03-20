@@ -179,8 +179,12 @@ func TestExecuteRejected(t *testing.T) {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
 	}
 
-	if !strings.Contains(w.Body.String(), "command not allowed") {
-		t.Fatalf("body = %q, want to contain %q", w.Body.String(), "command not allowed")
+	var errResp errorResponse
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if !strings.Contains(errResp.Error, "command not allowed") {
+		t.Fatalf("error = %q, want to contain %q", errResp.Error, "command not allowed")
 	}
 }
 
@@ -514,8 +518,12 @@ func TestExecuteValidatedUnsafe(t *testing.T) {
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
 	}
-	if !strings.Contains(w.Body.String(), "destructive") {
-		t.Fatalf("body = %q, want to contain reason", w.Body.String())
+	var errResp errorResponse
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if !strings.Contains(errResp.Error, "destructive") {
+		t.Fatalf("error = %q, want to contain reason", errResp.Error)
 	}
 }
 
