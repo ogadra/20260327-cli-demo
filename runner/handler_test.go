@@ -16,7 +16,7 @@ import (
 func TestCreateSession(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/session", nil)
 	w := httptest.NewRecorder()
@@ -40,7 +40,7 @@ func TestCreateSession(t *testing.T) {
 func TestDeleteSession(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	id, _, err := sm.Create()
 	if err != nil {
@@ -66,7 +66,7 @@ func TestDeleteSession(t *testing.T) {
 // X-Session-Id header returns 400 Bad Request.
 func TestDeleteSessionMissingHeader(t *testing.T) {
 	sm := NewSessionManager()
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/session", nil)
 	w := httptest.NewRecorder()
@@ -81,7 +81,7 @@ func TestDeleteSessionMissingHeader(t *testing.T) {
 // session ID returns 404 Not Found.
 func TestDeleteSessionNotFound(t *testing.T) {
 	sm := NewSessionManager()
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/session", nil)
 	req.Header.Set(sessionIDHeader, "nonexistent")
@@ -100,7 +100,7 @@ func TestDeleteSessionCloseError(t *testing.T) {
 	sm.newShell = func() (Shell, error) {
 		return &mockShell{closeErr: errors.New("close failed")}, nil
 	}
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	id, _, err := sm.Create()
 	if err != nil {
@@ -122,7 +122,7 @@ func TestDeleteSessionCloseError(t *testing.T) {
 func TestExecuteWhitelisted(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	id, _, err := sm.Create()
 	if err != nil {
@@ -162,7 +162,7 @@ func TestExecuteWhitelisted(t *testing.T) {
 func TestExecuteRejected(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	id, _, err := sm.Create()
 	if err != nil {
@@ -179,8 +179,12 @@ func TestExecuteRejected(t *testing.T) {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
 	}
 
-	if !strings.Contains(w.Body.String(), "command not allowed") {
-		t.Fatalf("body = %q, want to contain %q", w.Body.String(), "command not allowed")
+	var errResp errorResponse
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if !strings.Contains(errResp.Error, "command not allowed") {
+		t.Fatalf("error = %q, want to contain %q", errResp.Error, "command not allowed")
 	}
 }
 
@@ -189,7 +193,7 @@ func TestExecuteRejected(t *testing.T) {
 func TestExecuteRejectedWithArgs(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	id, _, err := sm.Create()
 	if err != nil {
@@ -211,7 +215,7 @@ func TestExecuteRejectedWithArgs(t *testing.T) {
 // X-Session-Id header returns 400 Bad Request.
 func TestExecuteMissingSessionHeader(t *testing.T) {
 	sm := NewSessionManager()
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	body := strings.NewReader(`{"command":"ls"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
@@ -227,7 +231,7 @@ func TestExecuteMissingSessionHeader(t *testing.T) {
 // session ID returns 404 Not Found.
 func TestExecuteSessionNotFound(t *testing.T) {
 	sm := NewSessionManager()
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	body := strings.NewReader(`{"command":"ls"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
@@ -245,7 +249,7 @@ func TestExecuteSessionNotFound(t *testing.T) {
 func TestExecuteInvalidJSON(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	id, _, err := sm.Create()
 	if err != nil {
@@ -268,7 +272,7 @@ func TestExecuteInvalidJSON(t *testing.T) {
 func TestExecuteEmptyCommand(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	id, _, err := sm.Create()
 	if err != nil {
@@ -290,7 +294,7 @@ func TestExecuteEmptyCommand(t *testing.T) {
 // /api/session return 405 Method Not Allowed.
 func TestSessionMethodNotAllowed(t *testing.T) {
 	sm := NewSessionManager()
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/session", nil)
 	w := httptest.NewRecorder()
@@ -305,7 +309,7 @@ func TestSessionMethodNotAllowed(t *testing.T) {
 // /api/execute return 405 Method Not Allowed.
 func TestExecuteMethodNotAllowed(t *testing.T) {
 	sm := NewSessionManager()
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/execute", nil)
 	w := httptest.NewRecorder()
@@ -323,7 +327,7 @@ func TestCreateSessionError(t *testing.T) {
 	sm.newShell = func() (Shell, error) {
 		return nil, errors.New("shell broken")
 	}
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/session", nil)
 	w := httptest.NewRecorder()
@@ -362,7 +366,7 @@ func TestExecuteWhitelistedWithStderr(t *testing.T) {
 	sm.newShell = func() (Shell, error) {
 		return &mockShell{exitCode: 0, stderr: "warning: something"}, nil
 	}
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	id, _, err := sm.Create()
 	if err != nil {
@@ -399,7 +403,7 @@ func TestExecuteWhitelistedNonZeroExit(t *testing.T) {
 	sm.newShell = func() (Shell, error) {
 		return &mockShell{exitCode: 2}, nil
 	}
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	id, _, err := sm.Create()
 	if err != nil {
@@ -427,7 +431,7 @@ func TestExecuteWhitelistedWithExecError(t *testing.T) {
 	sm.newShell = func() (Shell, error) {
 		return &mockShell{exitCode: -1, err: errors.New("broken")}, nil
 	}
-	handler := newHandler(sm)
+	handler := newHandler(sm, nil)
 
 	id, _, err := sm.Create()
 	if err != nil {
@@ -442,6 +446,139 @@ func TestExecuteWhitelistedWithExecError(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+// mockValidator is a test double for the Validator interface that returns
+// preconfigured ValidationResult and error, and tracks whether it was called.
+type mockValidator struct {
+	result ValidationResult
+	err    error
+	called bool
+}
+
+// Validate records that it was called and returns the preconfigured result and error.
+func (m *mockValidator) Validate(_ context.Context, _ string) (ValidationResult, error) {
+	m.called = true
+	return m.result, m.err
+}
+
+// TestExecuteValidatedSafe verifies that a non-whitelisted command judged safe
+// by the validator is executed and returns SSE events.
+func TestExecuteValidatedSafe(t *testing.T) {
+	sm := NewSessionManager()
+	defer sm.CloseAll()
+	sm.newShell = func() (Shell, error) {
+		return &mockShell{exitCode: 0}, nil
+	}
+	v := &mockValidator{result: ValidationResult{Safe: true, Reason: "safe command"}}
+	handler := newHandler(sm, v)
+
+	id, _, err := sm.Create()
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	body := strings.NewReader(`{"command":"echo hello"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
+	req.Header.Set(sessionIDHeader, id)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	events := parseSSEEvents(t, w.Body.String())
+	last := events[len(events)-1]
+	if last.Type != "complete" || last.ExitCode == nil || *last.ExitCode != 0 {
+		t.Fatalf("expected complete with exitCode=0, got %+v", last)
+	}
+}
+
+// TestExecuteValidatedUnsafe verifies that a non-whitelisted command judged unsafe
+// by the validator returns 403 with the reason.
+func TestExecuteValidatedUnsafe(t *testing.T) {
+	sm := NewSessionManager()
+	defer sm.CloseAll()
+	v := &mockValidator{result: ValidationResult{Safe: false, Reason: "destructive"}}
+	handler := newHandler(sm, v)
+
+	id, _, err := sm.Create()
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	body := strings.NewReader(`{"command":"rm -rf /"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
+	req.Header.Set(sessionIDHeader, id)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+	var errResp errorResponse
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if !strings.Contains(errResp.Error, "destructive") {
+		t.Fatalf("error = %q, want to contain reason", errResp.Error)
+	}
+}
+
+// TestExecuteValidatorError verifies that a validator error results in
+// 403 fail-closed behavior.
+func TestExecuteValidatorError(t *testing.T) {
+	sm := NewSessionManager()
+	defer sm.CloseAll()
+	v := &mockValidator{err: errors.New("LLM unavailable")}
+	handler := newHandler(sm, v)
+
+	id, _, err := sm.Create()
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	body := strings.NewReader(`{"command":"echo hello"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
+	req.Header.Set(sessionIDHeader, id)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+// TestExecuteWhitelistedSkipsValidator verifies that whitelisted commands
+// bypass the validator entirely and execute directly.
+func TestExecuteWhitelistedSkipsValidator(t *testing.T) {
+	sm := NewSessionManager()
+	defer sm.CloseAll()
+	sm.newShell = func() (Shell, error) {
+		return &mockShell{exitCode: 0}, nil
+	}
+	// Validator that would reject if called.
+	v := &mockValidator{result: ValidationResult{Safe: false, Reason: "should not be called"}}
+	handler := newHandler(sm, v)
+
+	id, _, err := sm.Create()
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	body := strings.NewReader(`{"command":"ls"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
+	req.Header.Set(sessionIDHeader, id)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if v.called {
+		t.Fatal("validator should not be called for whitelisted commands")
 	}
 }
 

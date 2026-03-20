@@ -121,7 +121,7 @@ func TestIntegrationExecuteSSEResponse(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
 
-	ts := httptest.NewServer(newHandler(sm))
+	ts := httptest.NewServer(newHandler(sm, nil))
 	defer ts.Close()
 
 	sid := createSession(t, ts)
@@ -148,7 +148,7 @@ func TestIntegrationRejectedCommand(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
 
-	ts := httptest.NewServer(newHandler(sm))
+	ts := httptest.NewServer(newHandler(sm, nil))
 	defer ts.Close()
 
 	sid := createSession(t, ts)
@@ -176,7 +176,7 @@ func TestIntegrationExecuteAfterDelete(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
 
-	ts := httptest.NewServer(newHandler(sm))
+	ts := httptest.NewServer(newHandler(sm, nil))
 	defer ts.Close()
 
 	sid := createSession(t, ts)
@@ -218,7 +218,7 @@ func TestIntegrationSessionIsolation(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
 
-	ts := httptest.NewServer(newHandler(sm))
+	ts := httptest.NewServer(newHandler(sm, nil))
 	defer ts.Close()
 
 	sid1 := createSession(t, ts)
@@ -243,7 +243,7 @@ func TestIntegrationCreateDeleteLifecycle(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
 
-	ts := httptest.NewServer(newHandler(sm))
+	ts := httptest.NewServer(newHandler(sm, nil))
 	defer ts.Close()
 
 	// Create.
@@ -298,7 +298,7 @@ func TestIntegrationConcurrentExecute(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
 
-	ts := httptest.NewServer(newHandler(sm))
+	ts := httptest.NewServer(newHandler(sm, nil))
 	defer ts.Close()
 
 	sid := createSession(t, ts)
