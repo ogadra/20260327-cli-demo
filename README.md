@@ -28,3 +28,24 @@ docker run --rm -p 3000:3000 runner  # 起動
 | POST | `/api/execute` | コマンド実行。`X-Session-Id` ヘッダと `{"command": "..."}` が必要。SSE でストリーム返却 |
 
 SSE イベント種別: `stdout`, `stderr`, `complete`（`exitCode` 付き）
+
+## Runner 単体のローカル動作確認
+
+```bash
+# runner を起動
+docker compose --profile runner up --build
+
+# セッション作成
+SESSION_ID=$(curl -s -X POST http://localhost:3000/api/session | jq -r .sessionId)
+
+# コマンド実行（SSE ストリーム）
+# -N でバッファリングを無効にし、リアルタイムに出力を受け取る
+curl -N -X POST http://localhost:3000/api/execute \
+  -H "X-Session-Id: $SESSION_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"ls"}'
+
+# セッション削除
+curl -X DELETE http://localhost:3000/api/session \
+  -H "X-Session-Id: $SESSION_ID"
+```
