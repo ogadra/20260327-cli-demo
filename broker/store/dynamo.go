@@ -66,8 +66,12 @@ func (r *DynamoRepository) Register(ctx context.Context, runnerID string) error 
 
 // AcquireIdle は idle runner を1台確保し session を紐づける。
 // ランダムバケットから検索し、競合時は同じバケットで再試行、空なら次のバケットへ移る。
+// GSI は eventually consistent なため、assignSession 済みの runner が再度返される場合がある。
+// tried 集合で同一 runner の無限リトライを防止する。
+// sessionID の一意性は呼び出し側が保証する。
 func (r *DynamoRepository) AcquireIdle(ctx context.Context, sessionID string) (*model.Runner, error) {
 	start := rand.IntN(bucketCount)
+	tried := map[string]struct{}{}
 	for i := range bucketCount {
 		bucket := fmt.Sprintf("bucket-%d", (start+i)%bucketCount)
 		for {
@@ -78,6 +82,10 @@ func (r *DynamoRepository) AcquireIdle(ctx context.Context, sessionID string) (*
 			if runner == nil {
 				break
 			}
+			if _, seen := tried[runner.RunnerID]; seen {
+				break
+			}
+			tried[runner.RunnerID] = struct{}{}
 			err = r.assignSession(ctx, runner.RunnerID, sessionID)
 			if err == nil {
 				runner.CurrentSessionID = sessionID
@@ -171,6 +179,7 @@ func (r *DynamoRepository) FindByID(ctx context.Context, runnerID string) (*mode
 		Key: map[string]types.AttributeValue{
 			"runnerId": &types.AttributeValueMemberS{Value: runnerID},
 		},
+		ConsistentRead: aws.Bool(true),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("get item: %w", err)

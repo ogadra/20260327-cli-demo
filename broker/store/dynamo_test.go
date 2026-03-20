@@ -346,6 +346,39 @@ func TestAcquireIdle_ConflictThenBucketEmpty(t *testing.T) {
 	}
 }
 
+// TestAcquireIdle_StaleGSI は GSI が stale な項目を返し続ける場合に無限ループせず次のバケットへ移ることを検証する。
+func TestAcquireIdle_StaleGSI(t *testing.T) {
+	t.Parallel()
+	queryCount := 0
+	mock := &mockDynamoDBAPI{
+		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			queryCount++
+			return &dynamodb.QueryOutput{
+				Items: []map[string]types.AttributeValue{
+					{
+						"runnerId":   &types.AttributeValueMemberS{Value: "r-stale"},
+						"idleBucket": &types.AttributeValueMemberS{Value: "bucket-0"},
+					},
+				},
+			}, nil
+		},
+		updateItemFn: func(_ context.Context, _ *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
+			return nil, &types.ConditionalCheckFailedException{Message: aws.String("conflict")}
+		},
+	}
+	repo := NewDynamoRepository(mock, "t")
+
+	_, err := repo.AcquireIdle(context.Background(), "sess-1")
+	if !errors.Is(err, ErrNoIdleRunner) {
+		t.Fatalf("expected ErrNoIdleRunner, got: %v", err)
+	}
+	// 最初のバケットで2回 query して stale 検出 + 残りバケットは1回ずつで即 stale 検出
+	expectedQueries := bucketCount + 1
+	if queryCount != expectedQueries {
+		t.Errorf("query count = %d, want %d", queryCount, expectedQueries)
+	}
+}
+
 // TestAcquireIdle_UpdateError は UpdateItem の予期せぬエラーを検証する。
 func TestAcquireIdle_UpdateError(t *testing.T) {
 	t.Parallel()
