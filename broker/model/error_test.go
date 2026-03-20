@@ -68,7 +68,6 @@ func TestErrorCodeConstants(t *testing.T) {
 	codes := []string{
 		CodeNoIdleRunner,
 		CodeSessionNotFound,
-		CodeRunnerNotFound,
 		CodeInvalidRequest,
 		CodeInternalError,
 	}

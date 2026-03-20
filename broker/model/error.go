@@ -6,8 +6,6 @@ const (
 	CodeNoIdleRunner = "NO_IDLE_RUNNER"
 	// CodeSessionNotFound は指定されたセッションが見つからない場合のエラーコード。
 	CodeSessionNotFound = "SESSION_NOT_FOUND"
-	// CodeRunnerNotFound は指定された runner が見つからない場合のエラーコード。
-	CodeRunnerNotFound = "RUNNER_NOT_FOUND"
 	// CodeInvalidRequest はリクエストが不正な場合のエラーコード。
 	CodeInvalidRequest = "INVALID_REQUEST"
 	// CodeInternalError は内部エラーのエラーコード。
