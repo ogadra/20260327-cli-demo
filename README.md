@@ -29,7 +29,7 @@ docker run --rm -p 3000:3000 runner  # 起動
 
 SSE イベント種別: `stdout`, `stderr`, `complete`（`exitCode` 付き）
 
-## ローカルでの動作確認
+## Runner 単体のローカル動作確認
 
 ```bash
 # runner を起動
