@@ -18,7 +18,7 @@ func TestIntegration_RegisterAndFindByID(t *testing.T) {
 
 	ctx := context.Background()
 
-	err := repo.Register(ctx, "r1")
+	err := repo.Register(ctx, "r1", "http://10.0.0.1:8080")
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -44,10 +44,10 @@ func TestIntegration_RegisterIdempotent(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := repo.Register(ctx, "r1"); err != nil {
+	if err := repo.Register(ctx, "r1", "http://10.0.0.1:8080"); err != nil {
 		t.Fatalf("first Register: %v", err)
 	}
-	if err := repo.Register(ctx, "r1"); err != nil {
+	if err := repo.Register(ctx, "r1", "http://10.0.0.1:8080"); err != nil {
 		t.Fatalf("second Register should be idempotent: %v", err)
 	}
 }
@@ -61,7 +61,7 @@ func TestIntegration_AcquireIdle(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := repo.Register(ctx, "r1"); err != nil {
+	if err := repo.Register(ctx, "r1", "http://10.0.0.1:8080"); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 
@@ -98,7 +98,7 @@ func TestIntegration_AcquireIdle_FindBySessionID(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := repo.Register(ctx, "r1"); err != nil {
+	if err := repo.Register(ctx, "r1", "http://10.0.0.1:8080"); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 
@@ -124,7 +124,7 @@ func TestIntegration_AcquireIdle_AlreadyBusy(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := repo.Register(ctx, "r1"); err != nil {
+	if err := repo.Register(ctx, "r1", "http://10.0.0.1:8080"); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 	if _, err := repo.AcquireIdle(ctx, "sess-1"); err != nil {
@@ -146,7 +146,7 @@ func TestIntegration_Delete(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := repo.Register(ctx, "r1"); err != nil {
+	if err := repo.Register(ctx, "r1", "http://10.0.0.1:8080"); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 	if err := repo.Delete(ctx, "r1"); err != nil {

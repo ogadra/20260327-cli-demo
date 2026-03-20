@@ -98,7 +98,7 @@ func TestRegister_Success(t *testing.T) {
 	repo := NewDynamoRepository(mock, "t")
 	repo.bucketFn = func() string { return "bucket-0" }
 
-	err := repo.Register(context.Background(), "r1")
+	err := repo.Register(context.Background(), "r1", "http://10.0.0.1:8080")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestRegister_AlreadyExists(t *testing.T) {
 	repo := NewDynamoRepository(mock, "t")
 	repo.bucketFn = func() string { return "bucket-0" }
 
-	err := repo.Register(context.Background(), "r1")
+	err := repo.Register(context.Background(), "r1", "http://10.0.0.1:8080")
 	if err != nil {
 		t.Fatalf("expected nil for idempotent register, got: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestRegister_PutItemError(t *testing.T) {
 	repo := NewDynamoRepository(mock, "t")
 	repo.bucketFn = func() string { return "bucket-0" }
 
-	err := repo.Register(context.Background(), "r1")
+	err := repo.Register(context.Background(), "r1", "http://10.0.0.1:8080")
 	if err == nil {
 		t.Fatal("expected error")
 	}

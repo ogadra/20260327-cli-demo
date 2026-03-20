@@ -40,10 +40,11 @@ func defaultBucketFn() string {
 }
 
 // Register は runner を idle 状態で登録する。attribute_not_exists で冪等性を確保する。
-func (r *DynamoRepository) Register(ctx context.Context, runnerID string) error {
+func (r *DynamoRepository) Register(ctx context.Context, runnerID, privateURL string) error {
 	item, err := attributevalue.MarshalMap(model.Runner{
 		RunnerID:   runnerID,
 		IdleBucket: r.bucketFn(),
+		PrivateURL: privateURL,
 	})
 	if err != nil {
 		return fmt.Errorf("marshal runner: %w", err)

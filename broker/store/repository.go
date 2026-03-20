@@ -20,8 +20,8 @@ var ErrConditionFailed = errors.New("condition check failed")
 
 // Repository は Runner の永続化操作を定義するインターフェース。
 type Repository interface {
-	// Register は runner を idle として登録する。
-	Register(ctx context.Context, runnerID string) error
+	// Register は runner を idle として登録する。privateURL は runner のプライベート URL。
+	Register(ctx context.Context, runnerID, privateURL string) error
 	// AcquireIdle は idle runner を1台確保し session を紐づける。
 	// バケット内で競合した場合は同じバケットで再試行し、空なら次のバケットへ移る。
 	AcquireIdle(ctx context.Context, sessionID string) (*model.Runner, error)
