@@ -15,6 +15,7 @@ import (
 )
 
 // bucketCount は IdleBucket のバケット数。
+// idle runner を複数バケットに分散させ、DynamoDB のホットパーティションを防ぐ。
 const bucketCount = 4
 
 // DynamoRepository は DynamoDB を使った Repository の実装。
