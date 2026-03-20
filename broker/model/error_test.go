@@ -71,9 +71,9 @@ func TestErrorCodeConstants(t *testing.T) {
 		CodeInvalidRequest,
 		CodeInternalError,
 	}
-	for _, code := range codes {
+	for i, code := range codes {
 		if code == "" {
-			t.Errorf("error code constant is empty")
+			t.Errorf("codes[%d] is empty", i)
 		}
 	}
 }

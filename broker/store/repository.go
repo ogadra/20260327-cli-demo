@@ -18,6 +18,9 @@ var ErrNoIdleRunner = errors.New("no idle runner available")
 // ErrConditionFailed は条件付き更新が失敗した場合に返される。
 var ErrConditionFailed = errors.New("condition check failed")
 
+// ErrConflict は登録済み runner の属性が異なる場合に返される。
+var ErrConflict = errors.New("runner already exists with different attributes")
+
 // Repository は Runner の永続化操作を定義するインターフェース。
 type Repository interface {
 	// Register は runner を idle として登録する。privateURL は runner のプライベート URL。

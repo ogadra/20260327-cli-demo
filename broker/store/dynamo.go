@@ -40,7 +40,12 @@ func defaultBucketFn() string {
 }
 
 // Register は runner を idle 状態で登録する。attribute_not_exists で冪等性を確保する。
+// 同一 runnerID で異なる privateURL が登録済みの場合は ErrConflict を返す。
 func (r *DynamoRepository) Register(ctx context.Context, runnerID, privateURL string) error {
+	if privateURL == "" {
+		return fmt.Errorf("privateURL must not be empty")
+	}
+
 	item, err := attributevalue.MarshalMap(model.Runner{
 		RunnerID:   runnerID,
 		IdleBucket: r.bucketFn(),
@@ -58,6 +63,13 @@ func (r *DynamoRepository) Register(ctx context.Context, runnerID, privateURL st
 	if err != nil {
 		var condErr *types.ConditionalCheckFailedException
 		if isConditionalCheckFailed(err, &condErr) {
+			existing, findErr := r.FindByID(ctx, runnerID)
+			if findErr != nil {
+				return fmt.Errorf("find existing runner: %w", findErr)
+			}
+			if existing.PrivateURL != privateURL {
+				return ErrConflict
+			}
 			return nil
 		}
 		return fmt.Errorf("put item: %w", err)

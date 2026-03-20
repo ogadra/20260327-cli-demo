@@ -92,6 +92,10 @@ func TestRegister_Success(t *testing.T) {
 			if *params.ConditionExpression != "attribute_not_exists(runnerId)" {
 				t.Errorf("unexpected condition: %s", *params.ConditionExpression)
 			}
+			v, ok := params.Item["privateUrl"].(*types.AttributeValueMemberS)
+			if !ok || v.Value != "http://10.0.0.1:8080" {
+				t.Errorf("privateUrl was not marshaled correctly")
+			}
 			return &dynamodb.PutItemOutput{}, nil
 		},
 	}
@@ -107,12 +111,21 @@ func TestRegister_Success(t *testing.T) {
 	}
 }
 
-// TestRegister_AlreadyExists は登録済み runner の再登録が冪等に成功することを検証する。
+// TestRegister_AlreadyExists は登録済み runner の再登録が同一 privateURL なら冪等に成功することを検証する。
 func TestRegister_AlreadyExists(t *testing.T) {
 	t.Parallel()
 	mock := &mockDynamoDBAPI{
 		putItemFn: func(_ context.Context, _ *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
 			return nil, &types.ConditionalCheckFailedException{Message: aws.String("exists")}
+		},
+		getItemFn: func(_ context.Context, _ *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+			return &dynamodb.GetItemOutput{
+				Item: map[string]types.AttributeValue{
+					"runnerId":   &types.AttributeValueMemberS{Value: "r1"},
+					"privateUrl": &types.AttributeValueMemberS{Value: "http://10.0.0.1:8080"},
+					"idleBucket": &types.AttributeValueMemberS{Value: "bucket-0"},
+				},
+			}, nil
 		},
 	}
 	repo := NewDynamoRepository(mock, "t")
@@ -121,6 +134,63 @@ func TestRegister_AlreadyExists(t *testing.T) {
 	err := repo.Register(context.Background(), "r1", "http://10.0.0.1:8080")
 	if err != nil {
 		t.Fatalf("expected nil for idempotent register, got: %v", err)
+	}
+}
+
+// TestRegister_ConflictPrivateURL は同一 runnerID で異なる privateURL の登録が ErrConflict を返すことを検証する。
+func TestRegister_ConflictPrivateURL(t *testing.T) {
+	t.Parallel()
+	mock := &mockDynamoDBAPI{
+		putItemFn: func(_ context.Context, _ *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+			return nil, &types.ConditionalCheckFailedException{Message: aws.String("exists")}
+		},
+		getItemFn: func(_ context.Context, _ *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+			return &dynamodb.GetItemOutput{
+				Item: map[string]types.AttributeValue{
+					"runnerId":   &types.AttributeValueMemberS{Value: "r1"},
+					"privateUrl": &types.AttributeValueMemberS{Value: "http://10.0.0.1:8080"},
+					"idleBucket": &types.AttributeValueMemberS{Value: "bucket-0"},
+				},
+			}, nil
+		},
+	}
+	repo := NewDynamoRepository(mock, "t")
+	repo.bucketFn = func() string { return "bucket-0" }
+
+	err := repo.Register(context.Background(), "r1", "http://10.0.0.2:9090")
+	if !errors.Is(err, ErrConflict) {
+		t.Fatalf("expected ErrConflict, got: %v", err)
+	}
+}
+
+// TestRegister_ConflictFindByIDError は条件失敗後の FindByID エラーを検証する。
+func TestRegister_ConflictFindByIDError(t *testing.T) {
+	t.Parallel()
+	mock := &mockDynamoDBAPI{
+		putItemFn: func(_ context.Context, _ *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+			return nil, &types.ConditionalCheckFailedException{Message: aws.String("exists")}
+		},
+		getItemFn: func(_ context.Context, _ *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+			return nil, errors.New("get error")
+		},
+	}
+	repo := NewDynamoRepository(mock, "t")
+	repo.bucketFn = func() string { return "bucket-0" }
+
+	err := repo.Register(context.Background(), "r1", "http://10.0.0.1:8080")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// TestRegister_EmptyPrivateURL は privateURL が空の場合にエラーを返すことを検証する。
+func TestRegister_EmptyPrivateURL(t *testing.T) {
+	t.Parallel()
+	repo := NewDynamoRepository(&mockDynamoDBAPI{}, "t")
+
+	err := repo.Register(context.Background(), "r1", "")
+	if err == nil {
+		t.Fatal("expected error for empty privateURL")
 	}
 }
 
