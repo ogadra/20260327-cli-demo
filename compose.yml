@@ -35,6 +35,13 @@ services:
     profiles:
       - test
 
+  runner:
+    build: runner/
+    ports:
+      - "3000:3000"
+    profiles:
+      - runner
+
   dynamodb-local:
     image: amazon/dynamodb-local:3.3.0
     ports:
