@@ -40,13 +40,15 @@ type sseEvent struct {
 
 // newHandler creates a gin.Engine with all API routes registered.
 // The returned engine handles POST /api/session, DELETE /api/session, and POST /api/execute.
-func newHandler(sm *SessionManager) *gin.Engine {
+// The Validator v is used to judge non-whitelisted commands via LLM; it may be nil
+// in which case all non-whitelisted commands are rejected with 403.
+func newHandler(sm *SessionManager, v Validator) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.HandleMethodNotAllowed = true
 	r.POST("/api/session", handleCreateSession(sm))
 	r.DELETE("/api/session", handleDeleteSession(sm))
-	r.POST("/api/execute", handleExecute(sm))
+	r.POST("/api/execute", handleExecute(sm, v))
 	return r
 }
 
@@ -85,10 +87,10 @@ func handleDeleteSession(sm *SessionManager) gin.HandlerFunc {
 }
 
 // handleExecute returns a gin handler for POST /api/execute.
-// It classifies the command and rejects it with 403 if not whitelisted.
-// Whitelisted commands are executed in the session specified by X-Session-Id
-// and the result is streamed as Server-Sent Events.
-func handleExecute(sm *SessionManager) gin.HandlerFunc {
+// It classifies the command: whitelisted commands execute immediately,
+// validated commands are checked by the Validator before execution,
+// and commands that fail validation are rejected with 403.
+func handleExecute(sm *SessionManager, v Validator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.GetHeader(sessionIDHeader)
 		if id == "" {
@@ -113,9 +115,22 @@ func handleExecute(sm *SessionManager) gin.HandlerFunc {
 		remote := c.ClientIP() + ":" + c.GetHeader("X-Forwarded-Port")
 		auditLog(id, remote, class, req.Command, nil, nil)
 
-		if class != "whitelisted" {
-			c.String(http.StatusForbidden, "command not allowed")
-			return
+		if class == "validated" {
+			if v == nil {
+				c.String(http.StatusForbidden, "command not allowed")
+				return
+			}
+			result, err := v.Validate(c.Request.Context(), req.Command)
+			if err != nil {
+				auditLog(id, remote, class, req.Command, nil, err)
+				c.String(http.StatusForbidden, "command not allowed")
+				return
+			}
+			if !result.Safe {
+				auditLog(id, remote, "rejected", req.Command, nil, fmt.Errorf("reason: %s", result.Reason))
+				c.String(http.StatusForbidden, "command not allowed: %s", result.Reason)
+				return
+			}
 		}
 
 		c.Header("Content-Type", "text/event-stream")
