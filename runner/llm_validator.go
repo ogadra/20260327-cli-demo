@@ -28,7 +28,7 @@ type BedrockConverseClient interface {
 }
 
 // systemPrompt instructs the LLM to judge command safety.
-const systemPrompt = `You are a security validator for a web-based shell environment.
+const systemPrompt = `You are a security validator for a shell environment.
 Your job is to judge whether a given shell command is safe to execute.
 
 Safe commands:
@@ -36,16 +36,19 @@ Safe commands:
 - Commands with safe flags like ls -la, uname -a
 - Navigation commands like cd, pwd
 - Echo and printf for display
+- File modification commands like rm, mv, chmod, chown, truncate on non-system files
+- HTTP GET requests via curl or wget
+- All network requests to localhost or 127.0.0.1 regardless of method
 
 Unsafe commands:
-- Anything that modifies or deletes files: rm, mv, chmod, chown, truncate
+- File modification on system paths like /etc, /root, /var, /usr, /boot, /sys, /proc
 - Package management: apt, yum, pip, npm install
-- Network exfiltration: curl, wget, nc, ssh with write/upload
+- HTTP POST, PUT, DELETE or file upload to external hosts via curl, wget, nc, ssh
 - Process manipulation: kill, reboot, shutdown
 - Disk operations: dd, mkfs, mount
 - Shell escapes and chaining that hide dangerous operations
-- Writing to sensitive paths like /etc, /root, /var
 - Commands using backticks, $(), or pipe to shell for code injection
+- Writing files whose content would be unsafe if executed, such as malicious scripts or code that performs the unsafe actions listed above
 
 Use the command_safety_judgment tool to report your decision.`
 
@@ -68,6 +71,10 @@ var toolSchema = document.NewLazyDocument(map[string]interface{}{
 	"required": []string{"safe", "reason"},
 })
 
+// maxRetries is the maximum number of times to retry the LLM call when the
+// response cannot be parsed.
+const maxRetries = 2
+
 // BedrockValidator validates commands using Bedrock Converse API with tool use.
 type BedrockValidator struct {
 	client  BedrockConverseClient
@@ -80,7 +87,8 @@ func NewBedrockValidator(client BedrockConverseClient, modelID string) *BedrockV
 }
 
 // Validate calls the Bedrock Converse API to judge whether command is safe to execute.
-// It returns an error if the API call fails or the response cannot be parsed.
+// If the response cannot be parsed, it retries up to maxRetries times.
+// API errors are not retried and are returned immediately.
 func (v *BedrockValidator) Validate(ctx context.Context, command string) (ValidationResult, error) {
 	input := &bedrockruntime.ConverseInput{
 		ModelId: &v.modelID,
@@ -109,12 +117,21 @@ func (v *BedrockValidator) Validate(ctx context.Context, command string) (Valida
 		},
 	}
 
-	output, err := v.client.Converse(ctx, input)
-	if err != nil {
-		return ValidationResult{}, fmt.Errorf("bedrock converse: %w", err)
+	var lastErr error
+	for range maxRetries {
+		output, err := v.client.Converse(ctx, input)
+		if err != nil {
+			return ValidationResult{}, fmt.Errorf("bedrock converse: %w", err)
+		}
+
+		result, parseErr := parseToolUseResult(output)
+		if parseErr == nil {
+			return result, nil
+		}
+		lastErr = parseErr
 	}
 
-	return parseToolUseResult(output)
+	return ValidationResult{}, fmt.Errorf("bedrock converse: retries exhausted: %w", lastErr)
 }
 
 // parseToolUseResult extracts the tool use result from the Converse API output.
