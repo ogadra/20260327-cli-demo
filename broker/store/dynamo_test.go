@@ -9,7 +9,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/ogadra/20260327-cli-demo/broker/model"
 )
 
 // mockDynamoDBAPI は DynamoDBAPI のモック実装。
@@ -151,7 +150,6 @@ func TestFindIdle_Success(t *testing.T) {
 				Items: []map[string]types.AttributeValue{
 					{
 						"runnerId":   &types.AttributeValueMemberS{Value: "r1"},
-						"status":     &types.AttributeValueMemberS{Value: "idle"},
 						"idleBucket": &types.AttributeValueMemberS{Value: "bucket-0"},
 					},
 				},
@@ -220,7 +218,6 @@ func TestFindIdle_FallbackBucket(t *testing.T) {
 				Items: []map[string]types.AttributeValue{
 					{
 						"runnerId":   &types.AttributeValueMemberS{Value: "r2"},
-						"status":     &types.AttributeValueMemberS{Value: "idle"},
 						"idleBucket": &types.AttributeValueMemberS{Value: "bucket-1"},
 					},
 				},
@@ -304,7 +301,6 @@ func TestFindBySessionID_Success(t *testing.T) {
 				Items: []map[string]types.AttributeValue{
 					{
 						"runnerId":         &types.AttributeValueMemberS{Value: "r1"},
-						"status":           &types.AttributeValueMemberS{Value: "busy"},
 						"currentSessionId": &types.AttributeValueMemberS{Value: "sess-1"},
 					},
 				},
@@ -362,7 +358,6 @@ func TestFindByID_Success(t *testing.T) {
 			return &dynamodb.GetItemOutput{
 				Item: map[string]types.AttributeValue{
 					"runnerId":   &types.AttributeValueMemberS{Value: "r1"},
-					"status":     &types.AttributeValueMemberS{Value: "idle"},
 					"idleBucket": &types.AttributeValueMemberS{Value: "bucket-0"},
 				},
 			}, nil
@@ -377,8 +372,8 @@ func TestFindByID_Success(t *testing.T) {
 	if runner.RunnerID != "r1" {
 		t.Errorf("runnerID = %q, want %q", runner.RunnerID, "r1")
 	}
-	if runner.Status != model.StatusIdle {
-		t.Errorf("status = %q, want %q", runner.Status, model.StatusIdle)
+	if !runner.IsIdle() {
+		t.Error("expected runner to be idle")
 	}
 }
 
@@ -457,8 +452,7 @@ func TestFindIdle_UnmarshalError(t *testing.T) {
 			return &dynamodb.QueryOutput{
 				Items: []map[string]types.AttributeValue{
 					{
-						"runnerId": &types.AttributeValueMemberN{Value: "123"},
-						"status":   &types.AttributeValueMemberBOOL{Value: true},
+						"runnerId": &types.AttributeValueMemberL{Value: []types.AttributeValue{}},
 					},
 				},
 			}, nil
@@ -480,8 +474,7 @@ func TestFindBySessionID_UnmarshalError(t *testing.T) {
 			return &dynamodb.QueryOutput{
 				Items: []map[string]types.AttributeValue{
 					{
-						"runnerId": &types.AttributeValueMemberN{Value: "123"},
-						"status":   &types.AttributeValueMemberBOOL{Value: true},
+						"runnerId": &types.AttributeValueMemberL{Value: []types.AttributeValue{}},
 					},
 				},
 			}, nil
@@ -502,8 +495,7 @@ func TestFindByID_UnmarshalError(t *testing.T) {
 		getItemFn: func(_ context.Context, _ *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
 			return &dynamodb.GetItemOutput{
 				Item: map[string]types.AttributeValue{
-					"runnerId": &types.AttributeValueMemberN{Value: "123"},
-					"status":   &types.AttributeValueMemberBOOL{Value: true},
+					"runnerId": &types.AttributeValueMemberL{Value: []types.AttributeValue{}},
 				},
 			}, nil
 		},

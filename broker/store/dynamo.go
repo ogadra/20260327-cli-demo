@@ -42,7 +42,6 @@ func defaultBucketFn() string {
 func (r *DynamoRepository) Register(ctx context.Context, runnerID string) error {
 	item, err := attributevalue.MarshalMap(model.Runner{
 		RunnerID:   runnerID,
-		Status:     model.StatusIdle,
 		IdleBucket: r.bucketFn(),
 	})
 	if err != nil {
@@ -104,22 +103,17 @@ func (r *DynamoRepository) queryIdleBucket(ctx context.Context, bucket string) (
 	return &runner, nil
 }
 
-// AssignSession は runner を busy に遷移させ session を紐づける。status=idle の場合のみ成功する。
+// AssignSession は runner に session を紐づけ idle から busy に遷移させる。idleBucket が存在する場合のみ成功する。
 func (r *DynamoRepository) AssignSession(ctx context.Context, runnerID, sessionID string) error {
 	_, err := r.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: &r.tableName,
 		Key: map[string]types.AttributeValue{
 			"runnerId": &types.AttributeValueMemberS{Value: runnerID},
 		},
-		UpdateExpression:    aws.String("SET #s = :busy, currentSessionId = :sid REMOVE idleBucket"),
-		ConditionExpression: aws.String("#s = :idle"),
-		ExpressionAttributeNames: map[string]string{
-			"#s": "status",
-		},
+		UpdateExpression:    aws.String("SET currentSessionId = :sid REMOVE idleBucket"),
+		ConditionExpression: aws.String("attribute_exists(idleBucket)"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":busy": &types.AttributeValueMemberS{Value: string(model.StatusBusy)},
-			":idle": &types.AttributeValueMemberS{Value: string(model.StatusIdle)},
-			":sid":  &types.AttributeValueMemberS{Value: sessionID},
+			":sid": &types.AttributeValueMemberS{Value: sessionID},
 		},
 	})
 	if err != nil {

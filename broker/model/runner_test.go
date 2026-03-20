@@ -3,71 +3,70 @@ package model
 
 import "testing"
 
-// TestSparseAttributes は状態ごとの sparse 属性値を検証する。
-func TestSparseAttributes(t *testing.T) {
+// TestRunner_IsIdle は IdleBucket の有無で idle 判定されることを検証する。
+func TestRunner_IsIdle(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name           string
-		status         RunnerStatus
-		sessionID      string
-		bucket         string
-		wantSessionID  string
-		wantIdleBucket string
+		name   string
+		runner Runner
+		want   bool
 	}{
 		{
-			name:           "idle sets bucket only",
-			status:         StatusIdle,
-			sessionID:      "sess-1",
-			bucket:         "bucket-0",
-			wantSessionID:  "",
-			wantIdleBucket: "bucket-0",
+			name:   "idle when idleBucket is set",
+			runner: Runner{RunnerID: "r1", IdleBucket: "bucket-0"},
+			want:   true,
 		},
 		{
-			name:           "busy sets sessionID only",
-			status:         StatusBusy,
-			sessionID:      "sess-1",
-			bucket:         "bucket-0",
-			wantSessionID:  "sess-1",
-			wantIdleBucket: "",
+			name:   "not idle when idleBucket is empty",
+			runner: Runner{RunnerID: "r1", CurrentSessionID: "sess-1"},
+			want:   false,
 		},
 		{
-			name:           "unknown status clears both",
-			status:         RunnerStatus("unknown"),
-			sessionID:      "sess-1",
-			bucket:         "bucket-0",
-			wantSessionID:  "",
-			wantIdleBucket: "",
+			name:   "not idle when both empty",
+			runner: Runner{RunnerID: "r1"},
+			want:   false,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			gotSessionID, gotBucket := SparseAttributes(tt.status, tt.sessionID, tt.bucket)
-			if gotSessionID != tt.wantSessionID {
-				t.Errorf("currentSessionID = %q, want %q", gotSessionID, tt.wantSessionID)
-			}
-			if gotBucket != tt.wantIdleBucket {
-				t.Errorf("idleBucket = %q, want %q", gotBucket, tt.wantIdleBucket)
+			if got := tt.runner.IsIdle(); got != tt.want {
+				t.Errorf("IsIdle() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-// TestIsValidStatus は有効な状態文字列と無効な状態文字列を検証する。
-func TestIsValidStatus(t *testing.T) {
+// TestRunner_IsBusy は CurrentSessionID の有無で busy 判定されることを検証する。
+func TestRunner_IsBusy(t *testing.T) {
 	t.Parallel()
-	validStatuses := []string{"idle", "busy"}
-	for _, s := range validStatuses {
-		if !IsValidStatus(s) {
-			t.Errorf("IsValidStatus(%q) = false, want true", s)
-		}
+	tests := []struct {
+		name   string
+		runner Runner
+		want   bool
+	}{
+		{
+			name:   "busy when currentSessionId is set",
+			runner: Runner{RunnerID: "r1", CurrentSessionID: "sess-1"},
+			want:   true,
+		},
+		{
+			name:   "not busy when currentSessionId is empty",
+			runner: Runner{RunnerID: "r1", IdleBucket: "bucket-0"},
+			want:   false,
+		},
+		{
+			name:   "not busy when both empty",
+			runner: Runner{RunnerID: "r1"},
+			want:   false,
+		},
 	}
-
-	invalidStatuses := []string{"", "unknown", "IDLE", "dead", "reserved", "draining", "stopped"}
-	for _, s := range invalidStatuses {
-		if IsValidStatus(s) {
-			t.Errorf("IsValidStatus(%q) = true, want false", s)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tt.runner.IsBusy(); got != tt.want {
+				t.Errorf("IsBusy() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

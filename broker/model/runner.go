@@ -1,51 +1,25 @@
 // Package model はドメインモデルを提供する。
 package model
 
-// RunnerStatus は Runner の状態を表す型。
-type RunnerStatus string
-
-const (
-	// StatusIdle はアイドル状態を表す。セッション未割当。
-	StatusIdle RunnerStatus = "idle"
-	// StatusBusy はビジー状態を表す。セッション処理中。
-	StatusBusy RunnerStatus = "busy"
-)
-
-// allStatuses は全ての有効な RunnerStatus を保持する。
-var allStatuses = map[RunnerStatus]struct{}{
-	StatusIdle: {},
-	StatusBusy: {},
-}
-
 // Runner は broker が管理する runner のドメインモデル。
 // runner は使い捨てであり、セッション終了時または異常終了時はレコードごと削除する。
+// 状態は sparse 属性で暗黙的に表現する。
+// IdleBucket が存在すれば idle、CurrentSessionID が存在すれば busy。
 type Runner struct {
 	// RunnerID は runner の一意識別子であり DynamoDB の PK。
 	RunnerID string `dynamodbav:"runnerId"`
-	// Status は現在の状態。
-	Status RunnerStatus `dynamodbav:"status"`
 	// CurrentSessionID は busy 時のセッション ID。sparse GSI session-index のキー。
 	CurrentSessionID string `dynamodbav:"currentSessionId,omitempty"`
 	// IdleBucket は idle 時のバケット値。sparse GSI idle-index のキー。
 	IdleBucket string `dynamodbav:"idleBucket,omitempty"`
 }
 
-// SparseAttributes は状態に応じた sparse 属性値を返す。
-// idle 時は idleBucket を設定し currentSessionID をクリアする。
-// busy 時は currentSessionID を設定し idleBucket をクリアする。
-func SparseAttributes(status RunnerStatus, sessionID string, bucket string) (currentSessionID string, idleBucket string) {
-	switch status {
-	case StatusIdle:
-		return "", bucket
-	case StatusBusy:
-		return sessionID, ""
-	default:
-		return "", ""
-	}
+// IsIdle は runner が idle 状態かを返す。
+func (r *Runner) IsIdle() bool {
+	return r.IdleBucket != ""
 }
 
-// IsValidStatus は文字列が有効な RunnerStatus かを返す。
-func IsValidStatus(s string) bool {
-	_, ok := allStatuses[RunnerStatus(s)]
-	return ok
+// IsBusy は runner が busy 状態かを返す。
+func (r *Runner) IsBusy() bool {
+	return r.CurrentSessionID != ""
 }

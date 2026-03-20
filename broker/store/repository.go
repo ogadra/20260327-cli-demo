@@ -20,11 +20,11 @@ var ErrConditionFailed = errors.New("condition check failed")
 
 // Repository は Runner の永続化操作を定義するインターフェース。
 type Repository interface {
-	// Register は runner を idle 状態で登録する。
+	// Register は runner を idle として登録する。
 	Register(ctx context.Context, runnerID string) error
-	// FindIdle は idle 状態の runner を1台返す。
+	// FindIdle は idle の runner を1台返す。
 	FindIdle(ctx context.Context) (*model.Runner, error)
-	// AssignSession は runner を busy に遷移させ session を紐づける。
+	// AssignSession は runner に session を紐づけ idle から busy にする。
 	AssignSession(ctx context.Context, runnerID, sessionID string) error
 	// FindBySessionID は session ID から runner を検索する。
 	FindBySessionID(ctx context.Context, sessionID string) (*model.Runner, error)
