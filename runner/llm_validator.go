@@ -117,21 +117,21 @@ func (v *BedrockValidator) Validate(ctx context.Context, command string) (Valida
 		},
 	}
 
-	var lastErr error
+	var parseErr error
 	for range maxRetries {
 		output, err := v.client.Converse(ctx, input)
 		if err != nil {
 			return ValidationResult{}, fmt.Errorf("bedrock converse: %w", err)
 		}
 
-		result, parseErr := parseToolUseResult(output)
+		var result ValidationResult
+		result, parseErr = parseToolUseResult(output)
 		if parseErr == nil {
 			return result, nil
 		}
-		lastErr = parseErr
 	}
 
-	return ValidationResult{}, fmt.Errorf("bedrock converse: retries exhausted: %w", lastErr)
+	return ValidationResult{}, fmt.Errorf("bedrock converse: retries exhausted: %w", parseErr)
 }
 
 // parseToolUseResult extracts the tool use result from the Converse API output.
