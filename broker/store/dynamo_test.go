@@ -141,11 +141,11 @@ func TestRegister_PutItemError(t *testing.T) {
 	}
 }
 
-// TestFindIdle_Success は idle runner が見つかるケースを検証する。
-func TestFindIdle_Success(t *testing.T) {
+// TestAcquireIdle_Success は idle runner の確保が成功するケースを検証する。
+func TestAcquireIdle_Success(t *testing.T) {
 	t.Parallel()
 	mock := &mockDynamoDBAPI{
-		queryFn: func(_ context.Context, params *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
 			return &dynamodb.QueryOutput{
 				Items: []map[string]types.AttributeValue{
 					{
@@ -155,20 +155,29 @@ func TestFindIdle_Success(t *testing.T) {
 				},
 			}, nil
 		},
+		updateItemFn: func(_ context.Context, _ *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
+			return &dynamodb.UpdateItemOutput{}, nil
+		},
 	}
 	repo := NewDynamoRepository(mock, "t")
 
-	runner, err := repo.FindIdle(context.Background())
+	runner, err := repo.AcquireIdle(context.Background(), "sess-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if runner.RunnerID != "r1" {
 		t.Errorf("runnerID = %q, want %q", runner.RunnerID, "r1")
 	}
+	if runner.CurrentSessionID != "sess-1" {
+		t.Errorf("currentSessionId = %q, want %q", runner.CurrentSessionID, "sess-1")
+	}
+	if runner.IdleBucket != "" {
+		t.Errorf("idleBucket = %q, want empty", runner.IdleBucket)
+	}
 }
 
-// TestFindIdle_NoIdleRunner は全バケット空の場合に ErrNoIdleRunner を返すことを検証する。
-func TestFindIdle_NoIdleRunner(t *testing.T) {
+// TestAcquireIdle_NoIdleRunner は全バケット空の場合に ErrNoIdleRunner を返すことを検証する。
+func TestAcquireIdle_NoIdleRunner(t *testing.T) {
 	t.Parallel()
 	queryCount := 0
 	mock := &mockDynamoDBAPI{
@@ -179,7 +188,7 @@ func TestFindIdle_NoIdleRunner(t *testing.T) {
 	}
 	repo := NewDynamoRepository(mock, "t")
 
-	_, err := repo.FindIdle(context.Background())
+	_, err := repo.AcquireIdle(context.Background(), "sess-1")
 	if !errors.Is(err, ErrNoIdleRunner) {
 		t.Fatalf("expected ErrNoIdleRunner, got: %v", err)
 	}
@@ -188,8 +197,8 @@ func TestFindIdle_NoIdleRunner(t *testing.T) {
 	}
 }
 
-// TestFindIdle_QueryError は Query エラー時にエラーを返すことを検証する。
-func TestFindIdle_QueryError(t *testing.T) {
+// TestAcquireIdle_QueryError は Query エラー時にエラーを返すことを検証する。
+func TestAcquireIdle_QueryError(t *testing.T) {
 	t.Parallel()
 	mock := &mockDynamoDBAPI{
 		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
@@ -198,20 +207,20 @@ func TestFindIdle_QueryError(t *testing.T) {
 	}
 	repo := NewDynamoRepository(mock, "t")
 
-	_, err := repo.FindIdle(context.Background())
+	_, err := repo.AcquireIdle(context.Background(), "sess-1")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-// TestFindIdle_FallbackBucket は最初のバケットが空で次のバケットで見つかるケースを検証する。
-func TestFindIdle_FallbackBucket(t *testing.T) {
+// TestAcquireIdle_FallbackBucket は最初のバケットが空で次のバケットで見つかるケースを検証する。
+func TestAcquireIdle_FallbackBucket(t *testing.T) {
 	t.Parallel()
-	callCount := 0
+	queryCount := 0
 	mock := &mockDynamoDBAPI{
-		queryFn: func(_ context.Context, params *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
-			callCount++
-			if callCount == 1 {
+		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			queryCount++
+			if queryCount == 1 {
 				return &dynamodb.QueryOutput{Items: nil}, nil
 			}
 			return &dynamodb.QueryOutput{
@@ -223,69 +232,165 @@ func TestFindIdle_FallbackBucket(t *testing.T) {
 				},
 			}, nil
 		},
+		updateItemFn: func(_ context.Context, _ *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
+			return &dynamodb.UpdateItemOutput{}, nil
+		},
 	}
 	repo := NewDynamoRepository(mock, "t")
 
-	runner, err := repo.FindIdle(context.Background())
+	runner, err := repo.AcquireIdle(context.Background(), "sess-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if runner.RunnerID != "r2" {
 		t.Errorf("runnerID = %q, want %q", runner.RunnerID, "r2")
 	}
-	if callCount != 2 {
-		t.Errorf("query call count = %d, want 2", callCount)
+	if queryCount != 2 {
+		t.Errorf("query call count = %d, want 2", queryCount)
 	}
 }
 
-// TestAssignSession_Success は正常な session 割当を検証する。
-func TestAssignSession_Success(t *testing.T) {
+// TestAcquireIdle_RetryWithinBucket は同一バケット内で競合時にリトライすることを検証する。
+func TestAcquireIdle_RetryWithinBucket(t *testing.T) {
 	t.Parallel()
+	queryCount := 0
+	updateCount := 0
 	mock := &mockDynamoDBAPI{
-		updateItemFn: func(_ context.Context, params *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
-			if params.Key["runnerId"].(*types.AttributeValueMemberS).Value != "r1" {
-				t.Errorf("unexpected runnerId")
+		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			queryCount++
+			if queryCount <= 2 {
+				return &dynamodb.QueryOutput{
+					Items: []map[string]types.AttributeValue{
+						{
+							"runnerId":   &types.AttributeValueMemberS{Value: "r" + itoa(queryCount)},
+							"idleBucket": &types.AttributeValueMemberS{Value: "bucket-0"},
+						},
+					},
+				}, nil
+			}
+			return &dynamodb.QueryOutput{Items: nil}, nil
+		},
+		updateItemFn: func(_ context.Context, _ *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
+			updateCount++
+			if updateCount == 1 {
+				return nil, &types.ConditionalCheckFailedException{Message: aws.String("conflict")}
 			}
 			return &dynamodb.UpdateItemOutput{}, nil
 		},
 	}
 	repo := NewDynamoRepository(mock, "t")
 
-	err := repo.AssignSession(context.Background(), "r1", "sess-1")
+	runner, err := repo.AcquireIdle(context.Background(), "sess-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if runner.RunnerID != "r2" {
+		t.Errorf("runnerID = %q, want %q", runner.RunnerID, "r2")
+	}
+	if queryCount != 2 {
+		t.Errorf("query count = %d, want 2", queryCount)
+	}
+	if updateCount != 2 {
+		t.Errorf("update count = %d, want 2", updateCount)
+	}
 }
 
-// TestAssignSession_ConditionFailed は既に busy の runner への割当が ErrConditionFailed を返すことを検証する。
-func TestAssignSession_ConditionFailed(t *testing.T) {
+// TestAcquireIdle_ConflictThenBucketEmpty はバケット内で競合後にバケットが空になり次のバケットへ移るケースを検証する。
+func TestAcquireIdle_ConflictThenBucketEmpty(t *testing.T) {
 	t.Parallel()
+	queryCount := 0
 	mock := &mockDynamoDBAPI{
-		updateItemFn: func(_ context.Context, _ *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
-			return nil, &types.ConditionalCheckFailedException{Message: aws.String("not idle")}
+		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			queryCount++
+			switch queryCount {
+			case 1:
+				return &dynamodb.QueryOutput{
+					Items: []map[string]types.AttributeValue{
+						{
+							"runnerId":   &types.AttributeValueMemberS{Value: "r1"},
+							"idleBucket": &types.AttributeValueMemberS{Value: "bucket-0"},
+						},
+					},
+				}, nil
+			case 2:
+				return &dynamodb.QueryOutput{Items: nil}, nil
+			case 3:
+				return &dynamodb.QueryOutput{
+					Items: []map[string]types.AttributeValue{
+						{
+							"runnerId":   &types.AttributeValueMemberS{Value: "r3"},
+							"idleBucket": &types.AttributeValueMemberS{Value: "bucket-1"},
+						},
+					},
+				}, nil
+			default:
+				return &dynamodb.QueryOutput{Items: nil}, nil
+			}
+		},
+		updateItemFn: func(_ context.Context, params *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
+			rid := params.Key["runnerId"].(*types.AttributeValueMemberS).Value
+			if rid == "r1" {
+				return nil, &types.ConditionalCheckFailedException{Message: aws.String("conflict")}
+			}
+			return &dynamodb.UpdateItemOutput{}, nil
 		},
 	}
 	repo := NewDynamoRepository(mock, "t")
 
-	err := repo.AssignSession(context.Background(), "r1", "sess-1")
-	if !errors.Is(err, ErrConditionFailed) {
-		t.Fatalf("expected ErrConditionFailed, got: %v", err)
+	runner, err := repo.AcquireIdle(context.Background(), "sess-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if runner.RunnerID != "r3" {
+		t.Errorf("runnerID = %q, want %q", runner.RunnerID, "r3")
 	}
 }
 
-// TestAssignSession_UpdateError は UpdateItem の予期せぬエラーを検証する。
-func TestAssignSession_UpdateError(t *testing.T) {
+// TestAcquireIdle_UpdateError は UpdateItem の予期せぬエラーを検証する。
+func TestAcquireIdle_UpdateError(t *testing.T) {
 	t.Parallel()
 	mock := &mockDynamoDBAPI{
+		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			return &dynamodb.QueryOutput{
+				Items: []map[string]types.AttributeValue{
+					{
+						"runnerId":   &types.AttributeValueMemberS{Value: "r1"},
+						"idleBucket": &types.AttributeValueMemberS{Value: "bucket-0"},
+					},
+				},
+			}, nil
+		},
 		updateItemFn: func(_ context.Context, _ *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
 			return nil, errors.New("update error")
 		},
 	}
 	repo := NewDynamoRepository(mock, "t")
 
-	err := repo.AssignSession(context.Background(), "r1", "sess-1")
+	_, err := repo.AcquireIdle(context.Background(), "sess-1")
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+// TestAcquireIdle_UnmarshalError は Query 結果の unmarshal 失敗を検証する。
+func TestAcquireIdle_UnmarshalError(t *testing.T) {
+	t.Parallel()
+	mock := &mockDynamoDBAPI{
+		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			return &dynamodb.QueryOutput{
+				Items: []map[string]types.AttributeValue{
+					{
+						"runnerId": &types.AttributeValueMemberL{Value: []types.AttributeValue{}},
+					},
+				},
+			}, nil
+		},
+	}
+	repo := NewDynamoRepository(mock, "t")
+
+	_, err := repo.AcquireIdle(context.Background(), "sess-1")
+	if err == nil {
+		t.Fatal("expected unmarshal error")
 	}
 }
 
@@ -350,11 +455,33 @@ func TestFindBySessionID_QueryError(t *testing.T) {
 	}
 }
 
+// TestFindBySessionID_UnmarshalError は Query 結果の unmarshal 失敗を検証する。
+func TestFindBySessionID_UnmarshalError(t *testing.T) {
+	t.Parallel()
+	mock := &mockDynamoDBAPI{
+		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			return &dynamodb.QueryOutput{
+				Items: []map[string]types.AttributeValue{
+					{
+						"runnerId": &types.AttributeValueMemberL{Value: []types.AttributeValue{}},
+					},
+				},
+			}, nil
+		},
+	}
+	repo := NewDynamoRepository(mock, "t")
+
+	_, err := repo.FindBySessionID(context.Background(), "sess-1")
+	if err == nil {
+		t.Fatal("expected unmarshal error")
+	}
+}
+
 // TestFindByID_Success は runner ID で runner が見つかるケースを検証する。
 func TestFindByID_Success(t *testing.T) {
 	t.Parallel()
 	mock := &mockDynamoDBAPI{
-		getItemFn: func(_ context.Context, params *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+		getItemFn: func(_ context.Context, _ *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
 			return &dynamodb.GetItemOutput{
 				Item: map[string]types.AttributeValue{
 					"runnerId":   &types.AttributeValueMemberS{Value: "r1"},
@@ -409,6 +536,26 @@ func TestFindByID_GetItemError(t *testing.T) {
 	}
 }
 
+// TestFindByID_UnmarshalError は GetItem 結果の unmarshal 失敗を検証する。
+func TestFindByID_UnmarshalError(t *testing.T) {
+	t.Parallel()
+	mock := &mockDynamoDBAPI{
+		getItemFn: func(_ context.Context, _ *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+			return &dynamodb.GetItemOutput{
+				Item: map[string]types.AttributeValue{
+					"runnerId": &types.AttributeValueMemberL{Value: []types.AttributeValue{}},
+				},
+			}, nil
+		},
+	}
+	repo := NewDynamoRepository(mock, "t")
+
+	_, err := repo.FindByID(context.Background(), "r1")
+	if err == nil {
+		t.Fatal("expected unmarshal error")
+	}
+}
+
 // TestDelete_Success は正常な削除を検証する。
 func TestDelete_Success(t *testing.T) {
 	t.Parallel()
@@ -441,70 +588,6 @@ func TestDelete_Error(t *testing.T) {
 	err := repo.Delete(context.Background(), "r1")
 	if err == nil {
 		t.Fatal("expected error")
-	}
-}
-
-// TestFindIdle_UnmarshalError は Query 結果の unmarshal 失敗を検証する。
-func TestFindIdle_UnmarshalError(t *testing.T) {
-	t.Parallel()
-	mock := &mockDynamoDBAPI{
-		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
-			return &dynamodb.QueryOutput{
-				Items: []map[string]types.AttributeValue{
-					{
-						"runnerId": &types.AttributeValueMemberL{Value: []types.AttributeValue{}},
-					},
-				},
-			}, nil
-		},
-	}
-	repo := NewDynamoRepository(mock, "t")
-
-	_, err := repo.FindIdle(context.Background())
-	if err == nil {
-		t.Fatal("expected unmarshal error")
-	}
-}
-
-// TestFindBySessionID_UnmarshalError は Query 結果の unmarshal 失敗を検証する。
-func TestFindBySessionID_UnmarshalError(t *testing.T) {
-	t.Parallel()
-	mock := &mockDynamoDBAPI{
-		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
-			return &dynamodb.QueryOutput{
-				Items: []map[string]types.AttributeValue{
-					{
-						"runnerId": &types.AttributeValueMemberL{Value: []types.AttributeValue{}},
-					},
-				},
-			}, nil
-		},
-	}
-	repo := NewDynamoRepository(mock, "t")
-
-	_, err := repo.FindBySessionID(context.Background(), "sess-1")
-	if err == nil {
-		t.Fatal("expected unmarshal error")
-	}
-}
-
-// TestFindByID_UnmarshalError は GetItem 結果の unmarshal 失敗を検証する。
-func TestFindByID_UnmarshalError(t *testing.T) {
-	t.Parallel()
-	mock := &mockDynamoDBAPI{
-		getItemFn: func(_ context.Context, _ *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
-			return &dynamodb.GetItemOutput{
-				Item: map[string]types.AttributeValue{
-					"runnerId": &types.AttributeValueMemberL{Value: []types.AttributeValue{}},
-				},
-			}, nil
-		},
-	}
-	repo := NewDynamoRepository(mock, "t")
-
-	_, err := repo.FindByID(context.Background(), "r1")
-	if err == nil {
-		t.Fatal("expected unmarshal error")
 	}
 }
 

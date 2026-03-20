@@ -52,8 +52,8 @@ func TestIntegration_RegisterIdempotent(t *testing.T) {
 	}
 }
 
-// TestIntegration_FindIdle は idle runner 検索の統合テスト。
-func TestIntegration_FindIdle(t *testing.T) {
+// TestIntegration_AcquireIdle は idle runner 確保の統合テスト。
+func TestIntegration_AcquireIdle(t *testing.T) {
 	t.Parallel()
 	client, tableName := setupIntegrationTable(t)
 	repo := NewDynamoRepository(client, tableName)
@@ -65,47 +65,9 @@ func TestIntegration_FindIdle(t *testing.T) {
 		t.Fatalf("Register: %v", err)
 	}
 
-	runner, err := repo.FindIdle(ctx)
+	runner, err := repo.AcquireIdle(ctx, "sess-1")
 	if err != nil {
-		t.Fatalf("FindIdle: %v", err)
-	}
-	if runner.RunnerID != "r1" {
-		t.Errorf("runnerID = %q, want %q", runner.RunnerID, "r1")
-	}
-}
-
-// TestIntegration_FindIdle_Empty は runner がいない場合に ErrNoIdleRunner を返す統合テスト。
-func TestIntegration_FindIdle_Empty(t *testing.T) {
-	t.Parallel()
-	client, tableName := setupIntegrationTable(t)
-	repo := NewDynamoRepository(client, tableName)
-
-	_, err := repo.FindIdle(context.Background())
-	if !errors.Is(err, ErrNoIdleRunner) {
-		t.Fatalf("expected ErrNoIdleRunner, got: %v", err)
-	}
-}
-
-// TestIntegration_AssignSessionAndFindBySessionID はセッション割当と検索の統合テスト。
-func TestIntegration_AssignSessionAndFindBySessionID(t *testing.T) {
-	t.Parallel()
-	client, tableName := setupIntegrationTable(t)
-	repo := NewDynamoRepository(client, tableName)
-	repo.bucketFn = func() string { return "bucket-0" }
-
-	ctx := context.Background()
-
-	if err := repo.Register(ctx, "r1"); err != nil {
-		t.Fatalf("Register: %v", err)
-	}
-
-	if err := repo.AssignSession(ctx, "r1", "sess-1"); err != nil {
-		t.Fatalf("AssignSession: %v", err)
-	}
-
-	runner, err := repo.FindBySessionID(ctx, "sess-1")
-	if err != nil {
-		t.Fatalf("FindBySessionID: %v", err)
+		t.Fatalf("AcquireIdle: %v", err)
 	}
 	if runner.RunnerID != "r1" {
 		t.Errorf("runnerID = %q, want %q", runner.RunnerID, "r1")
@@ -115,8 +77,20 @@ func TestIntegration_AssignSessionAndFindBySessionID(t *testing.T) {
 	}
 }
 
-// TestIntegration_AssignSession_AlreadyBusy は busy runner への割当が失敗する統合テスト。
-func TestIntegration_AssignSession_AlreadyBusy(t *testing.T) {
+// TestIntegration_AcquireIdle_Empty は runner がいない場合に ErrNoIdleRunner を返す統合テスト。
+func TestIntegration_AcquireIdle_Empty(t *testing.T) {
+	t.Parallel()
+	client, tableName := setupIntegrationTable(t)
+	repo := NewDynamoRepository(client, tableName)
+
+	_, err := repo.AcquireIdle(context.Background(), "sess-1")
+	if !errors.Is(err, ErrNoIdleRunner) {
+		t.Fatalf("expected ErrNoIdleRunner, got: %v", err)
+	}
+}
+
+// TestIntegration_AcquireIdle_FindBySessionID はセッション確保後にセッション検索できることを検証する統合テスト。
+func TestIntegration_AcquireIdle_FindBySessionID(t *testing.T) {
 	t.Parallel()
 	client, tableName := setupIntegrationTable(t)
 	repo := NewDynamoRepository(client, tableName)
@@ -127,13 +101,39 @@ func TestIntegration_AssignSession_AlreadyBusy(t *testing.T) {
 	if err := repo.Register(ctx, "r1"); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
-	if err := repo.AssignSession(ctx, "r1", "sess-1"); err != nil {
-		t.Fatalf("first AssignSession: %v", err)
+
+	if _, err := repo.AcquireIdle(ctx, "sess-1"); err != nil {
+		t.Fatalf("AcquireIdle: %v", err)
 	}
 
-	err := repo.AssignSession(ctx, "r1", "sess-2")
-	if !errors.Is(err, ErrConditionFailed) {
-		t.Fatalf("expected ErrConditionFailed, got: %v", err)
+	runner, err := repo.FindBySessionID(ctx, "sess-1")
+	if err != nil {
+		t.Fatalf("FindBySessionID: %v", err)
+	}
+	if runner.RunnerID != "r1" {
+		t.Errorf("runnerID = %q, want %q", runner.RunnerID, "r1")
+	}
+}
+
+// TestIntegration_AcquireIdle_AlreadyBusy は全 runner が busy の場合に ErrNoIdleRunner を返す統合テスト。
+func TestIntegration_AcquireIdle_AlreadyBusy(t *testing.T) {
+	t.Parallel()
+	client, tableName := setupIntegrationTable(t)
+	repo := NewDynamoRepository(client, tableName)
+	repo.bucketFn = func() string { return "bucket-0" }
+
+	ctx := context.Background()
+
+	if err := repo.Register(ctx, "r1"); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if _, err := repo.AcquireIdle(ctx, "sess-1"); err != nil {
+		t.Fatalf("first AcquireIdle: %v", err)
+	}
+
+	_, err := repo.AcquireIdle(ctx, "sess-2")
+	if !errors.Is(err, ErrNoIdleRunner) {
+		t.Fatalf("expected ErrNoIdleRunner, got: %v", err)
 	}
 }
 

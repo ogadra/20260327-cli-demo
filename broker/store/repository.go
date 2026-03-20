@@ -22,10 +22,9 @@ var ErrConditionFailed = errors.New("condition check failed")
 type Repository interface {
 	// Register は runner を idle として登録する。
 	Register(ctx context.Context, runnerID string) error
-	// FindIdle は idle の runner を1台返す。
-	FindIdle(ctx context.Context) (*model.Runner, error)
-	// AssignSession は runner に session を紐づけ idle から busy にする。
-	AssignSession(ctx context.Context, runnerID, sessionID string) error
+	// AcquireIdle は idle runner を1台確保し session を紐づける。
+	// バケット内で競合した場合は同じバケットで再試行し、空なら次のバケットへ移る。
+	AcquireIdle(ctx context.Context, sessionID string) (*model.Runner, error)
 	// FindBySessionID は session ID から runner を検索する。
 	FindBySessionID(ctx context.Context, sessionID string) (*model.Runner, error)
 	// FindByID は runner ID から runner を検索する。

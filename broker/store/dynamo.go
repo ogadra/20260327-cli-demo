@@ -64,17 +64,29 @@ func (r *DynamoRepository) Register(ctx context.Context, runnerID string) error 
 	return nil
 }
 
-// FindIdle は idle 状態の runner を1台返す。ランダムバケットから検索し、見つからなければ他バケットも試行する。
-func (r *DynamoRepository) FindIdle(ctx context.Context) (*model.Runner, error) {
+// AcquireIdle は idle runner を1台確保し session を紐づける。
+// ランダムバケットから検索し、競合時は同じバケットで再試行、空なら次のバケットへ移る。
+func (r *DynamoRepository) AcquireIdle(ctx context.Context, sessionID string) (*model.Runner, error) {
 	start := rand.IntN(bucketCount)
 	for i := range bucketCount {
 		bucket := fmt.Sprintf("bucket-%d", (start+i)%bucketCount)
-		runner, err := r.queryIdleBucket(ctx, bucket)
-		if err != nil {
-			return nil, err
-		}
-		if runner != nil {
-			return runner, nil
+		for {
+			runner, err := r.queryIdleBucket(ctx, bucket)
+			if err != nil {
+				return nil, err
+			}
+			if runner == nil {
+				break
+			}
+			err = r.assignSession(ctx, runner.RunnerID, sessionID)
+			if err == nil {
+				runner.CurrentSessionID = sessionID
+				runner.IdleBucket = ""
+				return runner, nil
+			}
+			if !errors.Is(err, ErrConditionFailed) {
+				return nil, err
+			}
 		}
 	}
 	return nil, ErrNoIdleRunner
@@ -104,8 +116,8 @@ func (r *DynamoRepository) queryIdleBucket(ctx context.Context, bucket string) (
 	return &runner, nil
 }
 
-// AssignSession は runner に session を紐づけ idle から busy に遷移させる。idleBucket が存在する場合のみ成功する。
-func (r *DynamoRepository) AssignSession(ctx context.Context, runnerID, sessionID string) error {
+// assignSession は runner に session を紐づけ idle から busy に遷移させる。idleBucket が存在する場合のみ成功する。
+func (r *DynamoRepository) assignSession(ctx context.Context, runnerID, sessionID string) error {
 	_, err := r.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: &r.tableName,
 		Key: map[string]types.AttributeValue{
