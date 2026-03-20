@@ -1,0 +1,417 @@
+// Package handler は broker の HTTP ハンドラーのテストを提供する。
+package handler
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/ogadra/20260327-cli-demo/broker/model"
+	"github.com/ogadra/20260327-cli-demo/broker/service"
+	"github.com/ogadra/20260327-cli-demo/broker/store"
+)
+
+// mockService は service.Service のモック実装。
+type mockService struct {
+	createSessionFn    func(ctx context.Context) (*service.CreateSessionResult, error)
+	closeSessionFn     func(ctx context.Context, sessionID string) error
+	resolveSessionFn   func(ctx context.Context, sessionID string) (string, error)
+	registerRunnerFn   func(ctx context.Context, runnerID, privateURL string) error
+	deregisterRunnerFn func(ctx context.Context, runnerID string) error
+}
+
+// CreateSession はモック CreateSession を呼び出す。
+func (m *mockService) CreateSession(ctx context.Context) (*service.CreateSessionResult, error) {
+	return m.createSessionFn(ctx)
+}
+
+// CloseSession はモック CloseSession を呼び出す。
+func (m *mockService) CloseSession(ctx context.Context, sessionID string) error {
+	return m.closeSessionFn(ctx, sessionID)
+}
+
+// ResolveSession はモック ResolveSession を呼び出す。
+func (m *mockService) ResolveSession(ctx context.Context, sessionID string) (string, error) {
+	return m.resolveSessionFn(ctx, sessionID)
+}
+
+// RegisterRunner はモック RegisterRunner を呼び出す。
+func (m *mockService) RegisterRunner(ctx context.Context, runnerID, privateURL string) error {
+	return m.registerRunnerFn(ctx, runnerID, privateURL)
+}
+
+// DeregisterRunner はモック DeregisterRunner を呼び出す。
+func (m *mockService) DeregisterRunner(ctx context.Context, runnerID string) error {
+	return m.deregisterRunnerFn(ctx, runnerID)
+}
+
+// newTestRouter はテスト用のルーターを構築する。
+func newTestRouter(h *Handler) *gin.Engine {
+	r := gin.New()
+	r.Use(RequestIDMiddleware(func() (string, error) {
+		return "test-req-id", nil
+	}))
+	r.POST("/sessions", h.PostSessions)
+	r.DELETE("/sessions/:sessionId", h.DeleteSession)
+	r.GET("/resolve", h.GetResolve)
+	r.POST("/internal/runners/register", h.PostRegister)
+	r.DELETE("/internal/runners/:runnerId", h.DeleteRunner)
+	return r
+}
+
+// TestPostSessions_Success はセッション作成の成功を検証する。
+func TestPostSessions_Success(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		createSessionFn: func(_ context.Context) (*service.CreateSessionResult, error) {
+			return &service.CreateSessionResult{
+				SessionID: "sess-abc",
+				Runner:    &model.Runner{RunnerID: "r1"},
+			}, nil
+		},
+	})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodPost, "/sessions", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if !strings.Contains(rec.Body.String(), "sess-abc") {
+		t.Errorf("body = %q, want to contain %q", rec.Body.String(), "sess-abc")
+	}
+	cookies := rec.Result().Cookies()
+	found := false
+	for _, c := range cookies {
+		if c.Name == "session_id" && c.Value == "sess-abc" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected session_id cookie")
+	}
+}
+
+// TestPostSessions_NoIdleRunner は idle runner がない場合に 503 を返すことを検証する。
+func TestPostSessions_NoIdleRunner(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		createSessionFn: func(_ context.Context) (*service.CreateSessionResult, error) {
+			return nil, store.ErrNoIdleRunner
+		},
+	})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodPost, "/sessions", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+	if !strings.Contains(rec.Body.String(), model.CodeNoIdleRunner) {
+		t.Errorf("body = %q, want to contain %q", rec.Body.String(), model.CodeNoIdleRunner)
+	}
+}
+
+// TestPostSessions_InternalError は内部エラー時に 500 を返すことを検証する。
+func TestPostSessions_InternalError(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		createSessionFn: func(_ context.Context) (*service.CreateSessionResult, error) {
+			return nil, errors.New("unexpected")
+		},
+	})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodPost, "/sessions", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// TestDeleteSession_Success はセッション終了の成功を検証する。
+func TestDeleteSession_Success(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		closeSessionFn: func(_ context.Context, sessionID string) error {
+			if sessionID != "sess-abc" {
+				t.Errorf("sessionID = %q, want %q", sessionID, "sess-abc")
+			}
+			return nil
+		},
+	})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodDelete, "/sessions/sess-abc", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
+// TestDeleteSession_NotFound はセッションが見つからない場合に 404 を返すことを検証する。
+func TestDeleteSession_NotFound(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		closeSessionFn: func(_ context.Context, _ string) error {
+			return store.ErrNotFound
+		},
+	})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodDelete, "/sessions/sess-missing", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+// TestDeleteSession_InternalError は内部エラー時に 500 を返すことを検証する。
+func TestDeleteSession_InternalError(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		closeSessionFn: func(_ context.Context, _ string) error {
+			return errors.New("unexpected")
+		},
+	})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodDelete, "/sessions/sess-abc", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// TestGetResolve_Success はセッション解決の成功を検証する。
+func TestGetResolve_Success(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		resolveSessionFn: func(_ context.Context, sessionID string) (string, error) {
+			if sessionID != "sess-abc" {
+				t.Errorf("sessionID = %q, want %q", sessionID, "sess-abc")
+			}
+			return "http://10.0.0.1:8080", nil
+		},
+	})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/resolve", nil)
+	req.Header.Set("X-Session", "sess-abc")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("X-Runner-Url"); got != "http://10.0.0.1:8080" {
+		t.Errorf("X-Runner-Url = %q, want %q", got, "http://10.0.0.1:8080")
+	}
+}
+
+// TestGetResolve_MissingHeader は X-Session ヘッダーがない場合に 400 を返すことを検証する。
+func TestGetResolve_MissingHeader(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/resolve", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+// TestGetResolve_NotFound はセッションが見つからない場合に 404 を返すことを検証する。
+func TestGetResolve_NotFound(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		resolveSessionFn: func(_ context.Context, _ string) (string, error) {
+			return "", store.ErrNotFound
+		},
+	})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/resolve", nil)
+	req.Header.Set("X-Session", "sess-missing")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+// TestGetResolve_InternalError は内部エラー時に 500 を返すことを検証する。
+func TestGetResolve_InternalError(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		resolveSessionFn: func(_ context.Context, _ string) (string, error) {
+			return "", errors.New("unexpected")
+		},
+	})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/resolve", nil)
+	req.Header.Set("X-Session", "sess-abc")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// TestPostRegister_Success は runner 登録の成功を検証する。
+func TestPostRegister_Success(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		registerRunnerFn: func(_ context.Context, runnerID, privateURL string) error {
+			if runnerID != "r1" {
+				t.Errorf("runnerID = %q, want %q", runnerID, "r1")
+			}
+			if privateURL != "http://10.0.0.1:8080" {
+				t.Errorf("privateURL = %q, want %q", privateURL, "http://10.0.0.1:8080")
+			}
+			return nil
+		},
+	})
+	r := newTestRouter(h)
+
+	body := strings.NewReader(`{"runnerId":"r1","privateUrl":"http://10.0.0.1:8080"}`)
+	req := httptest.NewRequest(http.MethodPost, "/internal/runners/register", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+}
+
+// TestPostRegister_InvalidBody はリクエストボディが不正な場合に 400 を返すことを検証する。
+func TestPostRegister_InvalidBody(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{})
+	r := newTestRouter(h)
+
+	body := strings.NewReader(`{}`)
+	req := httptest.NewRequest(http.MethodPost, "/internal/runners/register", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+// TestPostRegister_InternalError は内部エラー時に 500 を返すことを検証する。
+func TestPostRegister_InternalError(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		registerRunnerFn: func(_ context.Context, _, _ string) error {
+			return errors.New("unexpected")
+		},
+	})
+	r := newTestRouter(h)
+
+	body := strings.NewReader(`{"runnerId":"r1","privateUrl":"http://10.0.0.1:8080"}`)
+	req := httptest.NewRequest(http.MethodPost, "/internal/runners/register", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// TestDeleteRunner_Success は runner 削除の成功を検証する。
+func TestDeleteRunner_Success(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		deregisterRunnerFn: func(_ context.Context, runnerID string) error {
+			if runnerID != "r1" {
+				t.Errorf("runnerID = %q, want %q", runnerID, "r1")
+			}
+			return nil
+		},
+	})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodDelete, "/internal/runners/r1", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
+// TestDeleteRunner_InternalError は内部エラー時に 500 を返すことを検証する。
+func TestDeleteRunner_InternalError(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		deregisterRunnerFn: func(_ context.Context, _ string) error {
+			return errors.New("unexpected")
+		},
+	})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodDelete, "/internal/runners/r1", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// TestWriteError_IncludesRequestID はエラーレスポンスに requestId が含まれることを検証する。
+func TestWriteError_IncludesRequestID(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		resolveSessionFn: func(_ context.Context, _ string) (string, error) {
+			return "", store.ErrNotFound
+		},
+	})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/resolve", nil)
+	req.Header.Set("X-Session", "sess-missing")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if !strings.Contains(rec.Body.String(), "test-req-id") {
+		t.Errorf("body = %q, want to contain %q", rec.Body.String(), "test-req-id")
+	}
+}
+
+// TestNewHandler は NewHandler のコンストラクタを検証する。
+func TestNewHandler(t *testing.T) {
+	t.Parallel()
+	svc := &mockService{}
+	h := NewHandler(svc)
+	if h.svc != svc {
+		t.Error("svc mismatch")
+	}
+}

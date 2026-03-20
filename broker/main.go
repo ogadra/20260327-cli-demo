@@ -13,14 +13,24 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ogadra/20260327-cli-demo/broker/handler"
 )
 
 // newRouter は broker の HTTP ルーティングを構成した gin.Engine を返す。
-func newRouter() *gin.Engine {
+// h が nil の場合はヘルスチェックのみ登録する。
+func newRouter(h *handler.Handler) *gin.Engine {
 	r := gin.Default()
 	r.GET("/health", func(c *gin.Context) {
 		c.String(http.StatusOK, "ok\n")
 	})
+	if h != nil {
+		r.Use(handler.RequestIDMiddleware(handler.DefaultIDFn))
+		r.POST("/sessions", h.PostSessions)
+		r.DELETE("/sessions/:sessionId", h.DeleteSession)
+		r.GET("/resolve", h.GetResolve)
+		r.POST("/internal/runners/register", h.PostRegister)
+		r.DELETE("/internal/runners/:runnerId", h.DeleteRunner)
+	}
 	return r
 }
 
@@ -41,7 +51,7 @@ var signalNotify = signal.Notify
 
 // run はサーバーの起動とグレースフルシャットダウンを行う。
 func run() error {
-	r := newRouter()
+	r := newRouter(nil)
 
 	srv := &http.Server{
 		Addr:    addr,
