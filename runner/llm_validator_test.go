@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -28,6 +29,9 @@ func (m *mockBedrockClient) Converse(_ context.Context, _ *bedrockruntime.Conver
 	if m.outputs != nil {
 		i := m.calls
 		m.calls++
+		if i >= len(m.outputs) || i >= len(m.errs) {
+			return nil, fmt.Errorf("mockBedrockClient: sequence out of range (i=%d, outputs=%d, errs=%d)", i, len(m.outputs), len(m.errs))
+		}
 		return m.outputs[i], m.errs[i]
 	}
 	m.calls++
@@ -149,8 +153,8 @@ func TestValidateNoToolUseBlockRetries(t *testing.T) {
 	if !strings.Contains(err.Error(), "retries exhausted") {
 		t.Fatalf("error = %v, want containing 'retries exhausted'", err)
 	}
-	if client.calls != maxRetries {
-		t.Fatalf("calls = %d, want %d", client.calls, maxRetries)
+	if client.calls != maxRetries+1 {
+		t.Fatalf("calls = %d, want %d", client.calls, maxRetries+1)
 	}
 }
 
@@ -180,8 +184,8 @@ func TestValidateInvalidJSONRetries(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid JSON, got nil")
 	}
-	if client.calls != maxRetries {
-		t.Fatalf("calls = %d, want %d", client.calls, maxRetries)
+	if client.calls != maxRetries+1 {
+		t.Fatalf("calls = %d, want %d", client.calls, maxRetries+1)
 	}
 }
 
@@ -199,8 +203,8 @@ func TestValidateUnexpectedOutputType(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unexpected output type, got nil")
 	}
-	if client.calls != maxRetries {
-		t.Fatalf("calls = %d, want %d", client.calls, maxRetries)
+	if client.calls != maxRetries+1 {
+		t.Fatalf("calls = %d, want %d", client.calls, maxRetries+1)
 	}
 }
 
@@ -231,8 +235,8 @@ func TestValidateMarshalError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for marshal failure, got nil")
 	}
-	if client.calls != maxRetries {
-		t.Fatalf("calls = %d, want %d", client.calls, maxRetries)
+	if client.calls != maxRetries+1 {
+		t.Fatalf("calls = %d, want %d", client.calls, maxRetries+1)
 	}
 }
 
@@ -283,5 +287,72 @@ func TestValidateRetryAPIError(t *testing.T) {
 	}
 	if client.calls != 2 {
 		t.Fatalf("calls = %d, want 2", client.calls)
+	}
+}
+
+// TestValidateNilOutputRetries verifies that a nil ConverseOutput triggers
+// retries and returns an error instead of panicking.
+func TestValidateNilOutputRetries(t *testing.T) {
+	client := &mockBedrockClient{
+		output: nil,
+	}
+	v := NewBedrockValidator(client, "test-model")
+
+	_, err := v.Validate(context.Background(), "ls")
+	if err == nil {
+		t.Fatal("expected error for nil output, got nil")
+	}
+	if client.calls != maxRetries+1 {
+		t.Fatalf("calls = %d, want %d", client.calls, maxRetries+1)
+	}
+}
+
+// TestValidateWrongToolNameIgnored verifies that a tool use block with the
+// wrong name is ignored and treated as no matching tool use.
+func TestValidateWrongToolNameIgnored(t *testing.T) {
+	wrongNameOutput := &bedrockruntime.ConverseOutput{
+		Output: &brtypes.ConverseOutputMemberMessage{
+			Value: brtypes.Message{
+				Role: brtypes.ConversationRoleAssistant,
+				Content: []brtypes.ContentBlock{
+					&brtypes.ContentBlockMemberToolUse{
+						Value: brtypes.ToolUseBlock{
+							ToolUseId: strPtr("tool-1"),
+							Name:      strPtr("wrong_tool"),
+							Input: document.NewLazyDocument(map[string]interface{}{
+								"safe":   true,
+								"reason": "should be ignored",
+							}),
+						},
+					},
+				},
+			},
+		},
+	}
+	client := &mockBedrockClient{output: wrongNameOutput}
+	v := NewBedrockValidator(client, "test-model")
+
+	_, err := v.Validate(context.Background(), "ls")
+	if err == nil {
+		t.Fatal("expected error for wrong tool name, got nil")
+	}
+	if !strings.Contains(err.Error(), "retries exhausted") {
+		t.Fatalf("error = %v, want containing 'retries exhausted'", err)
+	}
+}
+
+// TestValidateMaxRetriesMeansInitialPlusRetries verifies that maxRetries=2
+// results in 1 initial attempt + 2 retries = 3 total calls.
+func TestValidateMaxRetriesMeansInitialPlusRetries(t *testing.T) {
+	client := &mockBedrockClient{
+		output: noToolUseOutput(),
+	}
+	v := NewBedrockValidator(client, "test-model")
+
+	_, _ = v.Validate(context.Background(), "ls")
+
+	// maxRetries=2 should mean initial + 2 retries = 3 total calls.
+	if client.calls != maxRetries+1 {
+		t.Fatalf("calls = %d, want %d (initial + %d retries)", client.calls, maxRetries+1, maxRetries)
 	}
 }

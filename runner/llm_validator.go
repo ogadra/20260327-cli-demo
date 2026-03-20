@@ -71,8 +71,8 @@ var toolSchema = document.NewLazyDocument(map[string]interface{}{
 	"required": []string{"safe", "reason"},
 })
 
-// maxRetries is the maximum number of times to retry the LLM call when the
-// response cannot be parsed.
+// maxRetries is the number of additional retries after the initial attempt when
+// the response cannot be parsed. Total attempts = 1 + maxRetries.
 const maxRetries = 2
 
 // BedrockValidator validates commands using Bedrock Converse API with tool use.
@@ -118,7 +118,7 @@ func (v *BedrockValidator) Validate(ctx context.Context, command string) (Valida
 	}
 
 	var parseErr error
-	for range maxRetries {
+	for range maxRetries + 1 {
 		output, err := v.client.Converse(ctx, input)
 		if err != nil {
 			return ValidationResult{}, fmt.Errorf("bedrock converse: %w", err)
@@ -136,6 +136,10 @@ func (v *BedrockValidator) Validate(ctx context.Context, command string) (Valida
 
 // parseToolUseResult extracts the tool use result from the Converse API output.
 func parseToolUseResult(output *bedrockruntime.ConverseOutput) (ValidationResult, error) {
+	if output == nil {
+		return ValidationResult{}, errors.New("nil converse output")
+	}
+
 	msg, ok := output.Output.(*brtypes.ConverseOutputMemberMessage)
 	if !ok {
 		return ValidationResult{}, errors.New("unexpected converse output type")
@@ -144,6 +148,9 @@ func parseToolUseResult(output *bedrockruntime.ConverseOutput) (ValidationResult
 	for _, block := range msg.Value.Content {
 		tu, ok := block.(*brtypes.ContentBlockMemberToolUse)
 		if !ok {
+			continue
+		}
+		if tu.Value.Name == nil || *tu.Value.Name != toolName {
 			continue
 		}
 
@@ -163,7 +170,7 @@ func parseToolUseResult(output *bedrockruntime.ConverseOutput) (ValidationResult
 		return ValidationResult{Safe: result.Safe, Reason: result.Reason}, nil
 	}
 
-	return ValidationResult{}, errors.New("no tool use block in response")
+	return ValidationResult{}, errors.New("no expected tool use block in response")
 }
 
 // strPtr returns a pointer to the given string.
