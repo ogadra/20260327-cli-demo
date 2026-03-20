@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ogadra/20260327-cli-demo/broker/handler"
 )
 
 // saveAndRestore は全てのパッケージレベル変数を退避し、テスト終了時に復元する。
@@ -20,13 +23,16 @@ func saveAndRestore(t *testing.T) {
 	origShutdownTimeout := shutdownTimeout
 	origFatalf := fatalf
 	origSignalNotify := signalNotify
+	origInitHandler := initHandler
 	t.Cleanup(func() {
 		stdout = origStdout
 		addr = origAddr
 		shutdownTimeout = origShutdownTimeout
 		fatalf = origFatalf
 		signalNotify = origSignalNotify
+		initHandler = origInitHandler
 	})
+	initHandler = func() (*handler.Handler, error) { return nil, nil }
 }
 
 // TestHealthEndpoint は GET /health が 200 OK を返すことを検証する。
@@ -125,6 +131,75 @@ func TestMainSuccess(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	sigCh <- os.Interrupt
 	<-done
+}
+
+// TestRunInitHandlerError は initHandler がエラーを返す場合に run がエラーを返すことを検証する。
+func TestRunInitHandlerError(t *testing.T) {
+	saveAndRestore(t)
+
+	stdout = io.Discard
+	initHandler = func() (*handler.Handler, error) {
+		return nil, errors.New("init failed")
+	}
+
+	err := run()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "init handler") {
+		t.Errorf("error = %q, want to contain %q", err.Error(), "init handler")
+	}
+}
+
+// TestDefaultInitHandler は defaultInitHandler がエンドポイント指定時に Handler を返すことを検証する。
+func TestDefaultInitHandler(t *testing.T) {
+	saveAndRestore(t)
+
+	t.Setenv("TABLE_NAME", "test-runners")
+	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
+
+	h, err := defaultInitHandler()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if h == nil {
+		t.Fatal("expected non-nil handler")
+	}
+}
+
+// TestDefaultInitHandler_DefaultTableName は TABLE_NAME 未設定時にデフォルト値を使用することを検証する。
+func TestDefaultInitHandler_DefaultTableName(t *testing.T) {
+	saveAndRestore(t)
+
+	t.Setenv("TABLE_NAME", "")
+	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
+
+	h, err := defaultInitHandler()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if h == nil {
+		t.Fatal("expected non-nil handler")
+	}
+}
+
+// TestDefaultInitHandler_NoEndpoint は DYNAMODB_ENDPOINT 未設定時に AWS デフォルト設定を使うことを検証する。
+func TestDefaultInitHandler_NoEndpoint(t *testing.T) {
+	saveAndRestore(t)
+
+	t.Setenv("TABLE_NAME", "test-runners")
+	t.Setenv("DYNAMODB_ENDPOINT", "")
+	t.Setenv("AWS_ACCESS_KEY_ID", "dummy")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "dummy")
+	t.Setenv("AWS_REGION", "ap-northeast-1")
+
+	h, err := defaultInitHandler()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if h == nil {
+		t.Fatal("expected non-nil handler")
+	}
 }
 
 // TestMainServerError は main がサーバー起動失敗時に fatalf を呼ぶことを検証する。

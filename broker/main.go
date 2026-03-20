@@ -12,8 +12,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/gin-gonic/gin"
 	"github.com/ogadra/20260327-cli-demo/broker/handler"
+	"github.com/ogadra/20260327-cli-demo/broker/service"
+	"github.com/ogadra/20260327-cli-demo/broker/store"
 )
 
 // newRouter は broker の HTTP ルーティングを構成した gin.Engine を返す。
@@ -49,9 +55,52 @@ var fatalf = log.Fatalf
 // signalNotify は os/signal.Notify のラッパー。テスト時に差し替える。
 var signalNotify = signal.Notify
 
+// initHandler は DynamoDB クライアントを初期化し Handler を生成する関数。テスト時に差し替える。
+var initHandler = defaultInitHandler
+
+// defaultInitHandler は環境変数から DynamoDB クライアントを構築し Handler を返す。
+func defaultInitHandler() (*handler.Handler, error) {
+	tableName := os.Getenv("TABLE_NAME")
+	if tableName == "" {
+		tableName = "runners"
+	}
+
+	endpoint := os.Getenv("DYNAMODB_ENDPOINT")
+
+	ctx := context.Background()
+	var opts []func(*config.LoadOptions) error
+	if endpoint != "" {
+		opts = append(opts,
+			config.WithRegion("ap-northeast-1"),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("dummy", "dummy", "")),
+		)
+	}
+
+	cfg, err := config.LoadDefaultConfig(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("load aws config: %w", err)
+	}
+
+	var dynamoOpts []func(*dynamodb.Options)
+	if endpoint != "" {
+		dynamoOpts = append(dynamoOpts, func(o *dynamodb.Options) {
+			o.BaseEndpoint = aws.String(endpoint)
+		})
+	}
+
+	client := dynamodb.NewFromConfig(cfg, dynamoOpts...)
+	repo := store.NewDynamoRepository(client, tableName)
+	svc := service.NewBrokerService(repo)
+	return handler.NewHandler(svc), nil
+}
+
 // run はサーバーの起動とグレースフルシャットダウンを行う。
 func run() error {
-	r := newRouter(nil)
+	h, err := initHandler()
+	if err != nil {
+		return fmt.Errorf("init handler: %w", err)
+	}
+	r := newRouter(h)
 
 	srv := &http.Server{
 		Addr:    addr,
