@@ -18,7 +18,7 @@ func TestIntegration_RegisterAndFindByID(t *testing.T) {
 
 	ctx := context.Background()
 
-	err := repo.Register(ctx, "r1")
+	err := repo.Register(ctx, "r1", "http://10.0.0.1:8080")
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -33,6 +33,9 @@ func TestIntegration_RegisterAndFindByID(t *testing.T) {
 	if runner.IdleBucket != "bucket-0" {
 		t.Errorf("idleBucket = %q, want %q", runner.IdleBucket, "bucket-0")
 	}
+	if runner.PrivateURL != "http://10.0.0.1:8080" {
+		t.Errorf("privateURL = %q, want %q", runner.PrivateURL, "http://10.0.0.1:8080")
+	}
 }
 
 // TestIntegration_RegisterIdempotent は登録の冪等性を検証する統合テスト。
@@ -44,11 +47,29 @@ func TestIntegration_RegisterIdempotent(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := repo.Register(ctx, "r1"); err != nil {
+	if err := repo.Register(ctx, "r1", "http://10.0.0.1:8080"); err != nil {
 		t.Fatalf("first Register: %v", err)
 	}
-	if err := repo.Register(ctx, "r1"); err != nil {
+	if err := repo.Register(ctx, "r1", "http://10.0.0.1:8080"); err != nil {
 		t.Fatalf("second Register should be idempotent: %v", err)
+	}
+}
+
+// TestIntegration_RegisterConflict は同一 runnerID で異なる privateURL の登録が ErrConflict を返す統合テスト。
+func TestIntegration_RegisterConflict(t *testing.T) {
+	t.Parallel()
+	client, tableName := setupIntegrationTable(t)
+	repo := NewDynamoRepository(client, tableName)
+	repo.bucketFn = func() string { return "bucket-0" }
+
+	ctx := context.Background()
+
+	if err := repo.Register(ctx, "r1", "http://10.0.0.1:8080"); err != nil {
+		t.Fatalf("first Register: %v", err)
+	}
+	err := repo.Register(ctx, "r1", "http://10.0.0.2:9090")
+	if !errors.Is(err, ErrConflict) {
+		t.Fatalf("expected ErrConflict, got: %v", err)
 	}
 }
 
@@ -61,7 +82,7 @@ func TestIntegration_AcquireIdle(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := repo.Register(ctx, "r1"); err != nil {
+	if err := repo.Register(ctx, "r1", "http://10.0.0.1:8080"); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 
@@ -98,7 +119,7 @@ func TestIntegration_AcquireIdle_FindBySessionID(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := repo.Register(ctx, "r1"); err != nil {
+	if err := repo.Register(ctx, "r1", "http://10.0.0.1:8080"); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 
@@ -124,7 +145,7 @@ func TestIntegration_AcquireIdle_AlreadyBusy(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := repo.Register(ctx, "r1"); err != nil {
+	if err := repo.Register(ctx, "r1", "http://10.0.0.1:8080"); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 	if _, err := repo.AcquireIdle(ctx, "sess-1"); err != nil {
@@ -146,7 +167,7 @@ func TestIntegration_Delete(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := repo.Register(ctx, "r1"); err != nil {
+	if err := repo.Register(ctx, "r1", "http://10.0.0.1:8080"); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 	if err := repo.Delete(ctx, "r1"); err != nil {

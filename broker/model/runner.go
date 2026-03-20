@@ -12,6 +12,8 @@ type Runner struct {
 	CurrentSessionID string `dynamodbav:"currentSessionId,omitempty"`
 	// IdleBucket は idle 時のバケット値。sparse GSI idle-index のキー。
 	IdleBucket string `dynamodbav:"idleBucket,omitempty"`
+	// PrivateURL は runner のプライベート URL。セッション解決時に返却する。
+	PrivateURL string `dynamodbav:"privateUrl,omitempty"`
 }
 
 // IsIdle は runner が idle 状態かを返す。

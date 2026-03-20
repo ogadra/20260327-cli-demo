@@ -17,6 +17,11 @@ func TestRunner_IsIdle(t *testing.T) {
 			want:   true,
 		},
 		{
+			name:   "idle when idleBucket is set with privateURL",
+			runner: Runner{RunnerID: "r1", IdleBucket: "bucket-0", PrivateURL: "http://10.0.0.1:8080"},
+			want:   true,
+		},
+		{
 			name:   "not idle when idleBucket is empty",
 			runner: Runner{RunnerID: "r1", CurrentSessionID: "sess-1"},
 			want:   false,
@@ -48,6 +53,11 @@ func TestRunner_IsBusy(t *testing.T) {
 		{
 			name:   "busy when currentSessionId is set",
 			runner: Runner{RunnerID: "r1", CurrentSessionID: "sess-1"},
+			want:   true,
+		},
+		{
+			name:   "busy when currentSessionId is set with privateURL",
+			runner: Runner{RunnerID: "r1", CurrentSessionID: "sess-1", PrivateURL: "http://10.0.0.1:8080"},
 			want:   true,
 		},
 		{
