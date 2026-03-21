@@ -51,6 +51,10 @@ pre-commit:
       glob: "**/*.{ts,tsx}"
       stage_fixed: true
       run: pnpm exec vp check --fix
+    041_nginx_config_test:
+      root: "nginx/"
+      glob: "**/*.conf"
+      run: docker build --target config-test .
     004_gitleaks:
       run: gitleaks protect --staged
     005_trivy:
