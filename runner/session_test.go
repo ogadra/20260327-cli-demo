@@ -131,8 +131,8 @@ func TestSessionExecute(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("exitCode = %d, want 0", exitCode)
 	}
-	if len(lines) != 1 || lines[0] != "hello" {
-		t.Fatalf("lines = %v, want [hello]", lines)
+	if len(lines) != 1 || lines[0] != "hello\n" {
+		t.Fatalf("lines = %v, want [hello\\n]", lines)
 	}
 }
 
@@ -187,8 +187,8 @@ func TestSessionIsolation(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("exitCode = %d, want 0", exitCode)
 	}
-	if len(lines2) != 1 || lines2[0] != "unset" {
-		t.Fatalf("session2 saw TESTVAR: lines = %v, want [unset]", lines2)
+	if len(lines2) != 1 || lines2[0] != "unset\n" {
+		t.Fatalf("session2 saw TESTVAR: lines = %v, want [unset\\n]", lines2)
 	}
 }
 

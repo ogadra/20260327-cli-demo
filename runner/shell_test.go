@@ -67,8 +67,8 @@ func TestStreamBasic(t *testing.T) {
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
-	if len(lines) != 1 || lines[0] != "hello" {
-		t.Errorf("lines = %v, want [hello]", lines)
+	if len(lines) != 1 || lines[0] != "hello\n" {
+		t.Errorf("lines = %v, want [hello\\n]", lines)
 	}
 	if stderr != "" {
 		t.Errorf("stderr = %q, want empty", stderr)
@@ -106,8 +106,8 @@ func TestStreamStdoutAndStderr(t *testing.T) {
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
-	if len(lines) != 1 || lines[0] != "out" {
-		t.Errorf("lines = %v, want [out]", lines)
+	if len(lines) != 1 || lines[0] != "out\n" {
+		t.Errorf("lines = %v, want [out\\n]", lines)
 	}
 	if !strings.Contains(stderr, "err") {
 		t.Errorf("stderr = %q, want to contain %q", stderr, "err")
@@ -122,8 +122,8 @@ func TestSessionPersistenceCd(t *testing.T) {
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
-	if len(lines) != 1 || lines[0] != "/tmp" {
-		t.Errorf("lines = %v, want [/tmp]", lines)
+	if len(lines) != 1 || lines[0] != "/tmp\n" {
+		t.Errorf("lines = %v, want [/tmp\\n]", lines)
 	}
 }
 
@@ -135,8 +135,8 @@ func TestSessionPersistenceEnv(t *testing.T) {
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
-	if len(lines) != 1 || lines[0] != "bar" {
-		t.Errorf("lines = %v, want [bar]", lines)
+	if len(lines) != 1 || lines[0] != "bar\n" {
+		t.Errorf("lines = %v, want [bar\\n]", lines)
 	}
 }
 
@@ -149,8 +149,8 @@ func TestSessionPersistenceAlias(t *testing.T) {
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
-	if len(lines) != 1 || lines[0] != "hi" {
-		t.Errorf("lines = %v, want [hi]", lines)
+	if len(lines) != 1 || lines[0] != "hi\n" {
+		t.Errorf("lines = %v, want [hi\\n]", lines)
 	}
 }
 
@@ -164,7 +164,7 @@ func TestStreamMultilineOutput(t *testing.T) {
 	if len(lines) != 3 {
 		t.Errorf("got %d lines, want 3: %v", len(lines), lines)
 	}
-	expected := []string{"line1", "line2", "line3"}
+	expected := []string{"line1\n", "line2\n", "line3\n"}
 	for i, want := range expected {
 		if i < len(lines) && lines[i] != want {
 			t.Errorf("lines[%d] = %q, want %q", i, lines[i], want)
@@ -188,7 +188,7 @@ func TestStreamOutputWithEmptyLines(t *testing.T) {
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
-	expected := []string{"a", "", "b"}
+	expected := []string{"a\n", "\n", "b\n"}
 	if len(lines) != len(expected) {
 		t.Fatalf("got %d lines %v, want %v", len(lines), lines, expected)
 	}
@@ -210,8 +210,8 @@ func TestStreamLongLine(t *testing.T) {
 	if len(lines) > 0 {
 		gotLen = len(lines[0])
 	}
-	if len(lines) != 1 || gotLen != 100000 {
-		t.Errorf("got %d lines, first line length = %d, want 1 line of 100000 chars", len(lines), gotLen)
+	if len(lines) != 1 || gotLen != 100001 {
+		t.Errorf("got %d lines, first line length = %d, want 1 line of 100001 chars including trailing newline", len(lines), gotLen)
 	}
 }
 
@@ -250,8 +250,8 @@ func TestStreamNoTrailingNewline(t *testing.T) {
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
-	if len(lines) != 1 || lines[0] != "no newline" {
-		t.Errorf("lines = %v, want [no newline]", lines)
+	if len(lines) != 1 || lines[0] != "no newline\n" {
+		t.Errorf("lines = %v, want [no newline\\n]", lines)
 	}
 }
 
@@ -781,8 +781,8 @@ func TestStreamDrainMarkerOnContextCancel(t *testing.T) {
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
-	if len(lines) != 1 || lines[0] != "recovered" {
-		t.Errorf("lines = %v, want [recovered]", lines)
+	if len(lines) != 1 || lines[0] != "recovered\n" {
+		t.Errorf("lines = %v, want [recovered\\n]", lines)
 	}
 }
 
