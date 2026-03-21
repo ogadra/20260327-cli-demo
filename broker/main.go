@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -64,28 +63,21 @@ var loadAWSConfig = config.LoadDefaultConfig
 
 // defaultInitHandler は環境変数から DynamoDB クライアントを構築し Handler を返す。
 func defaultInitHandler() (*handler.Handler, error) {
-	endpoint := os.Getenv("DYNAMODB_ENDPOINT")
 	region := os.Getenv("AWS_REGION")
-
-	var missing []string
-	for _, pair := range []struct{ name, val string }{
-		{"DYNAMODB_ENDPOINT", endpoint},
-		{"AWS_REGION", region},
-	} {
-		if pair.val == "" {
-			missing = append(missing, pair.name)
-		}
+	if region == "" {
+		return nil, fmt.Errorf("missing required environment variable: AWS_REGION")
 	}
-	if len(missing) > 0 {
-		return nil, fmt.Errorf("missing required environment variables: %s", strings.Join(missing, ", "))
+
+	accessKey := os.Getenv("AWS_ACCESS_KEY_ID")
+	secretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	if (accessKey == "") != (secretKey == "") {
+		return nil, fmt.Errorf("AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must both be set or both be empty")
 	}
 
 	opts := []func(*config.LoadOptions) error{
 		config.WithRegion(region),
 	}
-	accessKey := os.Getenv("AWS_ACCESS_KEY_ID")
-	secretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
-	if accessKey != "" && secretKey != "" {
+	if accessKey != "" {
 		opts = append(opts, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")))
 	}
 
@@ -95,9 +87,14 @@ func defaultInitHandler() (*handler.Handler, error) {
 		return nil, fmt.Errorf("load aws config: %w", err)
 	}
 
-	client := dynamodb.NewFromConfig(cfg, func(o *dynamodb.Options) {
-		o.BaseEndpoint = aws.String(endpoint)
-	})
+	endpoint := os.Getenv("DYNAMODB_ENDPOINT")
+	var ddbOpts []func(*dynamodb.Options)
+	if endpoint != "" {
+		ddbOpts = append(ddbOpts, func(o *dynamodb.Options) {
+			o.BaseEndpoint = aws.String(endpoint)
+		})
+	}
+	client := dynamodb.NewFromConfig(cfg, ddbOpts...)
 	repo := store.NewDynamoRepository(client, "Runners")
 	svc := service.NewBrokerService(repo)
 	return handler.NewHandler(svc), nil
