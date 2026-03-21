@@ -1,11 +1,15 @@
-import { useCallback, useRef, useState, type KeyboardEvent } from "react";
+import React, { useCallback, useRef, useState, type KeyboardEvent } from "react";
 
+/** Props for the CommandInput component. */
 interface Props {
+  /** Callback invoked with the entered command string. */
   onSubmit: (command: string) => void;
+  /** Whether the input is disabled. */
   disabled: boolean;
 }
 
-const CommandInput = ({ onSubmit, disabled }: Props) => {
+/** Text input with command history navigable via arrow keys. */
+const CommandInput = ({ onSubmit, disabled }: Props): React.JSX.Element => {
   const [value, setValue] = useState("");
   const historyRef = useRef<string[]>([]);
   const historyIndexRef = useRef(-1);

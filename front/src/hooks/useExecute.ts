@@ -2,10 +2,23 @@ import { useCallback, useRef, useState } from "react";
 import { execute, SseEventType, type SseEvent } from "../api/client";
 import type { TerminalHandle } from "../components/Terminal";
 
+/** Return type of the useExecute hook. */
+interface UseExecuteResult {
+  /** Execute a command in the session and stream output to the terminal. */
+  run: (command: string) => Promise<void>;
+  /** Whether a command is currently executing. */
+  running: boolean;
+}
+
+/**
+ * Hook that executes a command via SSE and streams output to a Terminal ref.
+ * @param sessionId - The active session ID, or null if not connected.
+ * @param terminalRef - Ref to the Terminal component for writing output.
+ */
 export const useExecute = (
   sessionId: string | null,
   terminalRef: React.RefObject<TerminalHandle | null>,
-) => {
+): UseExecuteResult => {
   const [running, setRunning] = useState(false);
   const runningRef = useRef(false);
 
@@ -32,7 +45,11 @@ export const useExecute = (
   return { run, running };
 };
 
-const handleEvent = (event: SseEvent, terminalRef: React.RefObject<TerminalHandle | null>) => {
+/** Write an SSE event to the terminal, colouring stderr and non-zero exit codes red. */
+const handleEvent = (
+  event: SseEvent,
+  terminalRef: React.RefObject<TerminalHandle | null>,
+): void => {
   switch (event.type) {
     case SseEventType.STDOUT:
       terminalRef.current?.write(event.data);
