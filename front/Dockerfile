@@ -18,8 +18,10 @@ COPY . .
 RUN pnpm exec vp build
 
 FROM deps AS dev
-RUN useradd -r -s /usr/sbin/nologin appuser
-COPY --chown=appuser:appuser . .
+RUN useradd -r -s /usr/sbin/nologin appuser \
+    && chown appuser:appuser /app \
+    && mkdir -p node_modules/.vite && chown -R appuser:appuser node_modules/.vite
+ENV COREPACK_HOME=/tmp/.corepack
 USER appuser
 EXPOSE 5173
 CMD ["pnpm", "exec", "vp", "dev", "--host"]
