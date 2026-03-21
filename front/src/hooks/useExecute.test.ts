@@ -1,6 +1,8 @@
+import type { RefObject } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useExecute } from "./useExecute";
+import type { TerminalHandle } from "../components/Terminal";
 
 vi.mock("../api/client", () => ({
   execute: vi.fn(),
@@ -19,13 +21,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function makeTerminalRef() {
-  return {
-    current: {
-      write: vi.fn(),
-      writeln: vi.fn(),
-    },
-  };
+/** Create a mock TerminalHandle ref for testing. */
+function makeTerminalRef(): RefObject<TerminalHandle> {
+  return { current: { write: vi.fn(), writeln: vi.fn() } };
 }
 
 describe("useExecute", () => {

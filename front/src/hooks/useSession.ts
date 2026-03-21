@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { createSession, deleteSession } from "../api/client";
 
+/**
+ * Hook that creates a session on mount and attempts to delete it on unmount.
+ * Returns the session ID once available, or null while loading.
+ */
 export const useSession = (): string | null => {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
