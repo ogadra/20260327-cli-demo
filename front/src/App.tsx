@@ -1,5 +1,20 @@
-function App() {
-  return <div />;
-}
+import { useRef } from "react";
+import Terminal, { type TerminalHandle } from "./components/Terminal";
+import CommandInput from "./components/CommandInput";
+import { useSession } from "./hooks/useSession";
+import { useExecute } from "./hooks/useExecute";
+
+const App = () => {
+  const sessionId = useSession();
+  const terminalRef = useRef<TerminalHandle>(null);
+  const { run, running } = useExecute(sessionId, terminalRef);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+      <Terminal ref={terminalRef} />
+      <CommandInput onSubmit={run} disabled={!sessionId || running} />
+    </div>
+  );
+};
 
 export default App;
