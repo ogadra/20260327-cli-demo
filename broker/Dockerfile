@@ -1,7 +1,4 @@
-# checkov:skip=CKV_DOCKER_3:broker does not require non-root user at this stage
 # checkov:skip=CKV_DOCKER_2:health check is managed by compose/orchestrator
-# trivy:ignore:DS-0002 -- broker does not require non-root user at this stage
-# trivy:ignore:DS-0026 -- health check is managed by compose/orchestrator
 FROM golang:1.26-alpine AS build
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -35,6 +32,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bash=5.2* \
     coreutils=9.1* \
     && rm -rf /var/lib/apt/lists/*
+RUN useradd -r -s /usr/sbin/nologin appuser
 COPY --from=binary /server /server
+USER appuser
 EXPOSE 8080
 CMD ["/server"]
