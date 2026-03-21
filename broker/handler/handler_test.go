@@ -415,3 +415,46 @@ func TestNewHandler(t *testing.T) {
 		t.Error("svc mismatch")
 	}
 }
+
+// TestNewHandler_NilPanics は NewHandler に nil を渡すと panic することを検証する。
+func TestNewHandler_NilPanics(t *testing.T) {
+	t.Parallel()
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for nil service")
+		}
+	}()
+	NewHandler(nil)
+}
+
+// TestPostSessions_CookieSecure はセッション作成時の cookie が Secure=true であることを検証する。
+func TestPostSessions_CookieSecure(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		createSessionFn: func(_ context.Context) (*service.CreateSessionResult, error) {
+			return &service.CreateSessionResult{
+				SessionID: "sess-abc",
+				Runner:    &model.Runner{RunnerID: "r1"},
+			}, nil
+		},
+	})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodPost, "/sessions", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	cookies := rec.Result().Cookies()
+	for _, c := range cookies {
+		if c.Name == "session_id" {
+			if !c.Secure {
+				t.Error("expected Secure=true on session_id cookie")
+			}
+			if !c.HttpOnly {
+				t.Error("expected HttpOnly=true on session_id cookie")
+			}
+			return
+		}
+	}
+	t.Error("session_id cookie not found")
+}

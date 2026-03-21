@@ -79,9 +79,45 @@ func TestDefaultIDFn(t *testing.T) {
 // TestDefaultIDFn_Unique は DefaultIDFn が一意の値を返すことを検証する。
 func TestDefaultIDFn_Unique(t *testing.T) {
 	t.Parallel()
-	id1, _ := DefaultIDFn()
-	id2, _ := DefaultIDFn()
+	id1, err := DefaultIDFn()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	id2, err := DefaultIDFn()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if id1 == id2 {
 		t.Error("expected unique request IDs")
+	}
+}
+
+// TestRequestIDMiddleware_NilIDFn は idFn が nil の場合にデフォルト関数が使われることを検証する。
+func TestRequestIDMiddleware_NilIDFn(t *testing.T) {
+	t.Parallel()
+	r := gin.New()
+	r.Use(RequestIDMiddleware(nil))
+	r.GET("/test", func(c *gin.Context) {
+		v, exists := c.Get(requestIDKey)
+		if !exists {
+			t.Error("requestId not set in context")
+			return
+		}
+		id, ok := v.(string)
+		if !ok || len(id) != 32 {
+			t.Errorf("expected 32 char hex id, got %q", id)
+		}
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("X-Request-Id"); len(got) != 32 {
+		t.Errorf("X-Request-Id header len = %d, want 32", len(got))
 	}
 }

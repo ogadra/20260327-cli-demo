@@ -16,8 +16,11 @@ type Handler struct {
 	svc service.Service
 }
 
-// NewHandler は Handler を生成する。
+// NewHandler は Handler を生成する。svc が nil の場合は panic する。
 func NewHandler(svc service.Service) *Handler {
+	if svc == nil {
+		panic("handler: nil service")
+	}
 	return &Handler{svc: svc}
 }
 
@@ -40,7 +43,8 @@ func (h *Handler) PostSessions(c *gin.Context) {
 		writeError(c, http.StatusInternalServerError, model.CodeInternalError, "failed to create session")
 		return
 	}
-	c.SetCookie("session_id", result.SessionID, 0, "/", "", false, true)
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("session_id", result.SessionID, 0, "/", "", true, true)
 	c.JSON(http.StatusCreated, gin.H{"sessionId": result.SessionID})
 }
 

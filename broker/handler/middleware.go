@@ -13,7 +13,11 @@ import (
 const requestIDKey = "requestId"
 
 // RequestIDMiddleware はリクエストごとにユニークな ID を生成しコンテキストとレスポンスヘッダーにセットするミドルウェアを返す。
+// idFn が nil の場合は DefaultIDFn を使用する。
 func RequestIDMiddleware(idFn func() (string, error)) gin.HandlerFunc {
+	if idFn == nil {
+		idFn = DefaultIDFn
+	}
 	return func(c *gin.Context) {
 		id, err := idFn()
 		if err != nil {
