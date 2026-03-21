@@ -2,7 +2,7 @@ export interface SessionResponse {
   sessionId: string;
 }
 
-const SseEventType = {
+export const SseEventType = {
   STDOUT: "stdout",
   STDERR: "stderr",
   COMPLETE: "complete",

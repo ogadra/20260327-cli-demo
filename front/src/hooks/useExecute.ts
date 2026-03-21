@@ -1,0 +1,49 @@
+import { useCallback, useRef, useState } from "react";
+import { execute, SseEventType, type SseEvent } from "../api/client";
+import type { TerminalHandle } from "../components/Terminal";
+
+export const useExecute = (
+  sessionId: string | null,
+  terminalRef: React.RefObject<TerminalHandle | null>,
+) => {
+  const [running, setRunning] = useState(false);
+  const runningRef = useRef(false);
+
+  const run = useCallback(
+    async (command: string) => {
+      if (!sessionId || runningRef.current) return;
+      runningRef.current = true;
+      setRunning(true);
+
+      terminalRef.current?.writeln(`$ ${command}`);
+
+      try {
+        for await (const event of execute(sessionId, command)) {
+          handleEvent(event, terminalRef);
+        }
+      } finally {
+        runningRef.current = false;
+        setRunning(false);
+      }
+    },
+    [sessionId, terminalRef],
+  );
+
+  return { run, running };
+};
+
+const handleEvent = (event: SseEvent, terminalRef: React.RefObject<TerminalHandle | null>) => {
+  switch (event.type) {
+    case SseEventType.STDOUT:
+      terminalRef.current?.write(event.data);
+      break;
+    case SseEventType.STDERR:
+      terminalRef.current?.write(`\x1b[31m${event.data}\x1b[0m`);
+      break;
+    case SseEventType.COMPLETE:
+      if (event.exitCode !== 0) {
+        terminalRef.current?.writeln(`\x1b[31mexit code: ${event.exitCode}\x1b[0m`);
+      }
+      break;
+  }
+};
