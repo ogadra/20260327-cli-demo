@@ -105,6 +105,13 @@ jobs:
       - name: Run tests
         run: docker build --target test front/
 
+  test-front-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Run e2e tests
+        run: docker build --target test-e2e front/
+
   build-front:
     runs-on: ubuntu-latest
     steps:

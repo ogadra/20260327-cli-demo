@@ -11,7 +11,10 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS test
 COPY . .
 RUN pnpm exec vp check
-RUN pnpm exec vp test --run 2>/dev/null || true
+RUN pnpm exec vp test --run
+
+FROM deps AS test-e2e
+COPY . .
 RUN pnpm exec playwright install --with-deps chromium
 RUN pnpm exec playwright test
 

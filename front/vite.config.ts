@@ -5,6 +5,10 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   lint: { options: { typeAware: true, typeCheck: true } },
   plugins: [react()],
+  test: {
+    environment: "jsdom",
+    exclude: ["e2e/**", "node_modules/**"],
+  },
   server: {
     host: true,
     proxy: {
