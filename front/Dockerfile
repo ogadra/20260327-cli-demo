@@ -12,6 +12,8 @@ FROM deps AS test
 COPY . .
 RUN pnpm exec vp check
 RUN pnpm exec vp test --run 2>/dev/null || true
+RUN pnpm exec playwright install --with-deps chromium
+RUN pnpm exec playwright test
 
 FROM deps AS build
 COPY . .

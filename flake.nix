@@ -20,6 +20,7 @@
           go_1_26
           lefthook
           nodejs_24
+          playwright-driver.browsers
           pnpm_10
           terraform
           tflint
