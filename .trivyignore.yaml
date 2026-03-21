@@ -1,0 +1,8 @@
+vulnerabilities: []
+misconfigurations:
+  - id: DS-0026
+    statement: health check is managed by compose or orchestrator
+  - id: DS-0002
+    paths:
+      - runner/Dockerfile
+    statement: runner executes user commands and requires root
