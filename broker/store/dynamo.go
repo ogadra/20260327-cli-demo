@@ -23,6 +23,7 @@ type DynamoRepository struct {
 	client    DynamoDBAPI
 	tableName string
 	bucketFn  func() string
+	marshalFn func(in interface{}) (map[string]types.AttributeValue, error)
 }
 
 // NewDynamoRepository は DynamoRepository を生成する。
@@ -31,6 +32,7 @@ func NewDynamoRepository(client DynamoDBAPI, tableName string) *DynamoRepository
 		client:    client,
 		tableName: tableName,
 		bucketFn:  defaultBucketFn,
+		marshalFn: attributevalue.MarshalMap,
 	}
 }
 
@@ -46,7 +48,7 @@ func (r *DynamoRepository) Register(ctx context.Context, runnerID, privateURL st
 		return fmt.Errorf("privateURL must not be empty")
 	}
 
-	item, err := attributevalue.MarshalMap(model.Runner{
+	item, err := r.marshalFn(model.Runner{
 		RunnerID:   runnerID,
 		IdleBucket: r.bucketFn(),
 		PrivateURL: privateURL,

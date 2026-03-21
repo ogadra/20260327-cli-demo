@@ -2,7 +2,9 @@
 package handler
 
 import (
+	"crypto/rand"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -91,6 +93,41 @@ func TestDefaultIDFn_Unique(t *testing.T) {
 		t.Error("expected unique request IDs")
 	}
 }
+
+// TestDefaultIDFnWithReader_Success は正常な io.Reader から hex ID を生成できることを検証する。
+func TestDefaultIDFnWithReader_Success(t *testing.T) {
+	t.Parallel()
+	id, err := defaultIDFnWithReader(rand.Reader)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(id) != 32 {
+		t.Errorf("len(id) = %d, want 32", len(id))
+	}
+}
+
+// TestDefaultIDFnWithReader_Error は io.Reader がエラーを返す場合にエラーを返すことを検証する。
+func TestDefaultIDFnWithReader_Error(t *testing.T) {
+	t.Parallel()
+	_, err := defaultIDFnWithReader(&errorReader{})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// errorReader は常にエラーを返す io.Reader。
+type errorReader struct{}
+
+// Read は常にエラーを返す。
+func (e *errorReader) Read(_ []byte) (int, error) {
+	return 0, errors.New("rand read error")
+}
+
+// ensure errorReader implements io.Reader.
+var _ io.Reader = (*errorReader)(nil)
+
+// ensure rand.Reader is used by default.
+var _ io.Reader = rand.Reader
 
 // TestRequestIDMiddleware_NilIDFn は idFn が nil の場合にデフォルト関数が使われることを検証する。
 func TestRequestIDMiddleware_NilIDFn(t *testing.T) {
