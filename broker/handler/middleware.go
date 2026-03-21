@@ -5,12 +5,16 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 
 	"github.com/gin-gonic/gin"
 )
 
 // requestIDKey は gin.Context に格納する RequestID のキー。
 const requestIDKey = "requestId"
+
+// randReader はランダムバイト生成に使う io.Reader。テスト時に差し替える。
+var randReader io.Reader = rand.Reader
 
 // RequestIDMiddleware はリクエストごとにユニークな ID を生成しコンテキストとレスポンスヘッダーにセットするミドルウェアを返す。
 // idFn が nil の場合は DefaultIDFn を使用する。
@@ -33,7 +37,7 @@ func RequestIDMiddleware(idFn func() (string, error)) gin.HandlerFunc {
 // DefaultIDFn は crypto/rand で 16 バイトのランダム値を生成し hex 32 文字の文字列を返す。
 func DefaultIDFn() (string, error) {
 	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
+	if _, err := io.ReadFull(randReader, b); err != nil {
 		return "", fmt.Errorf("generate request id: %w", err)
 	}
 	return hex.EncodeToString(b), nil

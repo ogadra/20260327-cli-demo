@@ -10,6 +10,14 @@ import (
 	"github.com/ogadra/20260327-cli-demo/broker/store"
 )
 
+// errorReader は常にエラーを返す io.Reader。
+type errorReader struct{}
+
+// Read は常にエラーを返す。
+func (e *errorReader) Read(_ []byte) (int, error) {
+	return 0, errors.New("rand read error")
+}
+
 // mockRepository は store.Repository のモック実装。
 type mockRepository struct {
 	registerFn        func(ctx context.Context, runnerID, privateURL string) error
@@ -125,6 +133,18 @@ func TestDefaultSessionFn_Unique(t *testing.T) {
 	}
 	if id1 == id2 {
 		t.Error("expected unique session IDs")
+	}
+}
+
+// TestDefaultSessionFn_RandReadError は rand.Reader がエラーを返す場合に defaultSessionFn がエラーを返すことを検証する。
+func TestDefaultSessionFn_RandReadError(t *testing.T) {
+	orig := randReader
+	t.Cleanup(func() { randReader = orig })
+	randReader = &errorReader{}
+
+	_, err := defaultSessionFn()
+	if err == nil {
+		t.Fatal("expected error")
 	}
 }
 

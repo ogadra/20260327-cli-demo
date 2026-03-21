@@ -82,6 +82,24 @@ func itoa(i int) string {
 	return string(rune('0' + i))
 }
 
+// TestRegister_MarshalError は MarshalMap がエラーを返す場合にエラーを返すことを検証する。
+func TestRegister_MarshalError(t *testing.T) {
+	t.Parallel()
+	orig := marshalMap
+	t.Cleanup(func() { marshalMap = orig })
+	marshalMap = func(_ interface{}) (map[string]types.AttributeValue, error) {
+		return nil, errors.New("marshal error")
+	}
+
+	repo := NewDynamoRepository(&mockDynamoDBAPI{}, "t")
+	repo.bucketFn = func() string { return "bucket-0" }
+
+	err := repo.Register(context.Background(), "r1", "http://10.0.0.1:8080")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 // TestRegister_Success は新規登録の成功ケースを検証する。
 func TestRegister_Success(t *testing.T) {
 	t.Parallel()

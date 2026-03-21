@@ -18,6 +18,9 @@ import (
 // idle runner を複数バケットに分散させ、DynamoDB のホットパーティションを防ぐ。
 const bucketCount = 4
 
+// marshalMap は attributevalue.MarshalMap のラッパー。テスト時に差し替える。
+var marshalMap = attributevalue.MarshalMap
+
 // DynamoRepository は DynamoDB を使った Repository の実装。
 type DynamoRepository struct {
 	client    DynamoDBAPI
@@ -46,7 +49,7 @@ func (r *DynamoRepository) Register(ctx context.Context, runnerID, privateURL st
 		return fmt.Errorf("privateURL must not be empty")
 	}
 
-	item, err := attributevalue.MarshalMap(model.Runner{
+	item, err := marshalMap(model.Runner{
 		RunnerID:   runnerID,
 		IdleBucket: r.bucketFn(),
 		PrivateURL: privateURL,
