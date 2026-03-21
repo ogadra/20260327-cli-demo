@@ -2,10 +2,16 @@ export interface SessionResponse {
   sessionId: string;
 }
 
+const SseEventType = {
+  STDOUT: "stdout",
+  STDERR: "stderr",
+  COMPLETE: "complete",
+};
+
 export type SseEvent =
-  | { type: "stdout"; data: string }
-  | { type: "stderr"; data: string }
-  | { type: "complete"; exitCode: number };
+  | { type: typeof SseEventType.STDOUT; data: string }
+  | { type: typeof SseEventType.STDERR; data: string }
+  | { type: typeof SseEventType.COMPLETE; exitCode: number };
 
 export const createSession = async (): Promise<SessionResponse> => {
   const res = await fetch("/api/session", { method: "POST" });
