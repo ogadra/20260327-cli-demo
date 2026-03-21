@@ -11,7 +11,10 @@ COPY *.go ./
 # test stage
 FROM build AS test
 RUN apk add --no-cache bash~=5.3
-RUN CGO_ENABLED=0 go test -v -cover -timeout=30s ./...
+RUN CGO_ENABLED=0 go test -v -coverprofile=cover.out -timeout=30s ./... \
+    && total=$(go tool cover -func=cover.out | grep ^total: | awk '{print $NF}') \
+    && echo "Total coverage: ${total}" \
+    && test "${total}" = "100.0%" || { echo "FAIL: coverage ${total} is below 100.0%"; exit 1; }
 
 # race detection stage
 FROM build AS test-race
