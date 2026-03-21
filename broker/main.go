@@ -58,6 +58,9 @@ var signalNotify = signal.Notify
 // initHandler は DynamoDB クライアントを初期化し Handler を生成する関数。テスト時に差し替える。
 var initHandler = defaultInitHandler
 
+// loadAWSConfig は AWS SDK の設定をロードする関数。テスト時に差し替える。
+var loadAWSConfig = config.LoadDefaultConfig
+
 // defaultInitHandler は環境変数から DynamoDB クライアントを構築し Handler を返す。
 func defaultInitHandler() (*handler.Handler, error) {
 	endpoint := os.Getenv("DYNAMODB_ENDPOINT")
@@ -66,7 +69,7 @@ func defaultInitHandler() (*handler.Handler, error) {
 	}
 
 	ctx := context.Background()
-	cfg, err := config.LoadDefaultConfig(ctx,
+	cfg, err := loadAWSConfig(ctx,
 		config.WithRegion("ap-northeast-1"),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("dummy", "dummy", "")),
 	)

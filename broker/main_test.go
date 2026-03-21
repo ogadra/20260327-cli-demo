@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/ogadra/20260327-cli-demo/broker/handler"
 )
 
@@ -24,6 +27,7 @@ func saveAndRestore(t *testing.T) {
 	origFatalf := fatalf
 	origSignalNotify := signalNotify
 	origInitHandler := initHandler
+	origLoadAWSConfig := loadAWSConfig
 	t.Cleanup(func() {
 		stdout = origStdout
 		addr = origAddr
@@ -31,6 +35,7 @@ func saveAndRestore(t *testing.T) {
 		fatalf = origFatalf
 		signalNotify = origSignalNotify
 		initHandler = origInitHandler
+		loadAWSConfig = origLoadAWSConfig
 	})
 	initHandler = func() (*handler.Handler, error) { return nil, nil }
 }
@@ -178,6 +183,54 @@ func TestDefaultInitHandler_NoEndpoint(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "DYNAMODB_ENDPOINT") {
 		t.Errorf("error = %q, want to contain %q", err.Error(), "DYNAMODB_ENDPOINT")
+	}
+}
+
+// TestNewRouter_WithHandler は handler が non-nil の場合に全ルートが登録されることを検証する。
+func TestNewRouter_WithHandler(t *testing.T) {
+	saveAndRestore(t)
+
+	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
+	h, err := defaultInitHandler()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	r := newRouter(h)
+
+	routes := r.Routes()
+	expected := map[string]string{
+		"GET /health":                        "",
+		"POST /sessions":                     "",
+		"DELETE /sessions/:sessionId":        "",
+		"GET /resolve":                       "",
+		"POST /internal/runners/register":    "",
+		"DELETE /internal/runners/:runnerId": "",
+	}
+	for _, route := range routes {
+		key := route.Method + " " + route.Path
+		delete(expected, key)
+	}
+	for key := range expected {
+		t.Errorf("missing route: %s", key)
+	}
+}
+
+// TestDefaultInitHandler_LoadConfigError は AWS config ロードが失敗した場合にエラーを返すことを検証する。
+func TestDefaultInitHandler_LoadConfigError(t *testing.T) {
+	saveAndRestore(t)
+
+	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
+	loadAWSConfig = func(_ context.Context, _ ...func(*config.LoadOptions) error) (aws.Config, error) {
+		return aws.Config{}, errors.New("config load failed")
+	}
+
+	_, err := defaultInitHandler()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "load aws config") {
+		t.Errorf("error = %q, want to contain %q", err.Error(), "load aws config")
 	}
 }
 
