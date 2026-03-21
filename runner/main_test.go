@@ -198,7 +198,7 @@ func TestIntegrationCreateExecuteDelete(t *testing.T) {
 	// Execute whitelisted command; validator should not be called.
 	body := strings.NewReader(`{"command":"pwd"}`)
 	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", body)
-	req.Header.Set(sessionIDHeader, sr.SessionID)
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: sr.SessionID})
 	resp2, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST /api/execute error: %v", err)
@@ -216,7 +216,7 @@ func TestIntegrationCreateExecuteDelete(t *testing.T) {
 	v.called = false
 	body2 := strings.NewReader(`{"command":"echo hello"}`)
 	req2, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", body2)
-	req2.Header.Set(sessionIDHeader, sr.SessionID)
+	req2.AddCookie(&http.Cookie{Name: "session_id", Value: sr.SessionID})
 	resp4, err := http.DefaultClient.Do(req2)
 	if err != nil {
 		t.Fatalf("POST /api/execute validated error: %v", err)
@@ -232,7 +232,7 @@ func TestIntegrationCreateExecuteDelete(t *testing.T) {
 
 	// Delete session.
 	req3, _ := http.NewRequest(http.MethodDelete, ts.URL+"/api/session", nil)
-	req3.Header.Set(sessionIDHeader, sr.SessionID)
+	req3.AddCookie(&http.Cookie{Name: "session_id", Value: sr.SessionID})
 	resp3, err := http.DefaultClient.Do(req3)
 	if err != nil {
 		t.Fatalf("DELETE /api/session error: %v", err)
