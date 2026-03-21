@@ -52,14 +52,19 @@ type serverConfig struct {
 	sm              *SessionManager
 	validator       Validator
 	shutdownTimeout time.Duration
+	handler         http.Handler
 }
 
 // run starts the HTTP server on the given listener and blocks until a signal is
 // received on sigCh, then performs graceful shutdown.
 // Separating this from main allows tests to inject a signal channel and listener.
 func run(ln net.Listener, sigCh <-chan os.Signal, cfg serverConfig) error {
+	h := cfg.handler
+	if h == nil {
+		h = newHandler(cfg.sm, cfg.validator)
+	}
 	srv := &http.Server{
-		Handler: newHandler(cfg.sm, cfg.validator),
+		Handler: h,
 	}
 
 	serveErr := make(chan error, 1)

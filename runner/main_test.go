@@ -251,10 +251,19 @@ func TestRunShutdownTimeout(t *testing.T) {
 	}
 	addr := ln.Addr().String()
 
+	// slowHandler blocks until the channel is closed, keeping the HTTP request in-flight.
+	reqStarted := make(chan struct{})
+	blockCh := make(chan struct{})
+	slow := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(reqStarted)
+		<-blockCh
+	})
+
 	sm := NewSessionManager()
 	cfg := serverConfig{
 		sm:              sm,
 		shutdownTimeout: 1 * time.Nanosecond,
+		handler:         slow,
 	}
 
 	sigCh := make(chan os.Signal, 1)
@@ -265,12 +274,11 @@ func TestRunShutdownTimeout(t *testing.T) {
 
 	waitForServer(t, addr)
 
-	// Open a kept-alive connection so the server has active connections at shutdown.
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		t.Fatalf("Dial error: %v", err)
-	}
-	defer conn.Close()
+	// Start an HTTP request that will block on the server side.
+	go http.Get("http://" + addr + "/slow") //nolint:errcheck
+
+	// Wait until the handler is actually processing the request.
+	<-reqStarted
 
 	sigCh <- os.Interrupt
 
@@ -282,6 +290,7 @@ func TestRunShutdownTimeout(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("run did not return within 10 seconds")
 	}
+	close(blockCh)
 }
 
 // TestStartAndShutdown verifies that start binds to the given address and
