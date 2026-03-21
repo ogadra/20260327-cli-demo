@@ -32,6 +32,19 @@ services:
     profiles:
       - test
 
+  front:
+    build:
+      context: front/
+      target: dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./front/src:/app/src:ro
+      - ./front/index.html:/app/index.html:ro
+      - ./front/vite.config.ts:/app/vite.config.ts:ro
+    profiles:
+      - front
+
   runner:
     build: runner/
     ports:

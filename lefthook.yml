@@ -46,6 +46,11 @@ pre-commit:
       run: tflint
     025_checkov:
       run: checkov -d .
+    031_check_front:
+      root: "front/"
+      glob: "**/*.{ts,tsx}"
+      stage_fixed: true
+      run: pnpm exec vp check --fix
     004_gitleaks:
       run: gitleaks protect --staged
     005_trivy:
