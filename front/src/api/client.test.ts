@@ -20,7 +20,11 @@ describe("createSession", () => {
 
     const result = await createSession();
     expect(result.sessionId).toBe("abc123");
-    expect(mockFetch).toHaveBeenCalledWith("/api/session", { method: "POST", signal: undefined });
+    expect(mockFetch).toHaveBeenCalledWith("/api/session", {
+      method: "POST",
+      credentials: "include",
+      signal: undefined,
+    });
   });
 
   it("forwards AbortSignal to fetch", async () => {
@@ -30,7 +34,11 @@ describe("createSession", () => {
     });
     const signal = new AbortController().signal;
     await createSession(signal);
-    expect(mockFetch).toHaveBeenCalledWith("/api/session", { method: "POST", signal });
+    expect(mockFetch).toHaveBeenCalledWith("/api/session", {
+      method: "POST",
+      credentials: "include",
+      signal,
+    });
   });
 
   it("throws on failure", async () => {
@@ -40,12 +48,12 @@ describe("createSession", () => {
 });
 
 describe("deleteSession", () => {
-  it("sends DELETE with session header and keepalive", () => {
+  it("sends DELETE with credentials and keepalive", () => {
     mockFetch.mockResolvedValue({ ok: true });
     deleteSession("abc123");
     expect(mockFetch).toHaveBeenCalledWith("/api/session", {
       method: "DELETE",
-      headers: { "X-Session-Id": "abc123" },
+      credentials: "include",
       keepalive: true,
     });
   });
@@ -99,10 +107,8 @@ describe("execute", () => {
     ]);
     expect(mockFetch).toHaveBeenCalledWith("/api/execute", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Session-Id": "abc123",
-      },
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: '{"command":"echo hello"}',
     });
   });
