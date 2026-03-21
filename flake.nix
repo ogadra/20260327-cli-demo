@@ -19,6 +19,8 @@
           gitleaks
           go_1_26
           lefthook
+          nodejs_24
+          pnpm_10
           terraform
           tflint
           trivy
