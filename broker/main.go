@@ -66,15 +66,11 @@ var loadAWSConfig = config.LoadDefaultConfig
 func defaultInitHandler() (*handler.Handler, error) {
 	endpoint := os.Getenv("DYNAMODB_ENDPOINT")
 	region := os.Getenv("AWS_REGION")
-	accessKey := os.Getenv("AWS_ACCESS_KEY_ID")
-	secretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
 
 	var missing []string
 	for _, pair := range []struct{ name, val string }{
 		{"DYNAMODB_ENDPOINT", endpoint},
 		{"AWS_REGION", region},
-		{"AWS_ACCESS_KEY_ID", accessKey},
-		{"AWS_SECRET_ACCESS_KEY", secretKey},
 	} {
 		if pair.val == "" {
 			missing = append(missing, pair.name)
@@ -84,11 +80,17 @@ func defaultInitHandler() (*handler.Handler, error) {
 		return nil, fmt.Errorf("missing required environment variables: %s", strings.Join(missing, ", "))
 	}
 
-	ctx := context.Background()
-	cfg, err := loadAWSConfig(ctx,
+	opts := []func(*config.LoadOptions) error{
 		config.WithRegion(region),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
-	)
+	}
+	accessKey := os.Getenv("AWS_ACCESS_KEY_ID")
+	secretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	if accessKey != "" && secretKey != "" {
+		opts = append(opts, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")))
+	}
+
+	ctx := context.Background()
+	cfg, err := loadAWSConfig(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("load aws config: %w", err)
 	}

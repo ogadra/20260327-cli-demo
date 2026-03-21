@@ -174,28 +174,45 @@ func TestDefaultInitHandler(t *testing.T) {
 	}
 }
 
-// TestDefaultInitHandler_MissingAllEnvVars は全環境変数が未設定時にまとめてエラーを返すことを検証する。
+// TestDefaultInitHandler_MissingAllEnvVars は全必須環境変数が未設定時にまとめてエラーを返すことを検証する。
 func TestDefaultInitHandler_MissingAllEnvVars(t *testing.T) {
 	saveAndRestore(t)
 
 	t.Setenv("DYNAMODB_ENDPOINT", "")
 	t.Setenv("AWS_REGION", "")
-	t.Setenv("AWS_ACCESS_KEY_ID", "")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "")
 
 	_, err := defaultInitHandler()
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	for _, key := range []string{"DYNAMODB_ENDPOINT", "AWS_REGION", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"} {
+	for _, key := range []string{"DYNAMODB_ENDPOINT", "AWS_REGION"} {
 		if !strings.Contains(err.Error(), key) {
 			t.Errorf("error = %q, want to contain %q", err.Error(), key)
 		}
 	}
 }
 
-// TestDefaultInitHandler_MissingPartialEnvVars は一部の環境変数が未設定時に不足分をまとめて報告することを検証する。
+// TestDefaultInitHandler_MissingPartialEnvVars は一部の必須環境変数が未設定時に不足分のみ報告することを検証する。
 func TestDefaultInitHandler_MissingPartialEnvVars(t *testing.T) {
+	saveAndRestore(t)
+
+	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
+	t.Setenv("AWS_REGION", "")
+
+	_, err := defaultInitHandler()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "AWS_REGION") {
+		t.Errorf("error = %q, want to contain %q", err.Error(), "AWS_REGION")
+	}
+	if strings.Contains(err.Error(), "DYNAMODB_ENDPOINT") {
+		t.Errorf("error should not contain DYNAMODB_ENDPOINT, got %q", err.Error())
+	}
+}
+
+// TestDefaultInitHandler_WithoutStaticCredentials は静的クレデンシャルなしでも Handler を返すことを検証する。
+func TestDefaultInitHandler_WithoutStaticCredentials(t *testing.T) {
 	saveAndRestore(t)
 
 	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
@@ -203,17 +220,12 @@ func TestDefaultInitHandler_MissingPartialEnvVars(t *testing.T) {
 	t.Setenv("AWS_ACCESS_KEY_ID", "")
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "")
 
-	_, err := defaultInitHandler()
-	if err == nil {
-		t.Fatal("expected error")
+	h, err := defaultInitHandler()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	for _, key := range []string{"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"} {
-		if !strings.Contains(err.Error(), key) {
-			t.Errorf("error = %q, want to contain %q", err.Error(), key)
-		}
-	}
-	if strings.Contains(err.Error(), "DYNAMODB_ENDPOINT") {
-		t.Errorf("error should not contain DYNAMODB_ENDPOINT, got %q", err.Error())
+	if h == nil {
+		t.Fatal("expected non-nil handler")
 	}
 }
 
