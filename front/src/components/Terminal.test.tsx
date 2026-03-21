@@ -63,4 +63,17 @@ describe("Terminal", () => {
     unmount();
     expect(mockDispose).toHaveBeenCalledOnce();
   });
+
+  it("loads FitAddon and fits on mount", () => {
+    render(<Terminal />);
+    expect(mockLoadAddon).toHaveBeenCalledOnce();
+    expect(mockFit).toHaveBeenCalledOnce();
+  });
+
+  it("refits on window resize", () => {
+    render(<Terminal />);
+    mockFit.mockClear();
+    window.dispatchEvent(new Event("resize"));
+    expect(mockFit).toHaveBeenCalledOnce();
+  });
 });

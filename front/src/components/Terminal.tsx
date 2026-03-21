@@ -12,14 +12,18 @@ const Terminal = forwardRef<TerminalHandle>((_, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
 
-  useImperativeHandle(ref, () => ({
-    write: (data: string) => {
-      xtermRef.current?.write(data);
-    },
-    writeln: (data: string) => {
-      xtermRef.current?.writeln(data);
-    },
-  }));
+  useImperativeHandle(
+    ref,
+    () => ({
+      write: (data: string) => {
+        xtermRef.current?.write(data);
+      },
+      writeln: (data: string) => {
+        xtermRef.current?.writeln(data);
+      },
+    }),
+    [],
+  );
 
   useEffect(() => {
     const el = containerRef.current;
@@ -44,5 +48,7 @@ const Terminal = forwardRef<TerminalHandle>((_, ref) => {
 
   return <div ref={containerRef} style={{ width: "100%", flexGrow: 1 }} />;
 });
+
+Terminal.displayName = "Terminal";
 
 export default Terminal;
