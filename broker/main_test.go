@@ -156,11 +156,14 @@ func TestRunInitHandlerError(t *testing.T) {
 	}
 }
 
-// TestDefaultInitHandler は defaultInitHandler がエンドポイント指定時に Handler を返すことを検証する。
+// TestDefaultInitHandler は defaultInitHandler が全環境変数指定時に Handler を返すことを検証する。
 func TestDefaultInitHandler(t *testing.T) {
 	saveAndRestore(t)
 
 	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
+	t.Setenv("AWS_REGION", "ap-northeast-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", "localdev")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "localdev")
 
 	h, err := defaultInitHandler()
 	if err != nil {
@@ -168,6 +171,60 @@ func TestDefaultInitHandler(t *testing.T) {
 	}
 	if h == nil {
 		t.Fatal("expected non-nil handler")
+	}
+}
+
+// TestDefaultInitHandler_NoRegion は AWS_REGION 未設定時にエラーを返すことを検証する。
+func TestDefaultInitHandler_NoRegion(t *testing.T) {
+	saveAndRestore(t)
+
+	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
+	t.Setenv("AWS_REGION", "")
+	t.Setenv("AWS_ACCESS_KEY_ID", "localdev")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "localdev")
+
+	_, err := defaultInitHandler()
+	if err == nil {
+		t.Fatal("expected error when AWS_REGION is not set")
+	}
+	if !strings.Contains(err.Error(), "AWS_REGION") {
+		t.Errorf("error = %q, want to contain %q", err.Error(), "AWS_REGION")
+	}
+}
+
+// TestDefaultInitHandler_NoAccessKey は AWS_ACCESS_KEY_ID 未設定時にエラーを返すことを検証する。
+func TestDefaultInitHandler_NoAccessKey(t *testing.T) {
+	saveAndRestore(t)
+
+	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
+	t.Setenv("AWS_REGION", "ap-northeast-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", "")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "localdev")
+
+	_, err := defaultInitHandler()
+	if err == nil {
+		t.Fatal("expected error when AWS_ACCESS_KEY_ID is not set")
+	}
+	if !strings.Contains(err.Error(), "AWS_ACCESS_KEY_ID") {
+		t.Errorf("error = %q, want to contain %q", err.Error(), "AWS_ACCESS_KEY_ID")
+	}
+}
+
+// TestDefaultInitHandler_NoSecretKey は AWS_SECRET_ACCESS_KEY 未設定時にエラーを返すことを検証する。
+func TestDefaultInitHandler_NoSecretKey(t *testing.T) {
+	saveAndRestore(t)
+
+	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
+	t.Setenv("AWS_REGION", "ap-northeast-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", "localdev")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "")
+
+	_, err := defaultInitHandler()
+	if err == nil {
+		t.Fatal("expected error when AWS_SECRET_ACCESS_KEY is not set")
+	}
+	if !strings.Contains(err.Error(), "AWS_SECRET_ACCESS_KEY") {
+		t.Errorf("error = %q, want to contain %q", err.Error(), "AWS_SECRET_ACCESS_KEY")
 	}
 }
 
@@ -191,6 +248,9 @@ func TestNewRouter_WithHandler(t *testing.T) {
 	saveAndRestore(t)
 
 	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
+	t.Setenv("AWS_REGION", "ap-northeast-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", "localdev")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "localdev")
 	h, err := defaultInitHandler()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -221,6 +281,9 @@ func TestDefaultInitHandler_LoadConfigError(t *testing.T) {
 	saveAndRestore(t)
 
 	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
+	t.Setenv("AWS_REGION", "ap-northeast-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", "localdev")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "localdev")
 	loadAWSConfig = func(_ context.Context, _ ...func(*config.LoadOptions) error) (aws.Config, error) {
 		return aws.Config{}, errors.New("config load failed")
 	}

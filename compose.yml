@@ -12,8 +12,8 @@ services:
     build: broker/
     ports:
       - "8080:8080"
-    environment:
-      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
+    env_file:
+      - .env.example
     depends_on:
       dynamodb-local:
         condition: service_healthy
@@ -24,11 +24,8 @@ services:
     build:
       context: broker/
       target: test-integration
-    environment:
-      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
-      - AWS_REGION=ap-northeast-1
-      - AWS_ACCESS_KEY_ID=dummy
-      - AWS_SECRET_ACCESS_KEY=dummy
+    env_file:
+      - .env.example
     depends_on:
       dynamodb-local:
         condition: service_healthy

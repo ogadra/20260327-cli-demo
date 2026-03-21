@@ -67,11 +67,23 @@ func defaultInitHandler() (*handler.Handler, error) {
 	if endpoint == "" {
 		return nil, fmt.Errorf("DYNAMODB_ENDPOINT is required")
 	}
+	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		return nil, fmt.Errorf("AWS_REGION is required")
+	}
+	accessKey := os.Getenv("AWS_ACCESS_KEY_ID")
+	if accessKey == "" {
+		return nil, fmt.Errorf("AWS_ACCESS_KEY_ID is required")
+	}
+	secretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	if secretKey == "" {
+		return nil, fmt.Errorf("AWS_SECRET_ACCESS_KEY is required")
+	}
 
 	ctx := context.Background()
 	cfg, err := loadAWSConfig(ctx,
-		config.WithRegion("ap-northeast-1"),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("dummy", "dummy", "")),
+		config.WithRegion(region),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("load aws config: %w", err)
