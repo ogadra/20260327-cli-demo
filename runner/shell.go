@@ -271,10 +271,10 @@ func (s *bashShell) ExecuteStream(ctx context.Context, command string, stdoutCh 
 		return -1, "", s.broken
 	}
 
-	// sendLine sends a line to stdoutCh, respecting context cancellation.
+	// sendLine sends a line with a trailing newline to stdoutCh, respecting context cancellation.
 	sendLine := func(line string) error {
 		select {
-		case stdoutCh <- line:
+		case stdoutCh <- line + "\n":
 			return nil
 		case <-ctx.Done():
 			return fmt.Errorf("context: %w", ctx.Err())
