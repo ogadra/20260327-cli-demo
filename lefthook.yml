@@ -45,7 +45,7 @@ pre-commit:
       glob: "*.tf"
       run: tflint
     025_checkov:
-      run: checkov -d .
+      run: checkov -d . --quiet --compact
     031_check_front:
       root: "front/"
       glob: "**/*.{ts,tsx}"
@@ -54,4 +54,4 @@ pre-commit:
     004_gitleaks:
       run: gitleaks protect --staged
     005_trivy:
-      run: trivy config .
+      run: trivy config . --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --exit-code 1 --skip-dirs .claude --ignorefile .trivyignore.yaml
