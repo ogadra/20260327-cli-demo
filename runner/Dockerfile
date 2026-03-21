@@ -11,6 +11,7 @@ COPY *.go ./
 # test stage
 FROM build AS test
 RUN apk add --no-cache bash~=5.3
+SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 RUN CGO_ENABLED=0 go test -v -coverprofile=cover.out -timeout=30s ./... \
     && total=$(go tool cover -func=cover.out | grep ^total: | awk '{print $NF}') \
     && echo "Total coverage: ${total}" \
