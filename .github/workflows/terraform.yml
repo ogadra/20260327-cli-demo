@@ -1,0 +1,32 @@
+name: Terraform
+
+on:
+  push:
+    paths:
+      - "terraform/**"
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.2.0
+        with:
+          terraform_version: "1.14"
+      - name: terraform fmt check
+        run: terraform -chdir=terraform fmt -check
+      - name: terraform init
+        run: terraform -chdir=terraform init -backend=false
+      - name: terraform validate
+        run: terraform -chdir=terraform validate
+
+  tflint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: terraform-linters/setup-tflint@90f302c255ef959cbfb4bd10581afecdb7ece3e6 # v4.1.1
+      - name: tflint
+        run: cd terraform && tflint

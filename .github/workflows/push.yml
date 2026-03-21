@@ -7,124 +7,6 @@ permissions:
   contents: read
 
 jobs:
-  lint-runner:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version: "1.26"
-      - name: gofmt check
-        run: gofmt -l runner/ | grep . && exit 1 || true
-      - name: go vet
-        run: cd runner && go vet ./...
-
-  lint-broker:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version: "1.26"
-      - name: gofmt check
-        run: gofmt -l broker/ | grep . && exit 1 || true
-      - name: go vet
-        run: cd broker && go vet ./...
-
-  test-runner:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Run tests and enforce 100% coverage
-        run: docker build --target test runner/
-
-  test-runner-race:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Run race detector
-        run: docker build --target test-race runner/
-
-  test-broker:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Run tests and enforce 100% coverage
-        run: docker build --target test broker/
-
-  test-broker-race:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Run race detector
-        run: docker build --target test-race broker/
-
-  build-runner:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Build
-        run: docker build -t sandbox-server runner/
-      - uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
-        with:
-          scan-type: image
-          image-ref: sandbox-server
-
-  build-broker:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Build
-        run: docker build -t broker broker/
-      - uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
-        with:
-          scan-type: image
-          image-ref: broker
-
-  lint-front:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
-        with:
-          version: 10
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: "24"
-          cache: pnpm
-          cache-dependency-path: front/pnpm-lock.yaml
-      - name: Install dependencies
-        run: cd front && pnpm install --frozen-lockfile
-      - name: vp check
-        run: cd front && pnpm exec vp check
-      - name: vp test
-        run: cd front && pnpm exec vp test --run
-
-  test-front:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Run tests
-        run: docker build -t front-test --target test front/
-      - uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
-        with:
-          scan-type: image
-          image-ref: front-test
-
-  test-front-e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Run e2e tests
-        run: docker build --target test-e2e front/
-
-  build-front:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Build
-        run: docker build --target build front/
-
   trivy-config:
     runs-on: ubuntu-latest
     steps:
@@ -143,27 +25,13 @@ jobs:
           scan-type: fs
           scan-ref: .
 
-  terraform:
+  gitleaks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.2.0
         with:
-          terraform_version: "1.14"
-      - name: terraform fmt check
-        run: terraform -chdir=terraform fmt -check
-      - name: terraform init
-        run: terraform -chdir=terraform init -backend=false
-      - name: terraform validate
-        run: terraform -chdir=terraform validate
-
-  tflint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: terraform-linters/setup-tflint@90f302c255ef959cbfb4bd10581afecdb7ece3e6 # v4.1.1
-      - name: tflint
-        run: cd terraform && tflint
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
 
   checkov:
     runs-on: ubuntu-latest
@@ -172,11 +40,3 @@ jobs:
       - uses: bridgecrewio/checkov-action@2fd3901c8feb52417f27f0d9800259a106c1ec1e # v12.3089.0
         with:
           directory: .
-
-  gitleaks:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
