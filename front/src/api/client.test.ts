@@ -12,14 +12,11 @@ afterEach(() => {
 });
 
 describe("createSession", () => {
-  it("returns sessionId on success", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ sessionId: "abc123" }),
-    });
+  it("resolves without a value on success", async () => {
+    mockFetch.mockResolvedValue({ ok: true });
 
     const result = await createSession();
-    expect(result.sessionId).toBe("abc123");
+    expect(result).toBeUndefined();
     expect(mockFetch).toHaveBeenCalledWith("/api/session", {
       method: "POST",
       credentials: "include",
@@ -28,10 +25,7 @@ describe("createSession", () => {
   });
 
   it("forwards AbortSignal to fetch", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ sessionId: "abc123" }),
-    });
+    mockFetch.mockResolvedValue({ ok: true });
     const signal = new AbortController().signal;
     await createSession(signal);
     expect(mockFetch).toHaveBeenCalledWith("/api/session", {

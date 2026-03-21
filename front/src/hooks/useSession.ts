@@ -3,21 +3,21 @@ import { createSession, deleteSession } from "../api/client";
 
 /**
  * Hook that creates a session on mount and attempts to delete it on unmount.
- * Returns the session ID once available, or null while loading.
+ * Returns whether the session is ready.
  */
-export const useSession = (): string | null => {
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const sessionIdRef = useRef<string | null>(null);
+export const useSession = (): boolean => {
+  const [ready, setReady] = useState(false);
+  const readyRef = useRef(false);
 
   useEffect(() => {
     const ac = new AbortController();
 
     void (async () => {
       try {
-        const res = await createSession(ac.signal);
+        await createSession(ac.signal);
         if (ac.signal.aborted) return;
-        sessionIdRef.current = res.sessionId;
-        setSessionId(res.sessionId);
+        readyRef.current = true;
+        setReady(true);
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return;
         if (ac.signal.aborted) return;
@@ -27,11 +27,11 @@ export const useSession = (): string | null => {
 
     return () => {
       ac.abort();
-      if (sessionIdRef.current) {
+      if (readyRef.current) {
         deleteSession();
       }
     };
   }, []);
 
-  return sessionId;
+  return ready;
 };

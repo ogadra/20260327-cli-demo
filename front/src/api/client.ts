@@ -1,9 +1,3 @@
-/** Response returned by the session creation endpoint. */
-export interface SessionResponse {
-  /** Unique identifier for the created session. */
-  sessionId: string;
-}
-
 /** Discriminant values for server-sent events. */
 export const SseEventType = {
   STDOUT: "stdout",
@@ -19,12 +13,12 @@ export type SseEvent =
 
 /**
  * Create a new session on the server.
+ * The session ID is stored as a cookie by the browser automatically.
  * @param signal - Optional AbortSignal to cancel the request.
  */
-export const createSession = async (signal?: AbortSignal): Promise<SessionResponse> => {
+export const createSession = async (signal?: AbortSignal): Promise<void> => {
   const res = await fetch("/api/session", { method: "POST", credentials: "include", signal });
   if (!res.ok) throw new Error(`Failed to create session: ${res.status}`);
-  return res.json() as Promise<SessionResponse>;
 };
 
 /**

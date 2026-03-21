@@ -13,11 +13,11 @@ interface UseExecuteResult {
 
 /**
  * Hook that executes a command via SSE and streams output to a Terminal ref.
- * @param sessionId - The active session ID, or null if not connected.
+ * @param ready - Whether the session is ready to accept commands.
  * @param terminalRef - Ref to the Terminal component for writing output.
  */
 export const useExecute = (
-  sessionId: string | null,
+  ready: boolean,
   terminalRef: RefObject<TerminalHandle | null>,
 ): UseExecuteResult => {
   const [running, setRunning] = useState(false);
@@ -25,7 +25,7 @@ export const useExecute = (
 
   const run = useCallback(
     async (command: string) => {
-      if (!sessionId || runningRef.current) return;
+      if (!ready || runningRef.current) return;
       runningRef.current = true;
       setRunning(true);
 
@@ -43,7 +43,7 @@ export const useExecute = (
         setRunning(false);
       }
     },
-    [sessionId, terminalRef],
+    [ready, terminalRef],
   );
 
   return { run, running };
