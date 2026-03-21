@@ -8,7 +8,7 @@ export const useSession = (): string | null => {
   useEffect(() => {
     const ac = new AbortController();
 
-    (async () => {
+    void (async () => {
       const res = await createSession();
       if (ac.signal.aborted) return;
       sessionIdRef.current = res.sessionId;
