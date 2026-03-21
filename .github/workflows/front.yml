@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "front/**"
+      - ".github/workflows/front.yml"
 
 permissions:
   contents: read

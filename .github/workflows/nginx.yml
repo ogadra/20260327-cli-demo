@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "nginx/**"
+      - ".github/workflows/nginx.yml"
 
 permissions:
   contents: read
@@ -12,7 +13,7 @@ jobs:
   nginx-config-test:
     runs-on: ubuntu-latest
     container:
-      image: nginx:1.29.6-alpine
+      image: nginx:1.29.6-alpine@sha256:08fe94b0d1e72fc687840f5696f6e107a85c327b1bcb8a7acc22f8c100227c67
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Copy config and test

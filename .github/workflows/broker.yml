@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "broker/**"
+      - ".github/workflows/broker.yml"
 
 permissions:
   contents: read
@@ -17,7 +18,12 @@ jobs:
         with:
           go-version: "1.26"
       - name: gofmt check
-        run: gofmt -l broker/ | grep . && exit 1 || true
+        run: |
+          unformatted="$(gofmt -l broker/)" || exit 1
+          test -z "$unformatted" || {
+            printf '%s\n' "$unformatted"
+            exit 1
+          }
       - name: go vet
         run: cd broker && go vet ./...
 

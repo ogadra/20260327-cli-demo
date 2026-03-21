@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "runner/**"
+      - ".github/workflows/runner.yml"
 
 permissions:
   contents: read
@@ -17,7 +18,12 @@ jobs:
         with:
           go-version: "1.26"
       - name: gofmt check
-        run: gofmt -l runner/ | grep . && exit 1 || true
+        run: |
+          unformatted="$(gofmt -l runner/)" || exit 1
+          test -z "$unformatted" || {
+            printf '%s\n' "$unformatted"
+            exit 1
+          }
       - name: go vet
         run: cd runner && go vet ./...
 
