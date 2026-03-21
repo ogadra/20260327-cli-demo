@@ -78,4 +78,54 @@ describe("useExecute", () => {
 
     expect(mockExecute).not.toHaveBeenCalled();
   });
+
+  it("prevents concurrent executions", async () => {
+    const termRef = makeTerminalRef();
+
+    let resolveFirst!: () => void;
+    const firstPromise = new Promise<void>((resolve) => {
+      resolveFirst = resolve;
+    });
+
+    async function* slowExecute() {
+      await firstPromise;
+      yield { type: "complete" as const, exitCode: 0 };
+    }
+    mockExecute.mockReturnValue(slowExecute());
+
+    const { result } = renderHook(() => useExecute("sess1", termRef));
+
+    const firstRun = act(async () => {
+      await result.current.run("first");
+    });
+
+    await act(async () => {
+      await result.current.run("second");
+    });
+
+    resolveFirst();
+    await firstRun;
+
+    expect(mockExecute).toHaveBeenCalledTimes(1);
+  });
+
+  it("displays error message in terminal on execute failure", async () => {
+    const termRef = makeTerminalRef();
+
+    async function* failingExecute() {
+      throw new Error("connection refused");
+      yield { type: "complete" as const, exitCode: 0 };
+    }
+    mockExecute.mockReturnValue(failingExecute());
+
+    const { result } = renderHook(() => useExecute("sess1", termRef));
+
+    await act(async () => {
+      await result.current.run("bad-cmd");
+    });
+
+    expect(termRef.current.writeln).toHaveBeenCalledWith(
+      "\x1b[31mError: connection refused\x1b[0m",
+    );
+  });
 });

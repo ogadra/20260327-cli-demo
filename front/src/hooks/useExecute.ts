@@ -34,6 +34,9 @@ export const useExecute = (
         for await (const event of execute(sessionId, command)) {
           handleEvent(event, terminalRef);
         }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        terminalRef.current?.writeln(`\x1b[31mError: ${message}\x1b[0m`);
       } finally {
         runningRef.current = false;
         setRunning(false);

@@ -16,10 +16,11 @@ const CommandInput = ({ onSubmit, disabled }: Props): React.JSX.Element => {
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter" && value.trim()) {
-        historyRef.current.push(value);
+      const trimmed = value.trim();
+      if (e.key === "Enter" && trimmed) {
+        historyRef.current.push(trimmed);
         historyIndexRef.current = historyRef.current.length;
-        onSubmit(value);
+        onSubmit(trimmed);
         setValue("");
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
@@ -29,10 +30,11 @@ const CommandInput = ({ onSubmit, disabled }: Props): React.JSX.Element => {
         }
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
+        if (historyRef.current.length === 0) return;
         if (historyIndexRef.current < historyRef.current.length - 1) {
           historyIndexRef.current++;
           setValue(historyRef.current[historyIndexRef.current]);
-        } else {
+        } else if (historyIndexRef.current < historyRef.current.length) {
           historyIndexRef.current = historyRef.current.length;
           setValue("");
         }

@@ -49,6 +49,17 @@ describe("CommandInput", () => {
     expect(input).toHaveValue("");
   });
 
+  it("does not clear input on ArrowDown with empty history", () => {
+    const onSubmit = vi.fn();
+    render(<CommandInput onSubmit={onSubmit} disabled={false} />);
+
+    const input = screen.getByPlaceholderText("Enter command...");
+    fireEvent.change(input, { target: { value: "typing" } });
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+
+    expect(input).toHaveValue("typing");
+  });
+
   it("disables input when disabled prop is true", () => {
     render(<CommandInput onSubmit={vi.fn()} disabled={true} />);
     expect(screen.getByPlaceholderText("Enter command...")).toBeDisabled();
