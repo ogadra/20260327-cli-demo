@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -251,10 +253,20 @@ func TestRunShutdownTimeout(t *testing.T) {
 	}
 	addr := ln.Addr().String()
 
+	// slowHandler blocks until the channel is closed, keeping the HTTP request in-flight.
+	reqStarted := make(chan struct{})
+	blockCh := make(chan struct{})
+	defer close(blockCh)
+	slow := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(reqStarted)
+		<-blockCh
+	})
+
 	sm := NewSessionManager()
 	cfg := serverConfig{
 		sm:              sm,
 		shutdownTimeout: 1 * time.Nanosecond,
+		handler:         slow,
 	}
 
 	sigCh := make(chan os.Signal, 1)
@@ -265,19 +277,22 @@ func TestRunShutdownTimeout(t *testing.T) {
 
 	waitForServer(t, addr)
 
-	// Open a kept-alive connection so the server has active connections at shutdown.
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		t.Fatalf("Dial error: %v", err)
+	// Start an HTTP request that will block on the server side.
+	go http.Get("http://" + addr + "/slow") //nolint:errcheck
+
+	// Wait until the handler is actually processing the request.
+	select {
+	case <-reqStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("slow handler did not start within 2 seconds")
 	}
-	defer conn.Close()
 
 	sigCh <- os.Interrupt
 
 	select {
 	case err := <-errCh:
-		if err == nil {
-			t.Fatal("run should return error when shutdown times out")
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("run error = %v, want context.DeadlineExceeded", err)
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("run did not return within 10 seconds")
