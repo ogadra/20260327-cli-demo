@@ -166,21 +166,18 @@ func TestDefaultInitHandler(t *testing.T) {
 	}
 }
 
-// TestDefaultInitHandler_NoEndpoint は DYNAMODB_ENDPOINT 未設定時に AWS デフォルト設定を使うことを検証する。
+// TestDefaultInitHandler_NoEndpoint は DYNAMODB_ENDPOINT 未設定時にエラーを返すことを検証する。
 func TestDefaultInitHandler_NoEndpoint(t *testing.T) {
 	saveAndRestore(t)
 
 	t.Setenv("DYNAMODB_ENDPOINT", "")
-	t.Setenv("AWS_ACCESS_KEY_ID", "dummy")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "dummy")
-	t.Setenv("AWS_REGION", "ap-northeast-1")
 
-	h, err := defaultInitHandler()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := defaultInitHandler()
+	if err == nil {
+		t.Fatal("expected error when DYNAMODB_ENDPOINT is not set")
 	}
-	if h == nil {
-		t.Fatal("expected non-nil handler")
+	if !strings.Contains(err.Error(), "DYNAMODB_ENDPOINT") {
+		t.Errorf("error = %q, want to contain %q", err.Error(), "DYNAMODB_ENDPOINT")
 	}
 }
 

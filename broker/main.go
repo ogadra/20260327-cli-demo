@@ -61,29 +61,22 @@ var initHandler = defaultInitHandler
 // defaultInitHandler は環境変数から DynamoDB クライアントを構築し Handler を返す。
 func defaultInitHandler() (*handler.Handler, error) {
 	endpoint := os.Getenv("DYNAMODB_ENDPOINT")
-
-	ctx := context.Background()
-	var opts []func(*config.LoadOptions) error
-	if endpoint != "" {
-		opts = append(opts,
-			config.WithRegion("ap-northeast-1"),
-			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("dummy", "dummy", "")),
-		)
+	if endpoint == "" {
+		return nil, fmt.Errorf("DYNAMODB_ENDPOINT is required")
 	}
 
-	cfg, err := config.LoadDefaultConfig(ctx, opts...)
+	ctx := context.Background()
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion("ap-northeast-1"),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("dummy", "dummy", "")),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("load aws config: %w", err)
 	}
 
-	var dynamoOpts []func(*dynamodb.Options)
-	if endpoint != "" {
-		dynamoOpts = append(dynamoOpts, func(o *dynamodb.Options) {
-			o.BaseEndpoint = aws.String(endpoint)
-		})
-	}
-
-	client := dynamodb.NewFromConfig(cfg, dynamoOpts...)
+	client := dynamodb.NewFromConfig(cfg, func(o *dynamodb.Options) {
+		o.BaseEndpoint = aws.String(endpoint)
+	})
 	repo := store.NewDynamoRepository(client, "Runners")
 	svc := service.NewBrokerService(repo)
 	return handler.NewHandler(svc), nil
