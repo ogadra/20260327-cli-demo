@@ -48,8 +48,40 @@ describe("useSession", () => {
 
     const { result } = renderHook(() => useSession());
 
-    await new Promise((r) => setTimeout(r, 50));
+    await waitFor(() => {
+      expect(mockCreateSession).toHaveBeenCalledOnce();
+    });
     expect(result.current).toBeNull();
+  });
+
+  it("logs non-abort errors to console.error", async () => {
+    const error = new Error("network error");
+    mockCreateSession.mockRejectedValue(error);
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    renderHook(() => useSession());
+
+    await waitFor(() => {
+      expect(spy).toHaveBeenCalledWith("Failed to create session", error);
+    });
+
+    spy.mockRestore();
+  });
+
+  it("does not log AbortError", async () => {
+    const abortError = new DOMException("The operation was aborted", "AbortError");
+    mockCreateSession.mockRejectedValue(abortError);
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { unmount } = renderHook(() => useSession());
+
+    await waitFor(() => {
+      expect(mockCreateSession).toHaveBeenCalledOnce();
+    });
+    unmount();
+
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 
   it("does not call deleteSession when createSession fails and unmounts", async () => {
@@ -57,7 +89,9 @@ describe("useSession", () => {
 
     const { unmount } = renderHook(() => useSession());
 
-    await new Promise((r) => setTimeout(r, 50));
+    await waitFor(() => {
+      expect(mockCreateSession).toHaveBeenCalledOnce();
+    });
     unmount();
 
     expect(mockDeleteSession).not.toHaveBeenCalled();

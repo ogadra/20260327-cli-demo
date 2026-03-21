@@ -6,7 +6,7 @@ const SseEventType = {
   STDOUT: "stdout",
   STDERR: "stderr",
   COMPLETE: "complete",
-};
+} as const;
 
 export type SseEvent =
   | { type: typeof SseEventType.STDOUT; data: string }
