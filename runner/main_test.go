@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"net"
@@ -187,18 +186,20 @@ func TestIntegrationCreateExecuteDelete(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	var sr sessionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
-		t.Fatalf("decode error: %v", err)
+	var sessionID string
+	for _, c := range resp.Cookies() {
+		if c.Name == "session_id" {
+			sessionID = c.Value
+		}
 	}
-	if sr.SessionID == "" {
-		t.Fatal("empty session ID")
+	if sessionID == "" {
+		t.Fatal("session_id cookie not found in response")
 	}
 
 	// Execute whitelisted command; validator should not be called.
 	body := strings.NewReader(`{"command":"pwd"}`)
 	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", body)
-	req.AddCookie(&http.Cookie{Name: "session_id", Value: sr.SessionID})
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
 	resp2, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST /api/execute error: %v", err)
@@ -216,7 +217,7 @@ func TestIntegrationCreateExecuteDelete(t *testing.T) {
 	v.called = false
 	body2 := strings.NewReader(`{"command":"echo hello"}`)
 	req2, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", body2)
-	req2.AddCookie(&http.Cookie{Name: "session_id", Value: sr.SessionID})
+	req2.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
 	resp4, err := http.DefaultClient.Do(req2)
 	if err != nil {
 		t.Fatalf("POST /api/execute validated error: %v", err)
@@ -232,7 +233,7 @@ func TestIntegrationCreateExecuteDelete(t *testing.T) {
 
 	// Delete session.
 	req3, _ := http.NewRequest(http.MethodDelete, ts.URL+"/api/session", nil)
-	req3.AddCookie(&http.Cookie{Name: "session_id", Value: sr.SessionID})
+	req3.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
 	resp3, err := http.DefaultClient.Do(req3)
 	if err != nil {
 		t.Fatalf("DELETE /api/session error: %v", err)
