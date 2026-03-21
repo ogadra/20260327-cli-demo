@@ -10,7 +10,11 @@ COPY . .
 
 # test stage
 FROM build AS test
-RUN CGO_ENABLED=0 go test -v ./...
+SHELL ["/bin/ash", "-o", "pipefail", "-c"]
+RUN CGO_ENABLED=0 go test -v -coverpkg=./... -coverprofile=cover.out ./... \
+    && total=$(go tool cover -func=cover.out | grep ^total: | awk '{print $NF}') \
+    && echo "Total coverage: ${total}" \
+    && test "${total}" = "100.0%" || { echo "FAIL: coverage ${total} is below 100.0%"; exit 1; }
 
 # integration test stage
 FROM build AS test-integration
