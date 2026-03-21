@@ -61,7 +61,7 @@ func newHandler(sm *SessionManager, v Validator) *gin.Engine {
 }
 
 // handleCreateSession returns a gin handler for POST /api/session.
-// It creates a new session and returns the session ID as JSON.
+// It creates a new session, sets the session_id cookie, and returns the session ID as JSON.
 func handleCreateSession(sm *SessionManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, _, err := sm.Create()
@@ -69,6 +69,7 @@ func handleCreateSession(sm *SessionManager) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, errorResponse{Error: err.Error()})
 			return
 		}
+		c.SetCookie(sessionIDCookie, id, 0, "/", "", false, true)
 		c.JSON(http.StatusOK, sessionResponse{SessionID: id})
 	}
 }
