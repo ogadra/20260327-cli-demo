@@ -70,9 +70,9 @@ describe("Terminal", () => {
     expect(mockFit).toHaveBeenCalledOnce();
   });
 
-  it("writes initial prompt on mount", () => {
+  it("does not write initial prompt on mount", () => {
     render(<Terminal />);
-    expect(mockWrite).toHaveBeenCalledWith("$ ");
+    expect(mockWrite).not.toHaveBeenCalled();
   });
 
   it("refits on window resize", () => {

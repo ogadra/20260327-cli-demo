@@ -86,4 +86,13 @@ describe("CommandInput", () => {
     render(<CommandInput onSubmit={vi.fn()} disabled={true} />);
     expect(screen.getByPlaceholderText("Enter command...")).toBeDisabled();
   });
+
+  it("focuses input when disabled changes from true to false", () => {
+    const { rerender } = render(<CommandInput onSubmit={vi.fn()} disabled={true} />);
+    const input = screen.getByPlaceholderText("Enter command...");
+    const focusSpy = vi.spyOn(input, "focus");
+
+    rerender(<CommandInput onSubmit={vi.fn()} disabled={false} />);
+    expect(focusSpy).toHaveBeenCalledOnce();
+  });
 });

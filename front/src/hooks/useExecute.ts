@@ -29,7 +29,7 @@ export const useExecute = (
       runningRef.current = true;
       setRunning(true);
 
-      terminalRef.current?.writeln(`$ ${command}`);
+      terminalRef.current?.writeln(command);
 
       try {
         for await (const event of execute(command)) {
@@ -39,6 +39,7 @@ export const useExecute = (
         const message = error instanceof Error ? error.message : "Unknown error";
         terminalRef.current?.writeln(`\x1b[31mError: ${message}\x1b[0m`);
       } finally {
+        terminalRef.current?.write("$ ");
         runningRef.current = false;
         setRunning(false);
       }

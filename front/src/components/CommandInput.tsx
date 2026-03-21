@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useCallback, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 /** Props for the CommandInput component. */
 interface Props {
@@ -15,6 +15,12 @@ const CommandInput = ({ onSubmit, disabled }: Props): ReactNode => {
   const inputRef = useRef<HTMLInputElement>(null);
   const historyRef = useRef<string[]>([]);
   const historyIndexRef = useRef(-1);
+
+  useEffect(() => {
+    if (!disabled) {
+      inputRef.current?.focus();
+    }
+  }, [disabled]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
