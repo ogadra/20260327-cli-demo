@@ -174,7 +174,7 @@ func TestIntegrationCreateExecuteDelete(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
 
-	ts := httptest.NewServer(newHandler(sm))
+	ts := httptest.NewServer(newHandler(sm, nil))
 	defer ts.Close()
 
 	// Create session.

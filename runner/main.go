@@ -50,6 +50,7 @@ func start(addr string) error {
 // Fields default to production values when created via main.
 type serverConfig struct {
 	sm              *SessionManager
+	validator       Validator
 	shutdownTimeout time.Duration
 }
 
@@ -58,7 +59,7 @@ type serverConfig struct {
 // Separating this from main allows tests to inject a signal channel and listener.
 func run(ln net.Listener, sigCh <-chan os.Signal, cfg serverConfig) error {
 	srv := &http.Server{
-		Handler: newHandler(cfg.sm),
+		Handler: newHandler(cfg.sm, cfg.validator),
 	}
 
 	serveErr := make(chan error, 1)
