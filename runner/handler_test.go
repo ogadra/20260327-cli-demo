@@ -33,6 +33,24 @@ func TestCreateSession(t *testing.T) {
 	if resp.SessionID == "" {
 		t.Fatal("sessionId is empty")
 	}
+
+	cookies := w.Result().Cookies()
+	var found bool
+	for _, c := range cookies {
+		if c.Name == "session_id" && c.Value == resp.SessionID {
+			found = true
+			if c.Path != "/" {
+				t.Errorf("cookie Path = %q, want %q", c.Path, "/")
+			}
+			if c.HttpOnly != true {
+				t.Error("cookie HttpOnly = false, want true")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("Set-Cookie session_id not found in response, cookies = %v", cookies)
+	}
 }
 
 // TestDeleteSession verifies that DELETE /api/session with a valid session_id cookie
