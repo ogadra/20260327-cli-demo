@@ -20,7 +20,17 @@ describe("createSession", () => {
 
     const result = await createSession();
     expect(result.sessionId).toBe("abc123");
-    expect(mockFetch).toHaveBeenCalledWith("/api/session", { method: "POST" });
+    expect(mockFetch).toHaveBeenCalledWith("/api/session", { method: "POST", signal: undefined });
+  });
+
+  it("forwards AbortSignal to fetch", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ sessionId: "abc123" }),
+    });
+    const signal = new AbortController().signal;
+    await createSession(signal);
+    expect(mockFetch).toHaveBeenCalledWith("/api/session", { method: "POST", signal });
   });
 
   it("throws on failure", async () => {
@@ -83,6 +93,38 @@ describe("execute", () => {
       },
       body: '{"command":"echo hello"}',
     });
+  });
+
+  it("yields event from stream chunk without trailing newline", async () => {
+    const chunks = [
+      'data: {"type":"stdout","data":"hello\\n"}\n\n',
+      'data: {"type":"complete","exitCode":0}',
+    ];
+    const encoder = new TextEncoder();
+    const iterator = chunks[Symbol.iterator]();
+
+    const readable = new ReadableStream({
+      pull(controller) {
+        const { done, value } = iterator.next();
+        if (done) {
+          controller.close();
+        } else {
+          controller.enqueue(encoder.encode(value));
+        }
+      },
+    });
+
+    mockFetch.mockResolvedValue({ ok: true, body: readable });
+
+    const events = [];
+    for await (const event of execute("abc123", "echo hello")) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      { type: "stdout", data: "hello\n" },
+      { type: "complete", exitCode: 0 },
+    ]);
   });
 
   it("throws on HTTP error", async () => {

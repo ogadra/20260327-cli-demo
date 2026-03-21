@@ -13,6 +13,8 @@ const mockCreateSession = vi.mocked(createSession);
 const mockDeleteSession = vi.mocked(deleteSession);
 
 beforeEach(() => {
+  mockCreateSession.mockReset();
+  mockDeleteSession.mockReset();
   mockCreateSession.mockResolvedValue({ sessionId: "test-session" });
 });
 
@@ -29,6 +31,36 @@ describe("useSession", () => {
       expect(result.current).toBe("test-session");
     });
     expect(mockCreateSession).toHaveBeenCalledOnce();
+  });
+
+  it("passes AbortSignal to createSession", async () => {
+    renderHook(() => useSession());
+
+    await waitFor(() => {
+      expect(mockCreateSession).toHaveBeenCalled();
+    });
+
+    expect(mockCreateSession.mock.lastCall?.[0]).toBeInstanceOf(AbortSignal);
+  });
+
+  it("does not set sessionId when createSession fails", async () => {
+    mockCreateSession.mockRejectedValue(new Error("network error"));
+
+    const { result } = renderHook(() => useSession());
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(result.current).toBeNull();
+  });
+
+  it("does not call deleteSession when createSession fails and unmounts", async () => {
+    mockCreateSession.mockRejectedValue(new Error("network error"));
+
+    const { unmount } = renderHook(() => useSession());
+
+    await new Promise((r) => setTimeout(r, 50));
+    unmount();
+
+    expect(mockDeleteSession).not.toHaveBeenCalled();
   });
 
   it("deletes session on unmount", async () => {

@@ -9,10 +9,14 @@ export const useSession = (): string | null => {
     const ac = new AbortController();
 
     void (async () => {
-      const res = await createSession();
-      if (ac.signal.aborted) return;
-      sessionIdRef.current = res.sessionId;
-      setSessionId(res.sessionId);
+      try {
+        const res = await createSession(ac.signal);
+        if (ac.signal.aborted) return;
+        sessionIdRef.current = res.sessionId;
+        setSessionId(res.sessionId);
+      } catch {
+        // ignore errors (abort or network failure)
+      }
     })();
 
     return () => {
