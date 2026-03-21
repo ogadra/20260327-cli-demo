@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -254,6 +256,7 @@ func TestRunShutdownTimeout(t *testing.T) {
 	// slowHandler blocks until the channel is closed, keeping the HTTP request in-flight.
 	reqStarted := make(chan struct{})
 	blockCh := make(chan struct{})
+	defer close(blockCh)
 	slow := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		close(reqStarted)
 		<-blockCh
@@ -278,19 +281,22 @@ func TestRunShutdownTimeout(t *testing.T) {
 	go http.Get("http://" + addr + "/slow") //nolint:errcheck
 
 	// Wait until the handler is actually processing the request.
-	<-reqStarted
+	select {
+	case <-reqStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("slow handler did not start within 2 seconds")
+	}
 
 	sigCh <- os.Interrupt
 
 	select {
 	case err := <-errCh:
-		if err == nil {
-			t.Fatal("run should return error when shutdown times out")
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("run error = %v, want context.DeadlineExceeded", err)
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("run did not return within 10 seconds")
 	}
-	close(blockCh)
 }
 
 // TestStartAndShutdown verifies that start binds to the given address and
