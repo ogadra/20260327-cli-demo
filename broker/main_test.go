@@ -155,23 +155,6 @@ func TestRunInitHandlerError(t *testing.T) {
 func TestDefaultInitHandler(t *testing.T) {
 	saveAndRestore(t)
 
-	t.Setenv("TABLE_NAME", "test-runners")
-	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
-
-	h, err := defaultInitHandler()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if h == nil {
-		t.Fatal("expected non-nil handler")
-	}
-}
-
-// TestDefaultInitHandler_DefaultTableName は TABLE_NAME 未設定時にデフォルト値を使用することを検証する。
-func TestDefaultInitHandler_DefaultTableName(t *testing.T) {
-	saveAndRestore(t)
-
-	t.Setenv("TABLE_NAME", "")
 	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
 
 	h, err := defaultInitHandler()
@@ -187,7 +170,6 @@ func TestDefaultInitHandler_DefaultTableName(t *testing.T) {
 func TestDefaultInitHandler_NoEndpoint(t *testing.T) {
 	saveAndRestore(t)
 
-	t.Setenv("TABLE_NAME", "test-runners")
 	t.Setenv("DYNAMODB_ENDPOINT", "")
 	t.Setenv("AWS_ACCESS_KEY_ID", "dummy")
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "dummy")

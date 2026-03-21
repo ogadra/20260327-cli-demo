@@ -60,11 +60,6 @@ var initHandler = defaultInitHandler
 
 // defaultInitHandler は環境変数から DynamoDB クライアントを構築し Handler を返す。
 func defaultInitHandler() (*handler.Handler, error) {
-	tableName := os.Getenv("TABLE_NAME")
-	if tableName == "" {
-		tableName = "runners"
-	}
-
 	endpoint := os.Getenv("DYNAMODB_ENDPOINT")
 
 	ctx := context.Background()
@@ -89,7 +84,7 @@ func defaultInitHandler() (*handler.Handler, error) {
 	}
 
 	client := dynamodb.NewFromConfig(cfg, dynamoOpts...)
-	repo := store.NewDynamoRepository(client, tableName)
+	repo := store.NewDynamoRepository(client, "Runners")
 	svc := service.NewBrokerService(repo)
 	return handler.NewHandler(svc), nil
 }
