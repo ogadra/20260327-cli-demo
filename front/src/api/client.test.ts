@@ -49,6 +49,18 @@ describe("deleteSession", () => {
       keepalive: true,
     });
   });
+
+  it("logs error when fetch rejects", async () => {
+    const error = new Error("network failure");
+    mockFetch.mockRejectedValue(error);
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    deleteSession("abc123");
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(spy).toHaveBeenCalledWith("Failed to delete session", error);
+    spy.mockRestore();
+  });
 });
 
 describe("execute", () => {
@@ -137,5 +149,32 @@ describe("execute", () => {
     mockFetch.mockResolvedValue({ ok: true, body: null });
     const gen = execute("abc123", "cmd");
     await expect(gen.next()).rejects.toThrow("No response body");
+  });
+
+  it("cancels reader when consumer breaks early", async () => {
+    const cancelFn = vi.fn();
+    let readCount = 0;
+    const readable = new ReadableStream({
+      pull(controller) {
+        readCount++;
+        if (readCount === 1) {
+          controller.enqueue(
+            new TextEncoder().encode('data: {"type":"stdout","data":"line1\\n"}\n\n'),
+          );
+        }
+      },
+      cancel: cancelFn,
+    });
+
+    mockFetch.mockResolvedValue({ ok: true, body: readable });
+
+    const events = [];
+    for await (const event of execute("abc123", "cmd")) {
+      events.push(event);
+      break;
+    }
+
+    expect(events).toHaveLength(1);
+    expect(cancelFn).toHaveBeenCalled();
   });
 });

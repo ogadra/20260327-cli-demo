@@ -24,6 +24,8 @@ export const deleteSession = (sessionId: string): void => {
     method: "DELETE",
     headers: { "X-Session-Id": sessionId },
     keepalive: true,
+  }).catch((err: unknown) => {
+    console.error("Failed to delete session", err);
   });
 };
 
@@ -43,20 +45,30 @@ export async function* execute(sessionId: string, command: string): AsyncGenerat
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   const chunks: string[] = [];
+  let completed = false;
 
-  for (;;) {
-    const { done, value } = await reader.read();
-    chunks.push(done ? decoder.decode() : decoder.decode(value, { stream: true }));
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      chunks.push(done ? decoder.decode() : decoder.decode(value, { stream: true }));
 
-    const lines = chunks.join("").split("\n");
-    chunks.length = 0;
-    if (!done) chunks.push(lines.pop()!);
+      const lines = chunks.join("").split("\n");
+      chunks.length = 0;
+      if (!done) chunks.push(lines.pop()!);
 
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      yield JSON.parse(line.slice(6)) as SseEvent;
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        yield JSON.parse(line.slice(6)) as SseEvent;
+      }
+
+      if (done) {
+        completed = true;
+        break;
+      }
     }
-
-    if (done) break;
+  } finally {
+    if (!completed) {
+      await reader.cancel();
+    }
   }
 }
