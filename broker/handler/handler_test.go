@@ -89,12 +89,12 @@ func TestPostSessions_Success(t *testing.T) {
 	cookies := rec.Result().Cookies()
 	found := false
 	for _, c := range cookies {
-		if c.Name == "session_id" && c.Value == "sess-abc" {
+		if c.Name == "runner_id" && c.Value == "sess-abc" {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("expected session_id cookie")
+		t.Error("expected runner_id cookie")
 	}
 }
 
@@ -213,7 +213,7 @@ func TestGetResolve_Success(t *testing.T) {
 	r := newTestRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/resolve", nil)
-	req.Header.Set("X-Session", "sess-abc")
+	req.AddCookie(&http.Cookie{Name: "runner_id", Value: "sess-abc"})
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -225,8 +225,8 @@ func TestGetResolve_Success(t *testing.T) {
 	}
 }
 
-// TestGetResolve_MissingHeader は X-Session ヘッダーがない場合に 400 を返すことを検証する。
-func TestGetResolve_MissingHeader(t *testing.T) {
+// TestGetResolve_MissingCookie は runner_id cookie がない場合に 401 を返すことを検証する。
+func TestGetResolve_MissingCookie(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(&mockService{})
 	r := newTestRouter(h)
@@ -235,8 +235,8 @@ func TestGetResolve_MissingHeader(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
 }
 
@@ -251,7 +251,7 @@ func TestGetResolve_NotFound(t *testing.T) {
 	r := newTestRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/resolve", nil)
-	req.Header.Set("X-Session", "sess-missing")
+	req.AddCookie(&http.Cookie{Name: "runner_id", Value: "sess-missing"})
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -271,7 +271,7 @@ func TestGetResolve_InternalError(t *testing.T) {
 	r := newTestRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/resolve", nil)
-	req.Header.Set("X-Session", "sess-abc")
+	req.AddCookie(&http.Cookie{Name: "runner_id", Value: "sess-abc"})
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -397,7 +397,7 @@ func TestWriteError_IncludesRequestID(t *testing.T) {
 	r := newTestRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/resolve", nil)
-	req.Header.Set("X-Session", "sess-missing")
+	req.AddCookie(&http.Cookie{Name: "runner_id", Value: "sess-missing"})
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -427,7 +427,7 @@ func TestNewHandler_NilPanics(t *testing.T) {
 	NewHandler(nil)
 }
 
-// TestPostSessions_CookieSecure はセッション作成時の cookie が Secure=true であることを検証する。
+// TestPostSessions_CookieSecure はセッション作成時の runner_id cookie が Secure=true であることを検証する。
 func TestPostSessions_CookieSecure(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(&mockService{
@@ -446,15 +446,15 @@ func TestPostSessions_CookieSecure(t *testing.T) {
 
 	cookies := rec.Result().Cookies()
 	for _, c := range cookies {
-		if c.Name == "session_id" {
+		if c.Name == "runner_id" {
 			if !c.Secure {
-				t.Error("expected Secure=true on session_id cookie")
+				t.Error("expected Secure=true on runner_id cookie")
 			}
 			if !c.HttpOnly {
-				t.Error("expected HttpOnly=true on session_id cookie")
+				t.Error("expected HttpOnly=true on runner_id cookie")
 			}
 			return
 		}
 	}
-	t.Error("session_id cookie not found")
+	t.Error("runner_id cookie not found")
 }
