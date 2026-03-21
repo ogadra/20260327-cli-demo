@@ -21,6 +21,9 @@ type Shell interface {
 // sessionIDCookie is the cookie name used to pass the session ID.
 const sessionIDCookie = "session_id"
 
+// errMissingSessionCookie is the error message returned when the session_id cookie is absent.
+const errMissingSessionCookie = "missing session_id cookie"
+
 // executeRequest is the JSON body for POST /api/execute.
 type executeRequest struct {
 	Command string `json:"command" binding:"required"`
@@ -76,7 +79,7 @@ func handleDeleteSession(sm *SessionManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := c.Cookie(sessionIDCookie)
 		if err != nil || id == "" {
-			c.JSON(http.StatusBadRequest, errorResponse{Error: "missing session_id cookie"})
+			c.JSON(http.StatusBadRequest, errorResponse{Error: errMissingSessionCookie})
 			return
 		}
 		if err := sm.Delete(id); err != nil {
@@ -99,7 +102,7 @@ func handleExecute(sm *SessionManager, v Validator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := c.Cookie(sessionIDCookie)
 		if err != nil || id == "" {
-			c.JSON(http.StatusBadRequest, errorResponse{Error: "missing session_id cookie"})
+			c.JSON(http.StatusBadRequest, errorResponse{Error: errMissingSessionCookie})
 			return
 		}
 
