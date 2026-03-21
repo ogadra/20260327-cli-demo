@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import App from "./App";
 
 vi.mock("./hooks/useSession", () => ({
-  useSession: () => "test-session",
+  useSession: () => true,
 }));
 
 vi.mock("./hooks/useExecute", () => ({
@@ -41,7 +41,7 @@ describe("App", () => {
   it("disables input when session is not ready", async () => {
     vi.resetModules();
     vi.doMock("./hooks/useSession", () => ({
-      useSession: () => null,
+      useSession: () => false,
     }));
     vi.doMock("./hooks/useExecute", () => ({
       useExecute: () => ({ run: vi.fn(), running: false }),
@@ -54,7 +54,7 @@ describe("App", () => {
   it("disables input when command is running", async () => {
     vi.resetModules();
     vi.doMock("./hooks/useSession", () => ({
-      useSession: () => "test-session",
+      useSession: () => true,
     }));
     vi.doMock("./hooks/useExecute", () => ({
       useExecute: () => ({ run: vi.fn(), running: true }),

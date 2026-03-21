@@ -7,14 +7,14 @@ import { useExecute } from "./hooks/useExecute";
 
 /** Root application component that wires session, terminal, and command input together. */
 const App = (): ReactNode => {
-  const sessionId = useSession();
+  const ready = useSession();
   const terminalRef = useRef<TerminalHandle>(null);
-  const { run, running } = useExecute(sessionId, terminalRef);
+  const { run, running } = useExecute(ready, terminalRef);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <Terminal ref={terminalRef} />
-      <CommandInput onSubmit={run} disabled={!sessionId || running} />
+      <CommandInput onSubmit={run} disabled={!ready || running} />
     </div>
   );
 };

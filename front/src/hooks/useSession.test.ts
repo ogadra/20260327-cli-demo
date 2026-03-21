@@ -15,7 +15,7 @@ const mockDeleteSession = vi.mocked(deleteSession);
 beforeEach(() => {
   mockCreateSession.mockReset();
   mockDeleteSession.mockReset();
-  mockCreateSession.mockResolvedValue({ sessionId: "test-session" });
+  mockCreateSession.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -23,12 +23,12 @@ afterEach(() => {
 });
 
 describe("useSession", () => {
-  it("creates session on mount and returns sessionId", async () => {
+  it("creates session on mount and returns ready true", async () => {
     const { result } = renderHook(() => useSession());
-    expect(result.current).toBeNull();
+    expect(result.current).toBe(false);
 
     await waitFor(() => {
-      expect(result.current).toBe("test-session");
+      expect(result.current).toBe(true);
     });
     expect(mockCreateSession).toHaveBeenCalledOnce();
   });
@@ -43,7 +43,7 @@ describe("useSession", () => {
     expect(mockCreateSession.mock.lastCall?.[0]).toBeInstanceOf(AbortSignal);
   });
 
-  it("does not set sessionId when createSession fails", async () => {
+  it("does not set ready when createSession fails", async () => {
     mockCreateSession.mockRejectedValue(new Error("network error"));
 
     const { result } = renderHook(() => useSession());
@@ -51,7 +51,7 @@ describe("useSession", () => {
     await waitFor(() => {
       expect(mockCreateSession).toHaveBeenCalledOnce();
     });
-    expect(result.current).toBeNull();
+    expect(result.current).toBe(false);
   });
 
   it("logs non-abort errors to console.error", async () => {
@@ -101,10 +101,10 @@ describe("useSession", () => {
     const { result, unmount } = renderHook(() => useSession());
 
     await waitFor(() => {
-      expect(result.current).toBe("test-session");
+      expect(result.current).toBe(true);
     });
 
     unmount();
-    expect(mockDeleteSession).toHaveBeenCalledWith("test-session");
+    expect(mockDeleteSession).toHaveBeenCalledWith();
   });
 });

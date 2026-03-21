@@ -12,25 +12,27 @@ afterEach(() => {
 });
 
 describe("createSession", () => {
-  it("returns sessionId on success", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ sessionId: "abc123" }),
-    });
+  it("resolves without a value on success", async () => {
+    mockFetch.mockResolvedValue({ ok: true });
 
     const result = await createSession();
-    expect(result.sessionId).toBe("abc123");
-    expect(mockFetch).toHaveBeenCalledWith("/api/session", { method: "POST", signal: undefined });
+    expect(result).toBeUndefined();
+    expect(mockFetch).toHaveBeenCalledWith("/api/session", {
+      method: "POST",
+      credentials: "include",
+      signal: undefined,
+    });
   });
 
   it("forwards AbortSignal to fetch", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ sessionId: "abc123" }),
-    });
+    mockFetch.mockResolvedValue({ ok: true });
     const signal = new AbortController().signal;
     await createSession(signal);
-    expect(mockFetch).toHaveBeenCalledWith("/api/session", { method: "POST", signal });
+    expect(mockFetch).toHaveBeenCalledWith("/api/session", {
+      method: "POST",
+      credentials: "include",
+      signal,
+    });
   });
 
   it("throws on failure", async () => {
@@ -40,12 +42,12 @@ describe("createSession", () => {
 });
 
 describe("deleteSession", () => {
-  it("sends DELETE with session header and keepalive", () => {
+  it("sends DELETE with credentials and keepalive", () => {
     mockFetch.mockResolvedValue({ ok: true });
-    deleteSession("abc123");
+    deleteSession();
     expect(mockFetch).toHaveBeenCalledWith("/api/session", {
       method: "DELETE",
-      headers: { "X-Session-Id": "abc123" },
+      credentials: "include",
       keepalive: true,
     });
   });
@@ -55,7 +57,7 @@ describe("deleteSession", () => {
     mockFetch.mockRejectedValue(error);
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    deleteSession("abc123");
+    deleteSession();
     await new Promise((r) => setTimeout(r, 0));
 
     expect(spy).toHaveBeenCalledWith("Failed to delete session", error);
@@ -89,7 +91,7 @@ describe("execute", () => {
     });
 
     const events = [];
-    for await (const event of execute("abc123", "echo hello")) {
+    for await (const event of execute("echo hello")) {
       events.push(event);
     }
 
@@ -99,10 +101,8 @@ describe("execute", () => {
     ]);
     expect(mockFetch).toHaveBeenCalledWith("/api/execute", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Session-Id": "abc123",
-      },
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: '{"command":"echo hello"}',
     });
   });
@@ -129,7 +129,7 @@ describe("execute", () => {
     mockFetch.mockResolvedValue({ ok: true, body: readable });
 
     const events = [];
-    for await (const event of execute("abc123", "echo hello")) {
+    for await (const event of execute("echo hello")) {
       events.push(event);
     }
 
@@ -141,13 +141,13 @@ describe("execute", () => {
 
   it("throws on HTTP error", async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 400 });
-    const gen = execute("abc123", "bad");
+    const gen = execute("bad");
     await expect(gen.next()).rejects.toThrow("Failed to execute: 400");
   });
 
   it("throws when body is null", async () => {
     mockFetch.mockResolvedValue({ ok: true, body: null });
-    const gen = execute("abc123", "cmd");
+    const gen = execute("cmd");
     await expect(gen.next()).rejects.toThrow("No response body");
   });
 
@@ -169,7 +169,7 @@ describe("execute", () => {
     mockFetch.mockResolvedValue({ ok: true, body: readable });
 
     const events = [];
-    for await (const event of execute("abc123", "cmd")) {
+    for await (const event of execute("cmd")) {
       events.push(event);
       break;
     }

@@ -36,7 +36,7 @@ describe("useExecute", () => {
     }
     mockExecute.mockReturnValue(fakeExecute());
 
-    const { result } = renderHook(() => useExecute("sess1", termRef));
+    const { result } = renderHook(() => useExecute(true, termRef));
 
     await act(async () => {
       await result.current.run("echo hello");
@@ -55,7 +55,7 @@ describe("useExecute", () => {
     }
     mockExecute.mockReturnValue(fakeExecute());
 
-    const { result } = renderHook(() => useExecute("sess1", termRef));
+    const { result } = renderHook(() => useExecute(true, termRef));
 
     await act(async () => {
       await result.current.run("bad");
@@ -65,10 +65,10 @@ describe("useExecute", () => {
     expect(termRef.current.writeln).toHaveBeenCalledWith("\x1b[31mexit code: 1\x1b[0m");
   });
 
-  it("does not run when sessionId is null", async () => {
+  it("does not run when session is not ready", async () => {
     const termRef = makeTerminalRef();
 
-    const { result } = renderHook(() => useExecute(null, termRef));
+    const { result } = renderHook(() => useExecute(false, termRef));
 
     await act(async () => {
       await result.current.run("cmd");
@@ -91,7 +91,7 @@ describe("useExecute", () => {
     }
     mockExecute.mockReturnValue(slowExecute());
 
-    const { result } = renderHook(() => useExecute("sess1", termRef));
+    const { result } = renderHook(() => useExecute(true, termRef));
 
     const firstRun = act(async () => {
       await result.current.run("first");
@@ -116,7 +116,7 @@ describe("useExecute", () => {
     }
     mockExecute.mockReturnValue(failingExecute());
 
-    const { result } = renderHook(() => useExecute("sess1", termRef));
+    const { result } = renderHook(() => useExecute(true, termRef));
 
     await act(async () => {
       await result.current.run("bad-cmd");
