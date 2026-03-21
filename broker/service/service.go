@@ -45,7 +45,9 @@ type Option func(*BrokerService)
 // WithSessionFn はセッション ID 生成関数を差し替えるオプション。
 func WithSessionFn(fn func() (string, error)) Option {
 	return func(s *BrokerService) {
-		s.sessionFn = fn
+		if fn != nil {
+			s.sessionFn = fn
+		}
 	}
 }
 

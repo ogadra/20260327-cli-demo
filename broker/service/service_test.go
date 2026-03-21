@@ -84,6 +84,22 @@ func TestNewBrokerService_WithSessionFn(t *testing.T) {
 	}
 }
 
+// TestWithSessionFn_Nil は WithSessionFn に nil を渡してもデフォルト関数が維持されることを検証する。
+func TestWithSessionFn_Nil(t *testing.T) {
+	t.Parallel()
+	svc := NewBrokerService(&mockRepository{}, WithSessionFn(nil))
+	if svc.sessionFn == nil {
+		t.Fatal("sessionFn should not be nil when WithSessionFn(nil) is passed")
+	}
+	id, err := svc.sessionFn()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(id) != 32 {
+		t.Errorf("len(id) = %d, want 32", len(id))
+	}
+}
+
 // TestDefaultSessionFn はデフォルトセッション ID 生成関数が 32 文字の hex 文字列を返すことを検証する。
 func TestDefaultSessionFn(t *testing.T) {
 	t.Parallel()
@@ -99,8 +115,14 @@ func TestDefaultSessionFn(t *testing.T) {
 // TestDefaultSessionFn_Unique はデフォルトセッション ID 生成関数が一意の値を返すことを検証する。
 func TestDefaultSessionFn_Unique(t *testing.T) {
 	t.Parallel()
-	id1, _ := defaultSessionFn()
-	id2, _ := defaultSessionFn()
+	id1, err := defaultSessionFn()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	id2, err := defaultSessionFn()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if id1 == id2 {
 		t.Error("expected unique session IDs")
 	}
