@@ -22,28 +22,30 @@ func TestCreateSession(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusNoContent)
 	}
 
-	var resp sessionResponse
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode error: %v", err)
-	}
-	if resp.SessionID == "" {
-		t.Fatal("sessionId is empty")
+	if body := w.Body.String(); body != "" {
+		t.Fatalf("expected empty body, got %q", body)
 	}
 
 	cookies := w.Result().Cookies()
 	var found bool
 	for _, c := range cookies {
-		if c.Name == "session_id" && c.Value == resp.SessionID {
+		if c.Name == "session_id" {
 			found = true
+			if c.Value == "" {
+				t.Fatal("cookie value is empty")
+			}
 			if c.Path != "/" {
 				t.Errorf("cookie Path = %q, want %q", c.Path, "/")
 			}
-			if c.HttpOnly != true {
+			if !c.HttpOnly {
 				t.Error("cookie HttpOnly = false, want true")
+			}
+			if !c.Secure {
+				t.Error("cookie Secure = false, want true")
 			}
 			break
 		}

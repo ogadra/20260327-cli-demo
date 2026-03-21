@@ -15,7 +15,7 @@ import (
 // --- Integration test helpers ---
 
 // createSession is a test helper that creates a new session via the HTTP API
-// and returns its ID.
+// and returns its ID extracted from the Set-Cookie header.
 func createSession(t *testing.T, ts *httptest.Server) string {
 	t.Helper()
 	resp, err := http.Post(ts.URL+"/api/session", "application/json", nil)
@@ -23,14 +23,16 @@ func createSession(t *testing.T, ts *httptest.Server) string {
 		t.Fatalf("POST /api/session error: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("create session status = %d, want %d", resp.StatusCode, http.StatusOK)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("create session status = %d, want %d", resp.StatusCode, http.StatusNoContent)
 	}
-	var sr sessionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
-		t.Fatalf("decode error: %v", err)
+	for _, c := range resp.Cookies() {
+		if c.Name == "session_id" {
+			return c.Value
+		}
 	}
-	return sr.SessionID
+	t.Fatal("session_id cookie not found in response")
+	return ""
 }
 
 // marshalCommand is a test helper that marshals a command string into a JSON request body.
