@@ -38,6 +38,7 @@ const Terminal = forwardRef<TerminalHandle>((_, ref) => {
     xterm.loadAddon(fitAddon);
     xterm.open(el);
     fitAddon.fit();
+    xterm.write("$ ");
     xtermRef.current = xterm;
 
     const onResize = () => fitAddon.fit();
