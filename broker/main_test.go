@@ -31,7 +31,7 @@ func saveAndRestore(t *testing.T) {
 
 // TestHealthEndpoint は GET /health が 200 OK を返すことを検証する。
 func TestHealthEndpoint(t *testing.T) {
-	r := newRouter()
+	r := newRouter(nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
