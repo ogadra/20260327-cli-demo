@@ -11,6 +11,9 @@ import (
 	"github.com/ogadra/20260327-cli-demo/broker/store"
 )
 
+// runnerIDCookie は runner 識別用の cookie 名。
+const runnerIDCookie = "runner_id"
+
 // Handler は broker の HTTP ハンドラー。
 type Handler struct {
 	svc service.Service
@@ -44,7 +47,7 @@ func (h *Handler) PostSessions(c *gin.Context) {
 		return
 	}
 	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie("runner_id", result.SessionID, 0, "/", "", true, true)
+	c.SetCookie(runnerIDCookie, result.SessionID, 0, "/", "", true, true)
 	c.JSON(http.StatusCreated, gin.H{"sessionId": result.SessionID})
 }
 
@@ -65,9 +68,9 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 
 // GetResolve は GET /resolve を処理し runner_id cookie からセッションを解決する。
 func (h *Handler) GetResolve(c *gin.Context) {
-	sessionID, err := c.Cookie("runner_id")
+	sessionID, err := c.Cookie(runnerIDCookie)
 	if err != nil {
-		writeError(c, http.StatusUnauthorized, model.CodeInvalidRequest, "runner_id cookie is required")
+		writeError(c, http.StatusUnauthorized, model.CodeInvalidRequest, runnerIDCookie+" cookie is required")
 		return
 	}
 	url, err := h.svc.ResolveSession(c.Request.Context(), sessionID)

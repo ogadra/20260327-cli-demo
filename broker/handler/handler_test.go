@@ -238,6 +238,12 @@ func TestGetResolve_MissingCookie(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
+	if !strings.Contains(rec.Body.String(), model.CodeInvalidRequest) {
+		t.Errorf("body = %q, want to contain %q", rec.Body.String(), model.CodeInvalidRequest)
+	}
+	if !strings.Contains(rec.Body.String(), "runner_id cookie is required") {
+		t.Errorf("body = %q, want to contain %q", rec.Body.String(), "runner_id cookie is required")
+	}
 }
 
 // TestGetResolve_NotFound はセッションが見つからない場合に 404 を返すことを検証する。
