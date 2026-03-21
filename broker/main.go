@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -64,20 +65,23 @@ var loadAWSConfig = config.LoadDefaultConfig
 // defaultInitHandler は環境変数から DynamoDB クライアントを構築し Handler を返す。
 func defaultInitHandler() (*handler.Handler, error) {
 	endpoint := os.Getenv("DYNAMODB_ENDPOINT")
-	if endpoint == "" {
-		return nil, fmt.Errorf("DYNAMODB_ENDPOINT is required")
-	}
 	region := os.Getenv("AWS_REGION")
-	if region == "" {
-		return nil, fmt.Errorf("AWS_REGION is required")
-	}
 	accessKey := os.Getenv("AWS_ACCESS_KEY_ID")
-	if accessKey == "" {
-		return nil, fmt.Errorf("AWS_ACCESS_KEY_ID is required")
-	}
 	secretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
-	if secretKey == "" {
-		return nil, fmt.Errorf("AWS_SECRET_ACCESS_KEY is required")
+
+	var missing []string
+	for _, pair := range []struct{ name, val string }{
+		{"DYNAMODB_ENDPOINT", endpoint},
+		{"AWS_REGION", region},
+		{"AWS_ACCESS_KEY_ID", accessKey},
+		{"AWS_SECRET_ACCESS_KEY", secretKey},
+	} {
+		if pair.val == "" {
+			missing = append(missing, pair.name)
+		}
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("missing required environment variables: %s", strings.Join(missing, ", "))
 	}
 
 	ctx := context.Background()
