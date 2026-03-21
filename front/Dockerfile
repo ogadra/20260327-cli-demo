@@ -1,7 +1,4 @@
 # checkov:skip=CKV_DOCKER_2:health check is managed by compose/orchestrator
-# checkov:skip=CKV_DOCKER_3:build and dev stages require root for package installation
-# trivy:ignore:DS-0002 -- build-only image, production assets served by nginx service
-# trivy:ignore:DS-0026 -- health check is managed by compose/orchestrator
 FROM node:24-slim AS deps
 RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
 WORKDIR /app
@@ -21,6 +18,8 @@ COPY . .
 RUN pnpm exec vp build
 
 FROM deps AS dev
+RUN useradd -r -s /usr/sbin/nologin appuser
 COPY . .
+USER appuser
 EXPOSE 5173
 CMD ["pnpm", "exec", "vp", "dev", "--host"]
