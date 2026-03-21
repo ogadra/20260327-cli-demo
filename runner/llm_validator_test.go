@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/document"
@@ -210,8 +211,10 @@ func TestValidateUnexpectedOutputType(t *testing.T) {
 
 // TestValidateMarshalError verifies that a document that fails to marshal
 // triggers retries and eventually returns an error.
+// time.Time is used because the Smithy encoder explicitly rejects it,
+// whereas func values are silently skipped.
 func TestValidateMarshalError(t *testing.T) {
-	unmarshalable := func() {}
+	unmarshalable := time.Now()
 	badOutput := &bedrockruntime.ConverseOutput{
 		Output: &brtypes.ConverseOutputMemberMessage{
 			Value: brtypes.Message{
