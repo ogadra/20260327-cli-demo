@@ -105,6 +105,6 @@ describe("useSession", () => {
     });
 
     unmount();
-    expect(mockDeleteSession).toHaveBeenCalledWith("test-session");
+    expect(mockDeleteSession).toHaveBeenCalledWith();
   });
 });

@@ -28,7 +28,7 @@ export const useSession = (): string | null => {
     return () => {
       ac.abort();
       if (sessionIdRef.current) {
-        deleteSession(sessionIdRef.current);
+        deleteSession();
       }
     };
   }, []);

@@ -32,7 +32,7 @@ export const useExecute = (
       terminalRef.current?.writeln(`$ ${command}`);
 
       try {
-        for await (const event of execute(sessionId, command)) {
+        for await (const event of execute(command)) {
           handleEvent(event, terminalRef);
         }
       } catch (error) {

@@ -22,20 +22,19 @@ export type SseEvent =
  * @param signal - Optional AbortSignal to cancel the request.
  */
 export const createSession = async (signal?: AbortSignal): Promise<SessionResponse> => {
-  const res = await fetch("/api/session", { method: "POST", signal });
+  const res = await fetch("/api/session", { method: "POST", credentials: "include", signal });
   if (!res.ok) throw new Error(`Failed to create session: ${res.status}`);
   return res.json() as Promise<SessionResponse>;
 };
 
 /**
- * Delete a session. Errors are logged but not thrown since this is
- * typically called during page unload.
- * @param sessionId - The session to delete.
+ * Delete the current session identified by the session_id cookie.
+ * Errors are logged but not thrown since this is typically called during page unload.
  */
-export const deleteSession = (sessionId: string): void => {
+export const deleteSession = (): void => {
   void fetch("/api/session", {
     method: "DELETE",
-    headers: { "X-Session-Id": sessionId },
+    credentials: "include",
     keepalive: true,
   }).catch((err: unknown) => {
     console.error("Failed to delete session", err);
@@ -43,18 +42,16 @@ export const deleteSession = (sessionId: string): void => {
 };
 
 /**
- * Execute a command in the given session and yield SSE events as they arrive.
+ * Execute a command in the current session and yield SSE events as they arrive.
+ * The session is identified by the session_id cookie sent automatically by the browser.
  * The reader is automatically cancelled if the consumer exits early.
- * @param sessionId - The session in which to run the command.
  * @param command - The shell command to execute.
  */
-export async function* execute(sessionId: string, command: string): AsyncGenerator<SseEvent> {
+export async function* execute(command: string): AsyncGenerator<SseEvent> {
   const res = await fetch("/api/execute", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Session-Id": sessionId,
-    },
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ command }),
   });
   if (!res.ok) throw new Error(`Failed to execute: ${res.status}`);

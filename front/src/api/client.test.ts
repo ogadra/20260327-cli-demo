@@ -50,7 +50,7 @@ describe("createSession", () => {
 describe("deleteSession", () => {
   it("sends DELETE with credentials and keepalive", () => {
     mockFetch.mockResolvedValue({ ok: true });
-    deleteSession("abc123");
+    deleteSession();
     expect(mockFetch).toHaveBeenCalledWith("/api/session", {
       method: "DELETE",
       credentials: "include",
@@ -63,7 +63,7 @@ describe("deleteSession", () => {
     mockFetch.mockRejectedValue(error);
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    deleteSession("abc123");
+    deleteSession();
     await new Promise((r) => setTimeout(r, 0));
 
     expect(spy).toHaveBeenCalledWith("Failed to delete session", error);
@@ -97,7 +97,7 @@ describe("execute", () => {
     });
 
     const events = [];
-    for await (const event of execute("abc123", "echo hello")) {
+    for await (const event of execute("echo hello")) {
       events.push(event);
     }
 
@@ -135,7 +135,7 @@ describe("execute", () => {
     mockFetch.mockResolvedValue({ ok: true, body: readable });
 
     const events = [];
-    for await (const event of execute("abc123", "echo hello")) {
+    for await (const event of execute("echo hello")) {
       events.push(event);
     }
 
@@ -147,13 +147,13 @@ describe("execute", () => {
 
   it("throws on HTTP error", async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 400 });
-    const gen = execute("abc123", "bad");
+    const gen = execute("bad");
     await expect(gen.next()).rejects.toThrow("Failed to execute: 400");
   });
 
   it("throws when body is null", async () => {
     mockFetch.mockResolvedValue({ ok: true, body: null });
-    const gen = execute("abc123", "cmd");
+    const gen = execute("cmd");
     await expect(gen.next()).rejects.toThrow("No response body");
   });
 
@@ -175,7 +175,7 @@ describe("execute", () => {
     mockFetch.mockResolvedValue({ ok: true, body: readable });
 
     const events = [];
-    for await (const event of execute("abc123", "cmd")) {
+    for await (const event of execute("cmd")) {
       events.push(event);
       break;
     }
