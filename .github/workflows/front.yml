@@ -2,6 +2,9 @@ name: Front
 
 on:
   push:
+    branches:
+      - main
+  pull_request:
     paths:
       - "front/**"
       - ".github/workflows/front.yml"

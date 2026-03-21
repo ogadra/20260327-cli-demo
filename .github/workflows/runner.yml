@@ -2,6 +2,9 @@ name: Runner
 
 on:
   push:
+    branches:
+      - main
+  pull_request:
     paths:
       - "runner/**"
       - ".github/workflows/runner.yml"

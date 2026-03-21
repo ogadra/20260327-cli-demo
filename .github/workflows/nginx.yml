@@ -2,6 +2,9 @@ name: Nginx
 
 on:
   push:
+    branches:
+      - main
+  pull_request:
     paths:
       - "nginx/**"
       - ".github/workflows/nginx.yml"
