@@ -174,7 +174,8 @@ func TestIntegrationCreateExecuteDelete(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
 
-	ts := httptest.NewServer(newHandler(sm, nil))
+	v := &mockValidator{result: ValidationResult{Safe: true, Reason: "ok"}}
+	ts := httptest.NewServer(newHandler(sm, v))
 	defer ts.Close()
 
 	// Create session.
@@ -192,7 +193,7 @@ func TestIntegrationCreateExecuteDelete(t *testing.T) {
 		t.Fatal("empty session ID")
 	}
 
-	// Execute whitelisted command.
+	// Execute whitelisted command; validator should not be called.
 	body := strings.NewReader(`{"command":"pwd"}`)
 	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", body)
 	req.Header.Set(sessionIDHeader, sr.SessionID)
@@ -204,6 +205,27 @@ func TestIntegrationCreateExecuteDelete(t *testing.T) {
 
 	if resp2.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want %d", resp2.StatusCode, http.StatusOK)
+	}
+	if v.called {
+		t.Fatal("validator should not be called for whitelisted command")
+	}
+
+	// Execute validated command; validator should be called.
+	v.called = false
+	body2 := strings.NewReader(`{"command":"echo hello"}`)
+	req2, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", body2)
+	req2.Header.Set(sessionIDHeader, sr.SessionID)
+	resp4, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatalf("POST /api/execute validated error: %v", err)
+	}
+	defer resp4.Body.Close()
+
+	if resp4.StatusCode != http.StatusOK {
+		t.Fatalf("validated status = %d, want %d", resp4.StatusCode, http.StatusOK)
+	}
+	if !v.called {
+		t.Fatal("validator should be called for non-whitelisted command")
 	}
 
 	// Delete session.
