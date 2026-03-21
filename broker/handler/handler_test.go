@@ -433,6 +433,69 @@ func TestNewHandler_NilPanics(t *testing.T) {
 	NewHandler(nil)
 }
 
+// TestPostRegister_InvalidURL は不正な URL 形式の場合に 400 を返すことを検証する。
+func TestPostRegister_InvalidURL(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		url  string
+	}{
+		{"no scheme", "10.0.0.1:8080"},
+		{"ftp scheme", "ftp://10.0.0.1:8080"},
+		{"no host", "http://"},
+		{"relative path", "/runner"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			h := NewHandler(&mockService{
+				registerRunnerFn: func(_ context.Context, _, _ string) error {
+					t.Fatal("service should not be called for invalid URL")
+					return nil
+				},
+			})
+			r := newTestRouter(h)
+
+			body := strings.NewReader(`{"runnerId":"r1","privateUrl":"` + tt.url + `"}`)
+			req := httptest.NewRequest(http.MethodPost, "/internal/runners/register", body)
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want %d for url %q", rec.Code, http.StatusBadRequest, tt.url)
+			}
+		})
+	}
+}
+
+// TestValidateRunnerURL は validateRunnerURL の境界値を検証する。
+func TestValidateRunnerURL(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		url     string
+		wantErr bool
+	}{
+		{"valid http", "http://10.0.0.1:3000", false},
+		{"valid https", "https://runner.local:3000", false},
+		{"valid http no port", "http://runner.local", false},
+		{"no scheme", "10.0.0.1:3000", true},
+		{"ftp scheme", "ftp://10.0.0.1:3000", true},
+		{"empty host", "http://", true},
+		{"relative", "/path", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := validateRunnerURL(tt.url)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateRunnerURL(%q) error = %v, wantErr %v", tt.url, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // TestPostSessions_CookieSecure はセッション作成時の runner_id cookie が Secure=true であることを検証する。
 func TestPostSessions_CookieSecure(t *testing.T) {
 	t.Parallel()

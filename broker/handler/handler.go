@@ -4,6 +4,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"net/url"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ogadra/20260327-cli-demo/broker/model"
@@ -86,11 +87,30 @@ func (h *Handler) GetResolve(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
+// validateRunnerURL は runner の PrivateURL が http または https スキームの有効な URL であることを検証する。
+func validateRunnerURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return err
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return errors.New("scheme must be http or https")
+	}
+	if u.Host == "" {
+		return errors.New("host is required")
+	}
+	return nil
+}
+
 // PostRegister は POST /internal/runners/register を処理し runner を登録する。
 func (h *Handler) PostRegister(c *gin.Context) {
 	var req registerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		writeError(c, http.StatusBadRequest, model.CodeInvalidRequest, "invalid request body")
+		return
+	}
+	if err := validateRunnerURL(req.PrivateURL); err != nil {
+		writeError(c, http.StatusBadRequest, model.CodeInvalidRequest, "invalid privateUrl: "+err.Error())
 		return
 	}
 	err := h.svc.RegisterRunner(c.Request.Context(), req.RunnerID, req.PrivateURL)
