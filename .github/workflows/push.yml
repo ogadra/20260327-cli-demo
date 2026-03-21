@@ -97,13 +97,19 @@ jobs:
         run: cd front && pnpm install --frozen-lockfile
       - name: vp check
         run: cd front && pnpm exec vp check
+      - name: vp test
+        run: cd front && pnpm exec vp test --run
 
   test-front:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Run tests
-        run: docker build --target test front/
+        run: docker build -t front-test --target test front/
+      - uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: image
+          image-ref: front-test
 
   test-front-e2e:
     runs-on: ubuntu-latest

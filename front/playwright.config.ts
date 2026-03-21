@@ -6,6 +6,7 @@ export default defineConfig({
     command: "pnpm exec vp dev",
     port: 5173,
     reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
   },
   use: {
     baseURL: "http://localhost:5173",

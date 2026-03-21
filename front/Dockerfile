@@ -3,20 +3,18 @@
 # trivy:ignore:DS-0002 -- build-only image, production assets served by nginx service
 # trivy:ignore:DS-0026 -- health check is managed by compose/orchestrator
 FROM node:24-slim AS deps
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS test
 COPY . .
-RUN pnpm exec vp check
-RUN pnpm exec vp test --run
+RUN pnpm exec vp check && pnpm exec vp test --run
 
 FROM deps AS test-e2e
 COPY . .
-RUN pnpm exec playwright install --with-deps chromium
-RUN pnpm exec playwright test
+RUN pnpm exec playwright install --with-deps chromium && pnpm exec playwright test
 
 FROM deps AS build
 COPY . .

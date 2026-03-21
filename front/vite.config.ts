@@ -1,19 +1,25 @@
 import { defineConfig } from "vite-plus";
 import react from "@vitejs/plugin-react";
 
-// https://vite.dev/config/
 export default defineConfig({
   lint: { options: { typeAware: true, typeCheck: true } },
   plugins: [react()],
   test: {
     environment: "jsdom",
-    exclude: ["e2e/**", "node_modules/**"],
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/cypress/**",
+      "**/.{idea,git,cache,output,temp}/**",
+      "**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*",
+      "e2e/**",
+    ],
   },
   server: {
     host: true,
     proxy: {
       "/api": {
-        target: "http://localhost:3000",
+        target: process.env.VITE_API_TARGET ?? "http://localhost:3000",
         changeOrigin: true,
       },
     },
