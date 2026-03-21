@@ -94,13 +94,22 @@ func TestDefaultIDFn_Unique(t *testing.T) {
 	}
 }
 
-// TestDefaultIDFn_RandReadError は rand.Reader がエラーを返す場合に DefaultIDFn がエラーを返すことを検証する。
-func TestDefaultIDFn_RandReadError(t *testing.T) {
-	orig := randReader
-	t.Cleanup(func() { randReader = orig })
-	randReader = &errorReader{}
+// TestDefaultIDFnWithReader_Success は正常な io.Reader から hex ID を生成できることを検証する。
+func TestDefaultIDFnWithReader_Success(t *testing.T) {
+	t.Parallel()
+	id, err := defaultIDFnWithReader(rand.Reader)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(id) != 32 {
+		t.Errorf("len(id) = %d, want 32", len(id))
+	}
+}
 
-	_, err := DefaultIDFn()
+// TestDefaultIDFnWithReader_Error は io.Reader がエラーを返す場合にエラーを返すことを検証する。
+func TestDefaultIDFnWithReader_Error(t *testing.T) {
+	t.Parallel()
+	_, err := defaultIDFnWithReader(&errorReader{})
 	if err == nil {
 		t.Fatal("expected error")
 	}

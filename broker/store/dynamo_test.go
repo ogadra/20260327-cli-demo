@@ -59,6 +59,9 @@ func TestNewDynamoRepository(t *testing.T) {
 	if repo.bucketFn == nil {
 		t.Error("bucketFn is nil")
 	}
+	if repo.marshalFn == nil {
+		t.Error("marshalFn is nil")
+	}
 }
 
 // TestDefaultBucketFn はデフォルトバケット関数がバケット範囲内の値を返すことを検証する。
@@ -85,14 +88,11 @@ func itoa(i int) string {
 // TestRegister_MarshalError は MarshalMap がエラーを返す場合にエラーを返すことを検証する。
 func TestRegister_MarshalError(t *testing.T) {
 	t.Parallel()
-	orig := marshalMap
-	t.Cleanup(func() { marshalMap = orig })
-	marshalMap = func(_ interface{}) (map[string]types.AttributeValue, error) {
-		return nil, errors.New("marshal error")
-	}
-
 	repo := NewDynamoRepository(&mockDynamoDBAPI{}, "t")
 	repo.bucketFn = func() string { return "bucket-0" }
+	repo.marshalFn = func(_ interface{}) (map[string]types.AttributeValue, error) {
+		return nil, errors.New("marshal error")
+	}
 
 	err := repo.Register(context.Background(), "r1", "http://10.0.0.1:8080")
 	if err == nil {
