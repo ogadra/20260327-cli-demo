@@ -18,8 +18,11 @@ type Shell interface {
 	Close() error
 }
 
-// sessionIDHeader is the HTTP header name used to pass the session ID.
-const sessionIDHeader = "X-Session-Id"
+// sessionIDCookie is the cookie name used to pass the session ID.
+const sessionIDCookie = "session_id"
+
+// errMissingSessionCookie is the error message returned when the session_id cookie is absent.
+const errMissingSessionCookie = "missing session_id cookie"
 
 // executeRequest is the JSON body for POST /api/execute.
 type executeRequest struct {
@@ -71,12 +74,12 @@ func handleCreateSession(sm *SessionManager) gin.HandlerFunc {
 }
 
 // handleDeleteSession returns a gin handler for DELETE /api/session.
-// It deletes the session specified by X-Session-Id header.
+// It deletes the session specified by session_id cookie.
 func handleDeleteSession(sm *SessionManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id := c.GetHeader(sessionIDHeader)
-		if id == "" {
-			c.JSON(http.StatusBadRequest, errorResponse{Error: "missing X-Session-Id header"})
+		id, err := c.Cookie(sessionIDCookie)
+		if err != nil || id == "" {
+			c.JSON(http.StatusBadRequest, errorResponse{Error: errMissingSessionCookie})
 			return
 		}
 		if err := sm.Delete(id); err != nil {
@@ -97,9 +100,9 @@ func handleDeleteSession(sm *SessionManager) gin.HandlerFunc {
 // and commands that fail validation are rejected with 403.
 func handleExecute(sm *SessionManager, v Validator) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id := c.GetHeader(sessionIDHeader)
-		if id == "" {
-			c.JSON(http.StatusBadRequest, errorResponse{Error: "missing X-Session-Id header"})
+		id, err := c.Cookie(sessionIDCookie)
+		if err != nil || id == "" {
+			c.JSON(http.StatusBadRequest, errorResponse{Error: errMissingSessionCookie})
 			return
 		}
 

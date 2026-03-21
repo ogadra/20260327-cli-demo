@@ -52,7 +52,7 @@ func executeCommand(t *testing.T, ts *httptest.Server, sessionID, command string
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	req.Header.Set(sessionIDHeader, sessionID)
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST /api/execute error: %v", err)
@@ -158,7 +158,7 @@ func TestIntegrationRejectedCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	req.Header.Set(sessionIDHeader, sid)
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: sid})
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST /api/execute error: %v", err)
@@ -186,7 +186,7 @@ func TestIntegrationExecuteAfterDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	delReq.Header.Set(sessionIDHeader, sid)
+	delReq.AddCookie(&http.Cookie{Name: "session_id", Value: sid})
 	delResp, err := http.DefaultClient.Do(delReq)
 	if err != nil {
 		t.Fatalf("DELETE error: %v", err)
@@ -199,7 +199,7 @@ func TestIntegrationExecuteAfterDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	execReq.Header.Set(sessionIDHeader, sid)
+	execReq.AddCookie(&http.Cookie{Name: "session_id", Value: sid})
 	execResp, err := http.DefaultClient.Do(execReq)
 	if err != nil {
 		t.Fatalf("POST /api/execute error: %v", err)
@@ -264,7 +264,7 @@ func TestIntegrationCreateDeleteLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	delReq.Header.Set(sessionIDHeader, sid)
+	delReq.AddCookie(&http.Cookie{Name: "session_id", Value: sid})
 	delResp, err := http.DefaultClient.Do(delReq)
 	if err != nil {
 		t.Fatalf("DELETE error: %v", err)
@@ -280,7 +280,7 @@ func TestIntegrationCreateDeleteLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	execReq.Header.Set(sessionIDHeader, sid)
+	execReq.AddCookie(&http.Cookie{Name: "session_id", Value: sid})
 	execResp, err := http.DefaultClient.Do(execReq)
 	if err != nil {
 		t.Fatalf("POST /api/execute error: %v", err)
@@ -318,7 +318,7 @@ func TestIntegrationConcurrentExecute(t *testing.T) {
 				errs[i] = err
 				return
 			}
-			req.Header.Set(sessionIDHeader, sid)
+			req.AddCookie(&http.Cookie{Name: "session_id", Value: sid})
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
 				errs[i] = err
