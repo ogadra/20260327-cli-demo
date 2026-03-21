@@ -2,6 +2,9 @@ name: Broker
 
 on:
   push:
+    branches:
+      - main
+  pull_request:
     paths:
       - "broker/**"
       - ".github/workflows/broker.yml"
