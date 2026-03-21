@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +12,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/ogadra/20260327-cli-demo/broker/handler"
 )
 
 // saveAndRestore は全てのパッケージレベル変数を退避し、テスト終了時に復元する。
@@ -20,13 +26,18 @@ func saveAndRestore(t *testing.T) {
 	origShutdownTimeout := shutdownTimeout
 	origFatalf := fatalf
 	origSignalNotify := signalNotify
+	origInitHandler := initHandler
+	origLoadAWSConfig := loadAWSConfig
 	t.Cleanup(func() {
 		stdout = origStdout
 		addr = origAddr
 		shutdownTimeout = origShutdownTimeout
 		fatalf = origFatalf
 		signalNotify = origSignalNotify
+		initHandler = origInitHandler
+		loadAWSConfig = origLoadAWSConfig
 	})
+	initHandler = func() (*handler.Handler, error) { return nil, nil }
 }
 
 // TestHealthEndpoint は GET /health が 200 OK を返すことを検証する。
@@ -125,6 +136,164 @@ func TestMainSuccess(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	sigCh <- os.Interrupt
 	<-done
+}
+
+// TestRunInitHandlerError は initHandler がエラーを返す場合に run がエラーを返すことを検証する。
+func TestRunInitHandlerError(t *testing.T) {
+	saveAndRestore(t)
+
+	stdout = io.Discard
+	initHandler = func() (*handler.Handler, error) {
+		return nil, errors.New("init failed")
+	}
+
+	err := run()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "init handler") {
+		t.Errorf("error = %q, want to contain %q", err.Error(), "init handler")
+	}
+}
+
+// TestDefaultInitHandler は defaultInitHandler が全環境変数指定時に Handler を返すことを検証する。
+func TestDefaultInitHandler(t *testing.T) {
+	saveAndRestore(t)
+
+	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
+	t.Setenv("AWS_REGION", "ap-northeast-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", "localdev")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "localdev")
+
+	h, err := defaultInitHandler()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if h == nil {
+		t.Fatal("expected non-nil handler")
+	}
+}
+
+// TestDefaultInitHandler_MissingRegion は AWS_REGION が未設定時にエラーを返すことを検証する。
+func TestDefaultInitHandler_MissingRegion(t *testing.T) {
+	saveAndRestore(t)
+
+	t.Setenv("AWS_REGION", "")
+
+	_, err := defaultInitHandler()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "AWS_REGION") {
+		t.Errorf("error = %q, want to contain %q", err.Error(), "AWS_REGION")
+	}
+}
+
+// TestDefaultInitHandler_WithoutStaticCredentials は静的クレデンシャルなしでも Handler を返すことを検証する。
+func TestDefaultInitHandler_WithoutStaticCredentials(t *testing.T) {
+	saveAndRestore(t)
+
+	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
+	t.Setenv("AWS_REGION", "ap-northeast-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", "")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "")
+
+	h, err := defaultInitHandler()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if h == nil {
+		t.Fatal("expected non-nil handler")
+	}
+}
+
+// TestDefaultInitHandler_WithoutEndpoint は DYNAMODB_ENDPOINT なしでも Handler を返すことを検証する。
+func TestDefaultInitHandler_WithoutEndpoint(t *testing.T) {
+	saveAndRestore(t)
+
+	t.Setenv("DYNAMODB_ENDPOINT", "")
+	t.Setenv("AWS_REGION", "ap-northeast-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", "localdev")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "localdev")
+
+	h, err := defaultInitHandler()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if h == nil {
+		t.Fatal("expected non-nil handler")
+	}
+}
+
+// TestDefaultInitHandler_PartialCredentials は片側のクレデンシャルのみ設定時にエラーを返すことを検証する。
+func TestDefaultInitHandler_PartialCredentials(t *testing.T) {
+	saveAndRestore(t)
+
+	t.Setenv("AWS_REGION", "ap-northeast-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", "localdev")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "")
+
+	_, err := defaultInitHandler()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "AWS_ACCESS_KEY_ID") || !strings.Contains(err.Error(), "AWS_SECRET_ACCESS_KEY") {
+		t.Errorf("error = %q, want to mention both credential keys", err.Error())
+	}
+}
+
+// TestNewRouter_WithHandler は handler が non-nil の場合に全ルートが登録されることを検証する。
+func TestNewRouter_WithHandler(t *testing.T) {
+	saveAndRestore(t)
+
+	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
+	t.Setenv("AWS_REGION", "ap-northeast-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", "localdev")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "localdev")
+	h, err := defaultInitHandler()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	r := newRouter(h)
+
+	routes := r.Routes()
+	expected := map[string]string{
+		"GET /health":                        "",
+		"POST /sessions":                     "",
+		"DELETE /sessions/:sessionId":        "",
+		"GET /resolve":                       "",
+		"POST /internal/runners/register":    "",
+		"DELETE /internal/runners/:runnerId": "",
+	}
+	for _, route := range routes {
+		key := route.Method + " " + route.Path
+		delete(expected, key)
+	}
+	for key := range expected {
+		t.Errorf("missing route: %s", key)
+	}
+}
+
+// TestDefaultInitHandler_LoadConfigError は AWS config ロードが失敗した場合にエラーを返すことを検証する。
+func TestDefaultInitHandler_LoadConfigError(t *testing.T) {
+	saveAndRestore(t)
+
+	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:18000")
+	t.Setenv("AWS_REGION", "ap-northeast-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", "localdev")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "localdev")
+	loadAWSConfig = func(_ context.Context, _ ...func(*config.LoadOptions) error) (aws.Config, error) {
+		return aws.Config{}, errors.New("config load failed")
+	}
+
+	_, err := defaultInitHandler()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "load aws config") {
+		t.Errorf("error = %q, want to contain %q", err.Error(), "load aws config")
+	}
 }
 
 // TestMainServerError は main がサーバー起動失敗時に fatalf を呼ぶことを検証する。

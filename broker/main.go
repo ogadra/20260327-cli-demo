@@ -12,8 +12,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/gin-gonic/gin"
 	"github.com/ogadra/20260327-cli-demo/broker/handler"
+	"github.com/ogadra/20260327-cli-demo/broker/service"
+	"github.com/ogadra/20260327-cli-demo/broker/store"
 )
 
 // newRouter は broker の HTTP ルーティングを構成した gin.Engine を返す。
@@ -49,9 +55,58 @@ var fatalf = log.Fatalf
 // signalNotify は os/signal.Notify のラッパー。テスト時に差し替える。
 var signalNotify = signal.Notify
 
+// initHandler は DynamoDB クライアントを初期化し Handler を生成する関数。テスト時に差し替える。
+var initHandler = defaultInitHandler
+
+// loadAWSConfig は AWS SDK の設定をロードする関数。テスト時に差し替える。
+var loadAWSConfig = config.LoadDefaultConfig
+
+// defaultInitHandler は環境変数から DynamoDB クライアントを構築し Handler を返す。
+func defaultInitHandler() (*handler.Handler, error) {
+	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		return nil, fmt.Errorf("missing required environment variable: AWS_REGION")
+	}
+
+	accessKey := os.Getenv("AWS_ACCESS_KEY_ID")
+	secretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	if (accessKey == "") != (secretKey == "") {
+		return nil, fmt.Errorf("AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must both be set or both be empty")
+	}
+
+	opts := []func(*config.LoadOptions) error{
+		config.WithRegion(region),
+	}
+	if accessKey != "" {
+		opts = append(opts, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")))
+	}
+
+	ctx := context.Background()
+	cfg, err := loadAWSConfig(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("load aws config: %w", err)
+	}
+
+	endpoint := os.Getenv("DYNAMODB_ENDPOINT")
+	var ddbOpts []func(*dynamodb.Options)
+	if endpoint != "" {
+		ddbOpts = append(ddbOpts, func(o *dynamodb.Options) {
+			o.BaseEndpoint = aws.String(endpoint)
+		})
+	}
+	client := dynamodb.NewFromConfig(cfg, ddbOpts...)
+	repo := store.NewDynamoRepository(client, "Runners")
+	svc := service.NewBrokerService(repo)
+	return handler.NewHandler(svc), nil
+}
+
 // run はサーバーの起動とグレースフルシャットダウンを行う。
 func run() error {
-	r := newRouter(nil)
+	h, err := initHandler()
+	if err != nil {
+		return fmt.Errorf("init handler: %w", err)
+	}
+	r := newRouter(h)
 
 	srv := &http.Server{
 		Addr:    addr,
