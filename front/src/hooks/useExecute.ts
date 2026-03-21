@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import { useCallback, useRef, useState } from "react";
 import { execute, SseEventType, type SseEvent } from "../api/client";
 import type { TerminalHandle } from "../components/Terminal";
@@ -17,7 +18,7 @@ interface UseExecuteResult {
  */
 export const useExecute = (
   sessionId: string | null,
-  terminalRef: React.RefObject<TerminalHandle | null>,
+  terminalRef: RefObject<TerminalHandle | null>,
 ): UseExecuteResult => {
   const [running, setRunning] = useState(false);
   const runningRef = useRef(false);
@@ -49,10 +50,7 @@ export const useExecute = (
 };
 
 /** Write an SSE event to the terminal, colouring stderr and non-zero exit codes red. */
-const handleEvent = (
-  event: SseEvent,
-  terminalRef: React.RefObject<TerminalHandle | null>,
-): void => {
+const handleEvent = (event: SseEvent, terminalRef: RefObject<TerminalHandle | null>): void => {
   switch (event.type) {
     case SseEventType.STDOUT:
       terminalRef.current?.write(event.data);

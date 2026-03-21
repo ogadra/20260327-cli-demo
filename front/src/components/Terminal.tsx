@@ -3,11 +3,15 @@ import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 
+/** Imperative handle exposed by the Terminal component via ref. */
 export interface TerminalHandle {
+  /** Write raw data to the terminal. */
   write(data: string): void;
+  /** Write data followed by a newline to the terminal. */
   writeln(data: string): void;
 }
 
+/** xterm.js terminal component with auto-fit on resize. */
 const Terminal = forwardRef<TerminalHandle>((_, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
