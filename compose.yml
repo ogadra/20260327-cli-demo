@@ -16,8 +16,8 @@ services:
     env_file:
       - broker/.env.example
     depends_on:
-      dynamodb-local:
-        condition: service_healthy
+      dynamodb-init:
+        condition: service_completed_successfully
     profiles:
       - broker
 
@@ -28,8 +28,8 @@ services:
     env_file:
       - broker/.env.example
     depends_on:
-      dynamodb-local:
-        condition: service_healthy
+      dynamodb-init:
+        condition: service_completed_successfully
     profiles:
       - test
 
@@ -52,6 +52,18 @@ services:
       - runner/.env.example
     profiles:
       - runner
+
+  dynamodb-init:
+    image: hashicorp/terraform:1.14
+    entrypoint: ["sh", "-c", "cp -r /src /work && cd /work && terraform init -input=false && terraform apply -auto-approve -input=false"]
+    volumes:
+      - ./terraform:/src:ro
+    depends_on:
+      dynamodb-local:
+        condition: service_healthy
+    profiles:
+      - broker
+      - test
 
   dynamodb-local:
     image: amazon/dynamodb-local:3.3.0
