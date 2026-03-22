@@ -401,6 +401,37 @@ func TestStartIdentityError(t *testing.T) {
 	}
 }
 
+// TestStartPortParsing verifies that start correctly extracts the port from
+// addresses with a host component like 127.0.0.1:12345.
+func TestStartPortParsing(t *testing.T) {
+	orig := resolveIdentityFn
+	defer func() { resolveIdentityFn = orig }()
+
+	var gotPort string
+	resolveIdentityFn = func(ctx context.Context, deps identityDeps) (Identity, error) {
+		gotPort = deps.port
+		return Identity{}, errors.New("stop here")
+	}
+
+	start("127.0.0.1:4567")
+
+	if gotPort != "4567" {
+		t.Fatalf("port = %q, want %q", gotPort, "4567")
+	}
+}
+
+// TestStartInvalidAddress verifies that start returns an error when the
+// address cannot be parsed by net.SplitHostPort.
+func TestStartInvalidAddress(t *testing.T) {
+	err := start("invalid-no-port")
+	if err == nil {
+		t.Fatal("start should return error for invalid address")
+	}
+	if !strings.Contains(err.Error(), "parse address") {
+		t.Fatalf("error should mention parse address, got: %v", err)
+	}
+}
+
 // waitForServer polls the given address with a TCP dial until it accepts a connection or times out.
 // It uses a raw TCP connection instead of an HTTP request to avoid side effects such as creating sessions.
 func waitForServer(t *testing.T, addr string) {
