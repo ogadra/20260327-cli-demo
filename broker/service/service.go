@@ -18,8 +18,6 @@ var randReader io.Reader = rand.Reader
 
 // Service はブローカーのビジネスロジックを定義するインターフェース。
 type Service interface {
-	// CreateSession は idle runner を確保しセッションを作成する。
-	CreateSession(ctx context.Context) (*CreateSessionResult, error)
 	// CloseSession はセッションを終了し紐づく runner を削除する。
 	CloseSession(ctx context.Context, sessionID string) error
 	// ResolveSession はセッション ID から runner のプライベート URL を返す。
@@ -89,8 +87,8 @@ func defaultSessionFn() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// CreateSession は idle runner を確保しセッションを作成する。
-func (s *BrokerService) CreateSession(ctx context.Context) (*CreateSessionResult, error) {
+// createSession は idle runner を確保しセッションを作成する。ResolveOrCreateSession から呼ばれる。
+func (s *BrokerService) createSession(ctx context.Context) (*CreateSessionResult, error) {
 	sessionID, err := s.sessionFn()
 	if err != nil {
 		return nil, err
@@ -132,7 +130,7 @@ func (s *BrokerService) ResolveOrCreateSession(ctx context.Context, sessionID st
 			return nil, err
 		}
 	}
-	result, err := s.CreateSession(ctx)
+	result, err := s.createSession(ctx)
 	if err != nil {
 		return nil, err
 	}

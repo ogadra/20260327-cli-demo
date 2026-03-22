@@ -36,22 +36,6 @@ type registerRequest struct {
 	PrivateURL string `json:"privateUrl" binding:"required"`
 }
 
-// PostSessions は POST /sessions を処理しセッションを作成する。
-func (h *Handler) PostSessions(c *gin.Context) {
-	result, err := h.svc.CreateSession(c.Request.Context())
-	if err != nil {
-		if errors.Is(err, store.ErrNoIdleRunner) {
-			writeError(c, http.StatusServiceUnavailable, model.CodeNoIdleRunner, "no idle runner available")
-			return
-		}
-		writeError(c, http.StatusInternalServerError, model.CodeInternalError, "failed to create session")
-		return
-	}
-	c.SetSameSite(http.SameSiteStrictMode)
-	c.SetCookie(runnerIDCookie, result.SessionID, 0, "/", "", true, true)
-	c.JSON(http.StatusCreated, gin.H{"sessionId": result.SessionID})
-}
-
 // DeleteSession は DELETE /sessions/:sessionId を処理しセッションを終了する。
 func (h *Handler) DeleteSession(c *gin.Context) {
 	sessionID := c.Param("sessionId")

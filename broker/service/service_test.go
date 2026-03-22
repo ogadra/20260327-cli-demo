@@ -167,7 +167,7 @@ func TestCreateSession_Success(t *testing.T) {
 		return "fixed-session", nil
 	}))
 
-	result, err := svc.CreateSession(context.Background())
+	result, err := svc.createSession(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestCreateSession_SessionFnError(t *testing.T) {
 		return "", errors.New("rand error")
 	}))
 
-	_, err := svc.CreateSession(context.Background())
+	_, err := svc.createSession(context.Background())
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -204,7 +204,7 @@ func TestCreateSession_AcquireIdleError(t *testing.T) {
 		return "sess-1", nil
 	}))
 
-	_, err := svc.CreateSession(context.Background())
+	_, err := svc.createSession(context.Background())
 	if !errors.Is(err, store.ErrNoIdleRunner) {
 		t.Fatalf("expected ErrNoIdleRunner, got: %v", err)
 	}

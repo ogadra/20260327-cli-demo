@@ -260,7 +260,6 @@ func TestNewRouter_WithHandler(t *testing.T) {
 	routes := r.Routes()
 	expected := map[string]string{
 		"GET /health":                        "",
-		"POST /sessions":                     "",
 		"DELETE /sessions/:sessionId":        "",
 		"GET /resolve":                       "",
 		"POST /internal/runners/register":    "",
