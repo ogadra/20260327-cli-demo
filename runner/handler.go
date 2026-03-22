@@ -64,7 +64,7 @@ func handleCreateSession(sm *SessionManager) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, errorResponse{Error: err.Error()})
 			return
 		}
-		c.SetSameSite(http.SameSiteLaxMode)
+		c.SetSameSite(http.SameSiteStrictMode)
 		c.SetCookie(sessionIDCookie, id, 0, "/", "", true, true)
 		c.Status(http.StatusNoContent)
 	}

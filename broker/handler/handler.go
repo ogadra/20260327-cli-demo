@@ -47,7 +47,7 @@ func (h *Handler) PostSessions(c *gin.Context) {
 		writeError(c, http.StatusInternalServerError, model.CodeInternalError, "failed to create session")
 		return
 	}
-	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetSameSite(http.SameSiteStrictMode)
 	c.SetCookie(runnerIDCookie, result.SessionID, 0, "/", "", true, true)
 	c.JSON(http.StatusCreated, gin.H{"sessionId": result.SessionID})
 }

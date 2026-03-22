@@ -522,6 +522,9 @@ func TestPostSessions_CookieSecure(t *testing.T) {
 			if !c.HttpOnly {
 				t.Error("expected HttpOnly=true on runner_id cookie")
 			}
+			if c.SameSite != http.SameSiteStrictMode {
+				t.Errorf("expected SameSite=Strict on runner_id cookie, got %v", c.SameSite)
+			}
 			return
 		}
 	}

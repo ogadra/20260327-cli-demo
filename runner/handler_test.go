@@ -47,8 +47,8 @@ func TestCreateSession(t *testing.T) {
 			if !c.Secure {
 				t.Error("cookie Secure = false, want true")
 			}
-			if c.SameSite != http.SameSiteLaxMode {
-				t.Errorf("cookie SameSite = %v, want %v", c.SameSite, http.SameSiteLaxMode)
+			if c.SameSite != http.SameSiteStrictMode {
+				t.Errorf("cookie SameSite = %v, want %v", c.SameSite, http.SameSiteStrictMode)
 			}
 			break
 		}
