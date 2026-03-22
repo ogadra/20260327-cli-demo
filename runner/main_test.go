@@ -430,15 +430,22 @@ func TestStartPortParsing(t *testing.T) {
 	}
 }
 
-// TestStartInvalidAddress verifies that start returns an error when the
-// address cannot be parsed by net.SplitHostPort.
-func TestStartInvalidAddress(t *testing.T) {
-	err := start("invalid-no-port")
-	if err == nil {
-		t.Fatal("start should return error for invalid address")
+// TestStartEphemeralPort verifies that start resolves the actual port when
+// the listen address uses port 0 to request an ephemeral port from the OS.
+func TestStartEphemeralPort(t *testing.T) {
+	orig := resolveIdentityFn
+	defer func() { resolveIdentityFn = orig }()
+
+	var gotPort string
+	resolveIdentityFn = func(ctx context.Context, deps identityDeps) (Identity, error) {
+		gotPort = deps.port
+		return Identity{}, errors.New("stop here")
 	}
-	if !strings.Contains(err.Error(), "parse address") {
-		t.Fatalf("error should mention parse address, got: %v", err)
+
+	start(":0")
+
+	if gotPort == "0" || gotPort == "" {
+		t.Fatalf("port should be resolved to actual ephemeral port, got %q", gotPort)
 	}
 }
 

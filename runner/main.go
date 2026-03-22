@@ -39,15 +39,12 @@ func main() {
 // registers signal handlers, and runs the server until a termination
 // signal is received. It returns any error from the server lifecycle.
 func start(addr string) error {
-	_, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return fmt.Errorf("parse address: %w", err)
-	}
-
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
+
+	_, port, _ := net.SplitHostPort(ln.Addr().String())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
