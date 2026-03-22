@@ -54,10 +54,13 @@ services:
       - runner
 
   dynamodb-init:
-    image: hashicorp/terraform:1.14
-    entrypoint: ["sh", "-c", "cp -r /src /work && cd /work && terraform init -input=false && terraform apply -auto-approve -input=false"]
+    image: amazon/aws-cli:2.27.28
+    entrypoint: ["sh", "/init/create-table.sh"]
     volumes:
-      - ./terraform:/src:ro
+      - ./init/create-table.sh:/init/create-table.sh:ro
+    environment:
+      AWS_ACCESS_KEY_ID: dummy
+      AWS_SECRET_ACCESS_KEY: dummy
     depends_on:
       dynamodb-local:
         condition: service_healthy
