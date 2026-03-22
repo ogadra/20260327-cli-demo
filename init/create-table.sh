@@ -5,7 +5,7 @@ set -eu
 
 ENDPOINT="http://dynamodb-local:8000"
 
-aws dynamodb create-table \
+OUTPUT=$(aws dynamodb create-table \
   --endpoint-url "$ENDPOINT" \
   --table-name Runners \
   --billing-mode PAY_PER_REQUEST \
@@ -17,5 +17,7 @@ aws dynamodb create-table \
   --global-secondary-indexes \
     'IndexName=session-index,KeySchema=[{AttributeName=currentSessionId,KeyType=HASH}],Projection={ProjectionType=ALL}' \
     'IndexName=idle-index,KeySchema=[{AttributeName=idleBucket,KeyType=HASH}],Projection={ProjectionType=ALL}' \
-  --region ap-northeast-1 \
-|| true
+  --region ap-northeast-1 2>&1) && echo "$OUTPUT" || {
+  echo "$OUTPUT" >&2
+  echo "$OUTPUT" | grep -q "ResourceInUseException"
+}
