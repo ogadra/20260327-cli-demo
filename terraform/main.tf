@@ -68,4 +68,11 @@ resource "aws_dynamodb_table" "runners" {
     # See: https://github.com/ogadra/20260327-cli-demo/issues/12
     projection_type = "ALL"
   }
+
+  tags = {
+    Project     = "Bunshin"
+    Environment = "shared"
+    Service     = "broker"
+    ManagedBy   = "terraform"
+  }
 }
