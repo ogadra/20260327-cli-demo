@@ -337,12 +337,16 @@ func TestRunShutdownTimeout(t *testing.T) {
 
 // TestStartAndShutdown verifies that start binds to the given address and
 // shuts down when SIGTERM is delivered to the process.
+// registerFn is replaced with a no-op to avoid race conditions caused by
+// leftover SIGTERM signals from other tests canceling the registration context.
 func TestStartAndShutdown(t *testing.T) {
-	broker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusCreated)
-	}))
-	defer broker.Close()
-	t.Setenv("BROKER_URL", broker.URL)
+	t.Setenv("BROKER_URL", "http://dummy:8080")
+
+	origReg := registerFn
+	defer func() { registerFn = origReg }()
+	registerFn = func(ctx context.Context, deps registerDeps) error {
+		return nil
+	}
 
 	// Reserve a free port, then release it so start can bind to it.
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
