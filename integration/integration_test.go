@@ -177,17 +177,18 @@ func TestSmoke_CreateSessionAndExecute(t *testing.T) {
 
 	events := executeCommand(t, base, cookies, "pwd")
 
-	var hasStdout, hasComplete bool
+	var stdout string
+	var hasComplete bool
 	for _, e := range events {
-		if e.Type == "stdout" && strings.TrimSpace(e.Data) != "" {
-			hasStdout = true
+		if e.Type == "stdout" {
+			stdout += e.Data
 		}
 		if e.Type == "complete" && e.ExitCode != nil && *e.ExitCode == 0 {
 			hasComplete = true
 		}
 	}
-	if !hasStdout {
-		t.Errorf("stdout event not found in events: %+v", events)
+	if got := strings.TrimSpace(stdout); got != "/" {
+		t.Errorf("pwd output: want %q, got %q (events: %+v)", "/", got, events)
 	}
 	if !hasComplete {
 		t.Errorf("complete event with exitCode=0 not found in events: %+v", events)
