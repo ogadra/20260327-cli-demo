@@ -42,8 +42,9 @@ describe("useExecute", () => {
       await result.current.run("echo hello");
     });
 
-    expect(termRef.current.writeln).toHaveBeenCalledWith("$ echo hello");
+    expect(termRef.current.writeln).toHaveBeenCalledWith("echo hello");
     expect(termRef.current.write).toHaveBeenCalledWith("hello\n");
+    expect(termRef.current.write).toHaveBeenCalledWith("$ ");
   });
 
   it("writes stderr in red", async () => {
@@ -63,6 +64,7 @@ describe("useExecute", () => {
 
     expect(termRef.current.write).toHaveBeenCalledWith("\x1b[31merr\n\x1b[0m");
     expect(termRef.current.writeln).toHaveBeenCalledWith("\x1b[31mexit code: 1\x1b[0m");
+    expect(termRef.current.write).toHaveBeenCalledWith("$ ");
   });
 
   it("does not run when session is not ready", async () => {
@@ -125,5 +127,6 @@ describe("useExecute", () => {
     expect(termRef.current.writeln).toHaveBeenCalledWith(
       "\x1b[31mError: connection refused\x1b[0m",
     );
+    expect(termRef.current.write).toHaveBeenCalledWith("$ ");
   });
 });

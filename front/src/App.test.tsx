@@ -10,10 +10,12 @@ vi.mock("./hooks/useExecute", () => ({
   useExecute: () => ({ run: vi.fn(), running: false }),
 }));
 
+const mockWrite = vi.fn();
+
 vi.mock("@xterm/xterm", () => {
   return {
     Terminal: class {
-      write = vi.fn();
+      write = mockWrite;
       writeln = vi.fn();
       open = vi.fn();
       dispose = vi.fn();
@@ -36,6 +38,12 @@ describe("App", () => {
   it("renders command input", () => {
     render(<App />);
     expect(screen.getByPlaceholderText("Enter command...")).toBeInTheDocument();
+  });
+
+  it("writes initial prompt when session is ready", () => {
+    mockWrite.mockClear();
+    render(<App />);
+    expect(mockWrite).toHaveBeenCalledWith("$ ");
   });
 
   it("disables input when session is not ready", async () => {

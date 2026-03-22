@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useCallback, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 /** Props for the CommandInput component. */
 interface Props {
@@ -12,8 +12,15 @@ interface Props {
 /** Text input with command history navigable via arrow keys. */
 const CommandInput = ({ onSubmit, disabled }: Props): ReactNode => {
   const [value, setValue] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
   const historyRef = useRef<string[]>([]);
   const historyIndexRef = useRef(-1);
+
+  useEffect(() => {
+    if (!disabled) {
+      inputRef.current?.focus();
+    }
+  }, [disabled]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
@@ -23,6 +30,7 @@ const CommandInput = ({ onSubmit, disabled }: Props): ReactNode => {
         historyIndexRef.current = historyRef.current.length;
         onSubmit(trimmed);
         setValue("");
+        requestAnimationFrame(() => inputRef.current?.focus());
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         if (historyIndexRef.current > 0) {
@@ -46,6 +54,7 @@ const CommandInput = ({ onSubmit, disabled }: Props): ReactNode => {
 
   return (
     <input
+      ref={inputRef}
       type="text"
       value={value}
       onChange={(e) => setValue(e.target.value)}
