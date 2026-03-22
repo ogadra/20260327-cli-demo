@@ -77,7 +77,7 @@ func (h *Handler) GetResolve(c *gin.Context) {
 	url, err := h.svc.ResolveSession(c.Request.Context(), sessionID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			writeError(c, http.StatusNotFound, model.CodeSessionNotFound, "session not found")
+			writeError(c, http.StatusUnauthorized, model.CodeSessionNotFound, "session not found")
 			return
 		}
 		writeError(c, http.StatusInternalServerError, model.CodeInternalError, "failed to resolve session")
