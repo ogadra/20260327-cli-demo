@@ -17,10 +17,16 @@ import (
 // and can be replaced in tests to avoid os.Exit.
 var fatalf = log.Fatalf
 
-// main starts the HTTP server on :3000 with graceful shutdown on SIGTERM/SIGINT.
+// main reads the RUNNER_PORT environment variable and starts the HTTP server
+// with graceful shutdown on SIGTERM/SIGINT.
 // The empty host binds to all interfaces, which is intentional for use inside a Docker container.
 func main() {
-	if err := start(":3000"); err != nil {
+	port := os.Getenv("RUNNER_PORT")
+	if port == "" {
+		fatalf("missing required environment variable: RUNNER_PORT")
+		return
+	}
+	if err := start(":" + port); err != nil {
 		fatalf("server error: %v", err)
 	}
 }

@@ -14,7 +14,7 @@ services:
     ports:
       - "8080:8080"
     env_file:
-      - .env.example
+      - broker/.env.example
     depends_on:
       dynamodb-local:
         condition: service_healthy
@@ -26,7 +26,7 @@ services:
       context: broker/
       target: test-integration
     env_file:
-      - .env.example
+      - broker/.env.example
     depends_on:
       dynamodb-local:
         condition: service_healthy
@@ -50,6 +50,8 @@ services:
     build: runner/
     ports:
       - "3000:3000"
+    env_file:
+      - runner/.env.example
     profiles:
       - runner
 

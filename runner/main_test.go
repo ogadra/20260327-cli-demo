@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -16,8 +17,10 @@ import (
 
 // TestMainSuccess verifies that main completes without calling fatalf
 // when start succeeds. It sends SIGTERM to the current process because
-// main hard-codes the address and signal handler, making injection impractical.
+// main reads RUNNER_PORT and calls start, making injection impractical.
 func TestMainSuccess(t *testing.T) {
+	t.Setenv("RUNNER_PORT", "3000")
+
 	orig := fatalf
 	defer func() { fatalf = orig }()
 
@@ -44,8 +47,10 @@ func TestMainSuccess(t *testing.T) {
 }
 
 // TestMainError verifies that main calls fatalf when start returns an error,
-// such as when the default port :3000 is already in use.
+// such as when the configured port is already in use.
 func TestMainError(t *testing.T) {
+	t.Setenv("RUNNER_PORT", "3000")
+
 	// Occupy :3000 to make start fail.
 	ln, err := net.Listen("tcp", ":3000")
 	if err != nil {
@@ -67,6 +72,30 @@ func TestMainError(t *testing.T) {
 
 	if !called {
 		t.Fatal("fatalf should have been called when start fails")
+	}
+}
+
+// TestMainMissingPort verifies that main calls fatalf when RUNNER_PORT is not set.
+func TestMainMissingPort(t *testing.T) {
+	t.Setenv("RUNNER_PORT", "")
+
+	orig := fatalf
+	defer func() { fatalf = orig }()
+
+	var called bool
+	var msg string
+	fatalf = func(format string, args ...any) {
+		called = true
+		msg = fmt.Sprintf(format, args...)
+	}
+
+	main()
+
+	if !called {
+		t.Fatal("fatalf should have been called when RUNNER_PORT is missing")
+	}
+	if !strings.Contains(msg, "RUNNER_PORT") {
+		t.Fatalf("fatalf message should mention RUNNER_PORT, got: %s", msg)
 	}
 }
 
