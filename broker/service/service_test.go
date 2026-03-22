@@ -379,3 +379,128 @@ func TestDeregisterRunner_Error(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+// TestResolveOrCreateSession_ExistingSession は既存セッションの解決を検証する。
+func TestResolveOrCreateSession_ExistingSession(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepository{
+		findBySessionIDFn: func(_ context.Context, sessionID string) (*model.Runner, error) {
+			return &model.Runner{RunnerID: "r1", PrivateURL: "http://10.0.0.1:8080"}, nil
+		},
+	}
+	svc := NewBrokerService(repo)
+
+	result, err := svc.ResolveOrCreateSession(context.Background(), "sess-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Created {
+		t.Error("expected Created=false for existing session")
+	}
+	if result.SessionID != "sess-1" {
+		t.Errorf("SessionID = %q, want %q", result.SessionID, "sess-1")
+	}
+	if result.RunnerURL != "http://10.0.0.1:8080" {
+		t.Errorf("RunnerURL = %q, want %q", result.RunnerURL, "http://10.0.0.1:8080")
+	}
+}
+
+// TestResolveOrCreateSession_NotFound_CreatesNew はセッションが見つからない場合に新規作成することを検証する。
+func TestResolveOrCreateSession_NotFound_CreatesNew(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepository{
+		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
+			return nil, store.ErrNotFound
+		},
+		acquireIdleFn: func(_ context.Context, sessionID string) (*model.Runner, error) {
+			return &model.Runner{
+				RunnerID:         "r2",
+				CurrentSessionID: sessionID,
+				PrivateURL:       "http://10.0.0.2:8080",
+			}, nil
+		},
+	}
+	svc := NewBrokerService(repo, WithSessionFn(func() (string, error) {
+		return "new-session", nil
+	}))
+
+	result, err := svc.ResolveOrCreateSession(context.Background(), "sess-missing")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.Created {
+		t.Error("expected Created=true for new session")
+	}
+	if result.SessionID != "new-session" {
+		t.Errorf("SessionID = %q, want %q", result.SessionID, "new-session")
+	}
+	if result.RunnerURL != "http://10.0.0.2:8080" {
+		t.Errorf("RunnerURL = %q, want %q", result.RunnerURL, "http://10.0.0.2:8080")
+	}
+}
+
+// TestResolveOrCreateSession_FindInternalError は FindBySessionID の内部エラーを検証する。
+func TestResolveOrCreateSession_FindInternalError(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepository{
+		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
+			return nil, errors.New("db error")
+		},
+	}
+	svc := NewBrokerService(repo)
+
+	_, err := svc.ResolveOrCreateSession(context.Background(), "sess-1")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// TestResolveOrCreateSession_CreateError は新規作成時のエラーを検証する。
+func TestResolveOrCreateSession_CreateError(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepository{
+		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
+			return nil, store.ErrNotFound
+		},
+		acquireIdleFn: func(_ context.Context, _ string) (*model.Runner, error) {
+			return nil, store.ErrNoIdleRunner
+		},
+	}
+	svc := NewBrokerService(repo, WithSessionFn(func() (string, error) {
+		return "new-session", nil
+	}))
+
+	_, err := svc.ResolveOrCreateSession(context.Background(), "sess-missing")
+	if !errors.Is(err, store.ErrNoIdleRunner) {
+		t.Fatalf("expected ErrNoIdleRunner, got: %v", err)
+	}
+}
+
+// TestResolveOrCreateSession_EmptySessionID は空のセッション ID で FindBySessionID をスキップして新規作成されることを検証する。
+func TestResolveOrCreateSession_EmptySessionID(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepository{
+		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
+			t.Fatal("FindBySessionID should not be called for empty session ID")
+			return nil, store.ErrNotFound
+		},
+		acquireIdleFn: func(_ context.Context, sessionID string) (*model.Runner, error) {
+			return &model.Runner{
+				RunnerID:         "r1",
+				CurrentSessionID: sessionID,
+				PrivateURL:       "http://10.0.0.1:8080",
+			}, nil
+		},
+	}
+	svc := NewBrokerService(repo, WithSessionFn(func() (string, error) {
+		return "new-session", nil
+	}))
+
+	result, err := svc.ResolveOrCreateSession(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.Created {
+		t.Error("expected Created=true")
+	}
+}

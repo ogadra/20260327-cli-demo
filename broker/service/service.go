@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 
@@ -23,10 +24,22 @@ type Service interface {
 	CloseSession(ctx context.Context, sessionID string) error
 	// ResolveSession はセッション ID から runner のプライベート URL を返す。
 	ResolveSession(ctx context.Context, sessionID string) (string, error)
+	// ResolveOrCreateSession はセッション ID から runner を解決し、見つからなければ新規作成する。
+	ResolveOrCreateSession(ctx context.Context, sessionID string) (*ResolveResult, error)
 	// RegisterRunner は runner を idle として登録する。
 	RegisterRunner(ctx context.Context, runnerID, privateURL string) error
 	// DeregisterRunner は runner を削除する。
 	DeregisterRunner(ctx context.Context, runnerID string) error
+}
+
+// ResolveResult はセッション解決または作成の結果を表す。
+type ResolveResult struct {
+	// SessionID はセッション ID。新規作成時は新しい ID、既存時は入力と同じ値。
+	SessionID string
+	// RunnerURL は runner のプライベート URL。
+	RunnerURL string
+	// Created は新規作成されたかどうかを示す。
+	Created bool
 }
 
 // CreateSessionResult はセッション作成の結果を表す。
@@ -105,6 +118,25 @@ func (s *BrokerService) ResolveSession(ctx context.Context, sessionID string) (s
 		return "", err
 	}
 	return runner.PrivateURL, nil
+}
+
+// ResolveOrCreateSession はセッション ID から runner を解決し、見つからなければ新規作成する。
+// sessionID が空の場合は検索をスキップして即座に新規作成する。
+func (s *BrokerService) ResolveOrCreateSession(ctx context.Context, sessionID string) (*ResolveResult, error) {
+	if sessionID != "" {
+		runner, err := s.repo.FindBySessionID(ctx, sessionID)
+		if err == nil {
+			return &ResolveResult{SessionID: sessionID, RunnerURL: runner.PrivateURL, Created: false}, nil
+		}
+		if !errors.Is(err, store.ErrNotFound) {
+			return nil, err
+		}
+	}
+	result, err := s.CreateSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &ResolveResult{SessionID: result.SessionID, RunnerURL: result.Runner.PrivateURL, Created: true}, nil
 }
 
 // RegisterRunner は runner を idle として登録する。

@@ -17,11 +17,12 @@ import (
 
 // mockService は service.Service のモック実装。
 type mockService struct {
-	createSessionFn    func(ctx context.Context) (*service.CreateSessionResult, error)
-	closeSessionFn     func(ctx context.Context, sessionID string) error
-	resolveSessionFn   func(ctx context.Context, sessionID string) (string, error)
-	registerRunnerFn   func(ctx context.Context, runnerID, privateURL string) error
-	deregisterRunnerFn func(ctx context.Context, runnerID string) error
+	createSessionFn          func(ctx context.Context) (*service.CreateSessionResult, error)
+	closeSessionFn           func(ctx context.Context, sessionID string) error
+	resolveSessionFn         func(ctx context.Context, sessionID string) (string, error)
+	resolveOrCreateSessionFn func(ctx context.Context, sessionID string) (*service.ResolveResult, error)
+	registerRunnerFn         func(ctx context.Context, runnerID, privateURL string) error
+	deregisterRunnerFn       func(ctx context.Context, runnerID string) error
 }
 
 // CreateSession はモック CreateSession を呼び出す。
@@ -37,6 +38,11 @@ func (m *mockService) CloseSession(ctx context.Context, sessionID string) error 
 // ResolveSession はモック ResolveSession を呼び出す。
 func (m *mockService) ResolveSession(ctx context.Context, sessionID string) (string, error) {
 	return m.resolveSessionFn(ctx, sessionID)
+}
+
+// ResolveOrCreateSession はモック ResolveOrCreateSession を呼び出す。
+func (m *mockService) ResolveOrCreateSession(ctx context.Context, sessionID string) (*service.ResolveResult, error) {
+	return m.resolveOrCreateSessionFn(ctx, sessionID)
 }
 
 // RegisterRunner はモック RegisterRunner を呼び出す。
@@ -199,15 +205,15 @@ func TestDeleteSession_InternalError(t *testing.T) {
 	}
 }
 
-// TestGetResolve_Success はセッション解決の成功を検証する。
-func TestGetResolve_Success(t *testing.T) {
+// TestGetResolve_ExistingSession は既存セッションの解決成功を検証する。
+func TestGetResolve_ExistingSession(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(&mockService{
-		resolveSessionFn: func(_ context.Context, sessionID string) (string, error) {
+		resolveOrCreateSessionFn: func(_ context.Context, sessionID string) (*service.ResolveResult, error) {
 			if sessionID != "sess-abc" {
 				t.Errorf("sessionID = %q, want %q", sessionID, "sess-abc")
 			}
-			return "http://10.0.0.1:8080", nil
+			return &service.ResolveResult{SessionID: "sess-abc", RunnerURL: "http://10.0.0.1:8080", Created: false}, nil
 		},
 	})
 	r := newTestRouter(h)
@@ -223,46 +229,63 @@ func TestGetResolve_Success(t *testing.T) {
 	if got := rec.Header().Get("X-Runner-Url"); got != "http://10.0.0.1:8080" {
 		t.Errorf("X-Runner-Url = %q, want %q", got, "http://10.0.0.1:8080")
 	}
-}
-
-// TestGetResolve_MissingCookie は runner_id cookie がない場合に 401 を返すことを検証する。
-func TestGetResolve_MissingCookie(t *testing.T) {
-	t.Parallel()
-	h := NewHandler(&mockService{})
-	r := newTestRouter(h)
-
-	req := httptest.NewRequest(http.MethodGet, "/resolve", nil)
-	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
-	}
-	if !strings.Contains(rec.Body.String(), model.CodeInvalidRequest) {
-		t.Errorf("body = %q, want to contain %q", rec.Body.String(), model.CodeInvalidRequest)
-	}
-	if !strings.Contains(rec.Body.String(), "runner_id cookie is required") {
-		t.Errorf("body = %q, want to contain %q", rec.Body.String(), "runner_id cookie is required")
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "runner_id" {
+			t.Error("should not set runner_id cookie for existing session")
+		}
 	}
 }
 
-// TestGetResolve_NotFound はセッションが見つからない場合に 401 を返すことを検証する。
-func TestGetResolve_NotFound(t *testing.T) {
+// TestGetResolve_MissingCookie_CreatesSession は cookie がない場合にセッションを新規作成することを検証する。
+func TestGetResolve_MissingCookie_CreatesSession(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(&mockService{
-		resolveSessionFn: func(_ context.Context, _ string) (string, error) {
-			return "", store.ErrNotFound
+		resolveOrCreateSessionFn: func(_ context.Context, sessionID string) (*service.ResolveResult, error) {
+			if sessionID != "" {
+				t.Errorf("sessionID = %q, want empty", sessionID)
+			}
+			return &service.ResolveResult{SessionID: "new-sess", RunnerURL: "http://10.0.0.2:8080", Created: true}, nil
 		},
 	})
 	r := newTestRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/resolve", nil)
-	req.AddCookie(&http.Cookie{Name: "runner_id", Value: "sess-missing"})
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("X-Runner-Url"); got != "http://10.0.0.2:8080" {
+		t.Errorf("X-Runner-Url = %q, want %q", got, "http://10.0.0.2:8080")
+	}
+	found := false
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "runner_id" && c.Value == "new-sess" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected runner_id cookie for new session")
+	}
+}
+
+// TestGetResolve_NoIdleRunner は idle runner がない場合に 503 を返すことを検証する。
+func TestGetResolve_NoIdleRunner(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		resolveOrCreateSessionFn: func(_ context.Context, _ string) (*service.ResolveResult, error) {
+			return nil, store.ErrNoIdleRunner
+		},
+	})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/resolve", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
 	}
 }
 
@@ -270,8 +293,8 @@ func TestGetResolve_NotFound(t *testing.T) {
 func TestGetResolve_InternalError(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(&mockService{
-		resolveSessionFn: func(_ context.Context, _ string) (string, error) {
-			return "", errors.New("unexpected")
+		resolveOrCreateSessionFn: func(_ context.Context, _ string) (*service.ResolveResult, error) {
+			return nil, errors.New("unexpected")
 		},
 	})
 	r := newTestRouter(h)
@@ -396,8 +419,8 @@ func TestDeleteRunner_InternalError(t *testing.T) {
 func TestWriteError_IncludesRequestID(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(&mockService{
-		resolveSessionFn: func(_ context.Context, _ string) (string, error) {
-			return "", store.ErrNotFound
+		resolveOrCreateSessionFn: func(_ context.Context, _ string) (*service.ResolveResult, error) {
+			return nil, errors.New("unexpected")
 		},
 	})
 	r := newTestRouter(h)

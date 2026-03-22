@@ -68,22 +68,23 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 }
 
 // GetResolve は GET /resolve を処理し runner_id cookie からセッションを解決する。
+// cookie が無い、またはセッションが見つからない場合は新規作成して Set-Cookie を返す。
 func (h *Handler) GetResolve(c *gin.Context) {
-	sessionID, err := c.Cookie(runnerIDCookie)
+	sessionID, _ := c.Cookie(runnerIDCookie)
+	result, err := h.svc.ResolveOrCreateSession(c.Request.Context(), sessionID)
 	if err != nil {
-		writeError(c, http.StatusUnauthorized, model.CodeInvalidRequest, runnerIDCookie+" cookie is required")
-		return
-	}
-	url, err := h.svc.ResolveSession(c.Request.Context(), sessionID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(c, http.StatusUnauthorized, model.CodeSessionNotFound, "session not found")
+		if errors.Is(err, store.ErrNoIdleRunner) {
+			writeError(c, http.StatusServiceUnavailable, model.CodeNoIdleRunner, "no idle runner available")
 			return
 		}
 		writeError(c, http.StatusInternalServerError, model.CodeInternalError, "failed to resolve session")
 		return
 	}
-	c.Header("X-Runner-Url", url)
+	if result.Created {
+		c.SetSameSite(http.SameSiteStrictMode)
+		c.SetCookie(runnerIDCookie, result.SessionID, 0, "/", "", true, true)
+	}
+	c.Header("X-Runner-Url", result.RunnerURL)
 	c.Status(http.StatusOK)
 }
 
