@@ -407,16 +407,26 @@ func TestStartPortParsing(t *testing.T) {
 	orig := resolveIdentityFn
 	defer func() { resolveIdentityFn = orig }()
 
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen error: %v", err)
+	}
+	addr := ln.Addr().String()
+	_, wantPort, _ := net.SplitHostPort(addr)
+	ln.Close()
+
 	var gotPort string
 	resolveIdentityFn = func(ctx context.Context, deps identityDeps) (Identity, error) {
 		gotPort = deps.port
 		return Identity{}, errors.New("stop here")
 	}
 
-	start("127.0.0.1:4567")
-
-	if gotPort != "4567" {
-		t.Fatalf("port = %q, want %q", gotPort, "4567")
+	err = start(addr)
+	if err == nil || !strings.Contains(err.Error(), "stop here") {
+		t.Fatalf("start error = %v, want contains %q", err, "stop here")
+	}
+	if gotPort != wantPort {
+		t.Fatalf("port = %q, want %q", gotPort, wantPort)
 	}
 }
 
