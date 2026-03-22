@@ -31,3 +31,30 @@ jobs:
       - name: Cleanup
         if: always()
         run: docker compose --env-file .env.example --profile integration down -v
+
+  integration-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Start services
+        run: docker compose --env-file .env.example --profile integration --profile front up -d --build
+      - name: Install dependencies
+        run: cd front && corepack enable && pnpm install --frozen-lockfile
+      - name: Install Playwright
+        run: cd front && pnpm exec playwright install --with-deps chromium
+      - name: Wait for services
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:5173 && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Run Playwright integration tests
+        run: cd front && pnpm exec playwright test --config playwright.integration.config.ts
+      - name: Cleanup
+        if: always()
+        run: docker compose --env-file .env.example --profile integration --profile front down -v
