@@ -21,6 +21,10 @@ var fatalf = log.Fatalf
 // It defaults to resolveIdentity and can be replaced in tests.
 var resolveIdentityFn = resolveIdentity
 
+// registerFn is the function used to register with the broker.
+// It defaults to register and can be replaced in tests.
+var registerFn = register
+
 // main reads the RUNNER_PORT environment variable and starts the HTTP server
 // with graceful shutdown on SIGTERM/SIGINT.
 // The empty host binds to all interfaces, which is intentional for use inside a Docker container.
@@ -36,7 +40,7 @@ func main() {
 }
 
 // start binds to the given address, resolves the runner identity,
-// registers signal handlers, and runs the server until a termination
+// registers with the broker, and runs the server until a termination
 // signal is received. It returns any error from the server lifecycle.
 func start(addr string) error {
 	ln, err := net.Listen("tcp", addr)
@@ -60,9 +64,37 @@ func start(addr string) error {
 	}
 	log.Printf("runner identity: id=%s url=%s", identity.RunnerID, identity.PrivateURL)
 
+	brokerURL := os.Getenv("BROKER_URL")
+	if brokerURL == "" {
+		ln.Close()
+		return fmt.Errorf("missing required environment variable: BROKER_URL")
+	}
+
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
 	defer signal.Stop(sig)
+
+	regCtx, regCancel := context.WithCancel(context.Background())
+	go func() {
+		select {
+		case s := <-sig:
+			regCancel()
+			sig <- s
+		case <-regCtx.Done():
+		}
+	}()
+	err = registerFn(regCtx, registerDeps{
+		brokerURL: brokerURL,
+		identity:  identity,
+		httpPost:  defaultHTTPPost,
+		afterFunc: time.After,
+		logf:      log.Printf,
+	})
+	regCancel()
+	if err != nil {
+		ln.Close()
+		return fmt.Errorf("register with broker: %w", err)
+	}
 
 	cfg := serverConfig{
 		sm:              NewSessionManager(),
