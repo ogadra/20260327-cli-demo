@@ -3,6 +3,7 @@ services:
     image: nginx:1.29.6-alpine
     profiles:
       - nginx
+      - integration
     ports:
       - "${NGINX_PORT}:80"
     volumes:
@@ -20,6 +21,7 @@ services:
         condition: service_completed_successfully
     profiles:
       - broker
+      - integration
 
   broker-test:
     build:
@@ -54,6 +56,7 @@ services:
       - runner/.env.example
     profiles:
       - runner
+      - integration
 
   dynamodb-init:
     image: amazon/aws-cli:2.34.14@sha256:0a8bbdb160cbb09e357ba24533204e90a97e2e56beadf1730739644c2d5f1bdb
@@ -68,6 +71,7 @@ services:
     profiles:
       - broker
       - test
+      - integration
 
   dynamodb-local:
     image: amazon/dynamodb-local:3.3.0@sha256:d89f8fcc6b1a39cb35976c248ed42a28c66ae00dc043099210f5571e42648ab4
@@ -79,3 +83,15 @@ services:
     profiles:
       - broker
       - test
+      - integration
+
+  integration-test:
+    build: integration/
+    environment:
+      NGINX_URL: "http://nginx"
+    depends_on:
+      - nginx
+      - broker
+      - runner
+    profiles:
+      - integration
