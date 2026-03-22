@@ -12,6 +12,13 @@ import (
 	"time"
 )
 
+// immediateAfter returns a channel that fires immediately, used to skip retry delays in tests.
+func immediateAfter(d time.Duration) <-chan time.Time {
+	ch := make(chan time.Time, 1)
+	ch <- time.Now()
+	return ch
+}
+
 // TestRegisterSuccess verifies that register returns nil
 // when the broker responds with 201 on the first attempt.
 func TestRegisterSuccess(t *testing.T) {
@@ -28,7 +35,7 @@ func TestRegisterSuccess(t *testing.T) {
 		brokerURL: ts.URL,
 		identity:  Identity{RunnerID: "r1", PrivateURL: "http://10.0.0.1:3000"},
 		httpPost:  defaultHTTPPost,
-		sleep:     func(d time.Duration) {},
+		afterFunc: immediateAfter,
 		logf:      func(f string, a ...any) { logged = f },
 	}
 
@@ -64,7 +71,7 @@ func TestRegisterRetryThenSuccess(t *testing.T) {
 		brokerURL: ts.URL,
 		identity:  Identity{RunnerID: "r1", PrivateURL: "http://10.0.0.1:3000"},
 		httpPost:  defaultHTTPPost,
-		sleep:     func(d time.Duration) {},
+		afterFunc: immediateAfter,
 		logf:      func(f string, a ...any) {},
 	}
 
@@ -90,8 +97,8 @@ func TestRegisterHTTPErrorRetry(t *testing.T) {
 			}
 			return &http.Response{StatusCode: http.StatusCreated, Body: io.NopCloser(nil)}, nil
 		},
-		sleep: func(d time.Duration) {},
-		logf:  func(f string, a ...any) {},
+		afterFunc: immediateAfter,
+		logf:      func(f string, a ...any) {},
 	}
 
 	err := register(context.Background(), deps)
@@ -103,9 +110,9 @@ func TestRegisterHTTPErrorRetry(t *testing.T) {
 	}
 }
 
-// TestRegisterContextCanceledBeforeSleep verifies that register
-// returns the context error when context is canceled before the sleep.
-func TestRegisterContextCanceledBeforeSleep(t *testing.T) {
+// TestRegisterContextCanceledBeforeWait verifies that register
+// returns the context error when context is canceled before the retry wait.
+func TestRegisterContextCanceledBeforeWait(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	deps := registerDeps{
@@ -115,8 +122,8 @@ func TestRegisterContextCanceledBeforeSleep(t *testing.T) {
 			cancel()
 			return &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(nil)}, nil
 		},
-		sleep: func(d time.Duration) {},
-		logf:  func(f string, a ...any) {},
+		afterFunc: immediateAfter,
+		logf:      func(f string, a ...any) {},
 	}
 
 	err := register(ctx, deps)
@@ -125,9 +132,9 @@ func TestRegisterContextCanceledBeforeSleep(t *testing.T) {
 	}
 }
 
-// TestRegisterContextCanceledAfterSleep verifies that register
-// returns the context error when context is canceled during the sleep.
-func TestRegisterContextCanceledAfterSleep(t *testing.T) {
+// TestRegisterContextCanceledDuringWait verifies that register
+// returns the context error when context is canceled during the retry wait.
+func TestRegisterContextCanceledDuringWait(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var callCount atomic.Int32
 
@@ -138,8 +145,9 @@ func TestRegisterContextCanceledAfterSleep(t *testing.T) {
 			callCount.Add(1)
 			return &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(nil)}, nil
 		},
-		sleep: func(d time.Duration) {
+		afterFunc: func(d time.Duration) <-chan time.Time {
 			cancel()
+			return make(chan time.Time)
 		},
 		logf: func(f string, a ...any) {},
 	}
@@ -167,7 +175,7 @@ func TestRegisterRequestBody(t *testing.T) {
 		brokerURL: ts.URL,
 		identity:  Identity{RunnerID: "test-runner", PrivateURL: "http://10.0.0.5:3000"},
 		httpPost:  defaultHTTPPost,
-		sleep:     func(d time.Duration) {},
+		afterFunc: immediateAfter,
 		logf:      func(f string, a ...any) {},
 	}
 

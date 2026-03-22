@@ -87,7 +87,7 @@ func start(addr string) error {
 		brokerURL: brokerURL,
 		identity:  identity,
 		httpPost:  defaultHTTPPost,
-		sleep:     time.Sleep,
+		afterFunc: time.After,
 		logf:      log.Printf,
 	})
 	regCancel()

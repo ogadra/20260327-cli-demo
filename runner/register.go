@@ -17,7 +17,7 @@ type registerDeps struct {
 	brokerURL string
 	identity  Identity
 	httpPost  func(ctx context.Context, url string, contentType string, body io.Reader) (*http.Response, error)
-	sleep     func(time.Duration)
+	afterFunc func(time.Duration) <-chan time.Time
 	logf      func(string, ...any)
 }
 
@@ -57,15 +57,7 @@ func register(ctx context.Context, deps registerDeps) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
-		}
-
-		deps.sleep(registerRetryInterval)
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
+		case <-deps.afterFunc(registerRetryInterval):
 		}
 	}
 }
