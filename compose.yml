@@ -16,8 +16,8 @@ services:
     env_file:
       - broker/.env.example
     depends_on:
-      dynamodb-local:
-        condition: service_healthy
+      dynamodb-init:
+        condition: service_completed_successfully
     profiles:
       - broker
 
@@ -28,8 +28,8 @@ services:
     env_file:
       - broker/.env.example
     depends_on:
-      dynamodb-local:
-        condition: service_healthy
+      dynamodb-init:
+        condition: service_completed_successfully
     profiles:
       - test
 
@@ -53,8 +53,23 @@ services:
     profiles:
       - runner
 
+  dynamodb-init:
+    image: amazon/aws-cli:2.34.14@sha256:0a8bbdb160cbb09e357ba24533204e90a97e2e56beadf1730739644c2d5f1bdb
+    entrypoint: ["sh", "/init/create-table.sh"]
+    volumes:
+      - ./init/create-table.sh:/init/create-table.sh:ro
+    environment:
+      AWS_ACCESS_KEY_ID: dummy
+      AWS_SECRET_ACCESS_KEY: dummy
+    depends_on:
+      dynamodb-local:
+        condition: service_healthy
+    profiles:
+      - broker
+      - test
+
   dynamodb-local:
-    image: amazon/dynamodb-local:3.3.0
+    image: amazon/dynamodb-local:3.3.0@sha256:d89f8fcc6b1a39cb35976c248ed42a28c66ae00dc043099210f5571e42648ab4
     healthcheck:
       test: ["CMD", "/bin/bash", "-c", "echo > /dev/tcp/localhost/8000"]
       interval: 5s
