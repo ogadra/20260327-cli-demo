@@ -58,9 +58,8 @@ services:
     entrypoint: ["sh", "/init/create-table.sh"]
     volumes:
       - ./init/create-table.sh:/init/create-table.sh:ro
-    environment:
-      AWS_ACCESS_KEY_ID: dummy
-      AWS_SECRET_ACCESS_KEY: dummy
+    env_file:
+      - broker/.env.example
     depends_on:
       dynamodb-local:
         condition: service_healthy
