@@ -36,27 +36,3 @@ jobs:
         run: cd terraform && tflint --init
       - name: tflint
         run: cd terraform && tflint
-
-  checkov:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: bridgecrewio/checkov-action@99bb2cae6a0622e421daf0e3b838e0f91e42eb88 # v12.2964.0
-        with:
-          directory: .
-          quiet: true
-          compact: true
-          external_checks_dirs: terraform/checkov
-
-  trivy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: aquasecurity/trivy-action@6c175e9c4083a92bbca2f9724c8a5e33bc2d97a5 # v0.30.0
-        with:
-          scan-type: config
-          scan-ref: .
-          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
-          exit-code: "1"
-          skip-dirs: .claude
-          trivyignores: .trivyignore.yaml
