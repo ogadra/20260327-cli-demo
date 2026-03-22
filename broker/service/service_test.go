@@ -272,41 +272,6 @@ func TestCloseSession_DeleteError(t *testing.T) {
 	}
 }
 
-// TestResolveSession_Success はセッション解決の成功ケースを検証する。
-func TestResolveSession_Success(t *testing.T) {
-	t.Parallel()
-	repo := &mockRepository{
-		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
-			return &model.Runner{RunnerID: "r1", PrivateURL: "http://10.0.0.1:8080"}, nil
-		},
-	}
-	svc := NewBrokerService(repo)
-
-	url, err := svc.ResolveSession(context.Background(), "sess-1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if url != "http://10.0.0.1:8080" {
-		t.Errorf("url = %q, want %q", url, "http://10.0.0.1:8080")
-	}
-}
-
-// TestResolveSession_FindError は FindBySessionID のエラーを検証する。
-func TestResolveSession_FindError(t *testing.T) {
-	t.Parallel()
-	repo := &mockRepository{
-		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
-			return nil, store.ErrNotFound
-		},
-	}
-	svc := NewBrokerService(repo)
-
-	_, err := svc.ResolveSession(context.Background(), "sess-missing")
-	if !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("expected ErrNotFound, got: %v", err)
-	}
-}
-
 // TestRegisterRunner_Success は runner 登録の成功ケースを検証する。
 func TestRegisterRunner_Success(t *testing.T) {
 	t.Parallel()
@@ -380,8 +345,8 @@ func TestDeregisterRunner_Error(t *testing.T) {
 	}
 }
 
-// TestResolveOrCreateSession_ExistingSession は既存セッションの解決を検証する。
-func TestResolveOrCreateSession_ExistingSession(t *testing.T) {
+// TestResolveSession_ExistingSession は既存セッションの解決を検証する。
+func TestResolveSession_ExistingSession(t *testing.T) {
 	t.Parallel()
 	repo := &mockRepository{
 		findBySessionIDFn: func(_ context.Context, sessionID string) (*model.Runner, error) {
@@ -390,7 +355,7 @@ func TestResolveOrCreateSession_ExistingSession(t *testing.T) {
 	}
 	svc := NewBrokerService(repo)
 
-	result, err := svc.ResolveOrCreateSession(context.Background(), "sess-1")
+	result, err := svc.ResolveSession(context.Background(), "sess-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -405,8 +370,8 @@ func TestResolveOrCreateSession_ExistingSession(t *testing.T) {
 	}
 }
 
-// TestResolveOrCreateSession_NotFound_CreatesNew はセッションが見つからない場合に新規作成することを検証する。
-func TestResolveOrCreateSession_NotFound_CreatesNew(t *testing.T) {
+// TestResolveSession_NotFound_CreatesNew はセッションが見つからない場合に新規作成することを検証する。
+func TestResolveSession_NotFound_CreatesNew(t *testing.T) {
 	t.Parallel()
 	repo := &mockRepository{
 		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
@@ -424,7 +389,7 @@ func TestResolveOrCreateSession_NotFound_CreatesNew(t *testing.T) {
 		return "new-session", nil
 	}))
 
-	result, err := svc.ResolveOrCreateSession(context.Background(), "sess-missing")
+	result, err := svc.ResolveSession(context.Background(), "sess-missing")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -439,8 +404,8 @@ func TestResolveOrCreateSession_NotFound_CreatesNew(t *testing.T) {
 	}
 }
 
-// TestResolveOrCreateSession_FindInternalError は FindBySessionID の内部エラーを検証する。
-func TestResolveOrCreateSession_FindInternalError(t *testing.T) {
+// TestResolveSession_FindInternalError は FindBySessionID の内部エラーを検証する。
+func TestResolveSession_FindInternalError(t *testing.T) {
 	t.Parallel()
 	repo := &mockRepository{
 		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
@@ -449,14 +414,14 @@ func TestResolveOrCreateSession_FindInternalError(t *testing.T) {
 	}
 	svc := NewBrokerService(repo)
 
-	_, err := svc.ResolveOrCreateSession(context.Background(), "sess-1")
+	_, err := svc.ResolveSession(context.Background(), "sess-1")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-// TestResolveOrCreateSession_CreateError は新規作成時のエラーを検証する。
-func TestResolveOrCreateSession_CreateError(t *testing.T) {
+// TestResolveSession_CreateError は新規作成時のエラーを検証する。
+func TestResolveSession_CreateError(t *testing.T) {
 	t.Parallel()
 	repo := &mockRepository{
 		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
@@ -470,14 +435,14 @@ func TestResolveOrCreateSession_CreateError(t *testing.T) {
 		return "new-session", nil
 	}))
 
-	_, err := svc.ResolveOrCreateSession(context.Background(), "sess-missing")
+	_, err := svc.ResolveSession(context.Background(), "sess-missing")
 	if !errors.Is(err, store.ErrNoIdleRunner) {
 		t.Fatalf("expected ErrNoIdleRunner, got: %v", err)
 	}
 }
 
-// TestResolveOrCreateSession_EmptySessionID は空のセッション ID で FindBySessionID をスキップして新規作成されることを検証する。
-func TestResolveOrCreateSession_EmptySessionID(t *testing.T) {
+// TestResolveSession_EmptySessionID は空のセッション ID で FindBySessionID をスキップして新規作成されることを検証する。
+func TestResolveSession_EmptySessionID(t *testing.T) {
 	t.Parallel()
 	repo := &mockRepository{
 		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
@@ -496,7 +461,7 @@ func TestResolveOrCreateSession_EmptySessionID(t *testing.T) {
 		return "new-session", nil
 	}))
 
-	result, err := svc.ResolveOrCreateSession(context.Background(), "")
+	result, err := svc.ResolveSession(context.Background(), "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

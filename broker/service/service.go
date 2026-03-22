@@ -20,10 +20,8 @@ var randReader io.Reader = rand.Reader
 type Service interface {
 	// CloseSession はセッションを終了し紐づく runner を削除する。
 	CloseSession(ctx context.Context, sessionID string) error
-	// ResolveSession はセッション ID から runner のプライベート URL を返す。
-	ResolveSession(ctx context.Context, sessionID string) (string, error)
-	// ResolveOrCreateSession はセッション ID から runner を解決し、見つからなければ新規作成する。
-	ResolveOrCreateSession(ctx context.Context, sessionID string) (*ResolveResult, error)
+	// ResolveSession はセッション ID から runner を解決し、見つからなければ新規作成する。
+	ResolveSession(ctx context.Context, sessionID string) (*ResolveResult, error)
 	// RegisterRunner は runner を idle として登録する。
 	RegisterRunner(ctx context.Context, runnerID, privateURL string) error
 	// DeregisterRunner は runner を削除する。
@@ -109,18 +107,9 @@ func (s *BrokerService) CloseSession(ctx context.Context, sessionID string) erro
 	return s.repo.Delete(ctx, runner.RunnerID)
 }
 
-// ResolveSession はセッション ID から runner のプライベート URL を返す。
-func (s *BrokerService) ResolveSession(ctx context.Context, sessionID string) (string, error) {
-	runner, err := s.repo.FindBySessionID(ctx, sessionID)
-	if err != nil {
-		return "", err
-	}
-	return runner.PrivateURL, nil
-}
-
-// ResolveOrCreateSession はセッション ID から runner を解決し、見つからなければ新規作成する。
+// ResolveSession はセッション ID から runner を解決し、見つからなければ新規作成する。
 // sessionID が空の場合は検索をスキップして即座に新規作成する。
-func (s *BrokerService) ResolveOrCreateSession(ctx context.Context, sessionID string) (*ResolveResult, error) {
+func (s *BrokerService) ResolveSession(ctx context.Context, sessionID string) (*ResolveResult, error) {
 	if sessionID != "" {
 		runner, err := s.repo.FindBySessionID(ctx, sessionID)
 		if err == nil {

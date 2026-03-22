@@ -16,11 +16,10 @@ import (
 
 // mockService は service.Service のモック実装。
 type mockService struct {
-	closeSessionFn           func(ctx context.Context, sessionID string) error
-	resolveSessionFn         func(ctx context.Context, sessionID string) (string, error)
-	resolveOrCreateSessionFn func(ctx context.Context, sessionID string) (*service.ResolveResult, error)
-	registerRunnerFn         func(ctx context.Context, runnerID, privateURL string) error
-	deregisterRunnerFn       func(ctx context.Context, runnerID string) error
+	closeSessionFn     func(ctx context.Context, sessionID string) error
+	resolveSessionFn   func(ctx context.Context, sessionID string) (*service.ResolveResult, error)
+	registerRunnerFn   func(ctx context.Context, runnerID, privateURL string) error
+	deregisterRunnerFn func(ctx context.Context, runnerID string) error
 }
 
 // CloseSession はモック CloseSession を呼び出す。
@@ -29,13 +28,8 @@ func (m *mockService) CloseSession(ctx context.Context, sessionID string) error 
 }
 
 // ResolveSession はモック ResolveSession を呼び出す。
-func (m *mockService) ResolveSession(ctx context.Context, sessionID string) (string, error) {
+func (m *mockService) ResolveSession(ctx context.Context, sessionID string) (*service.ResolveResult, error) {
 	return m.resolveSessionFn(ctx, sessionID)
-}
-
-// ResolveOrCreateSession はモック ResolveOrCreateSession を呼び出す。
-func (m *mockService) ResolveOrCreateSession(ctx context.Context, sessionID string) (*service.ResolveResult, error) {
-	return m.resolveOrCreateSessionFn(ctx, sessionID)
 }
 
 // RegisterRunner はモック RegisterRunner を呼び出す。
@@ -125,7 +119,7 @@ func TestDeleteSession_InternalError(t *testing.T) {
 func TestGetResolve_ExistingSession(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(&mockService{
-		resolveOrCreateSessionFn: func(_ context.Context, sessionID string) (*service.ResolveResult, error) {
+		resolveSessionFn: func(_ context.Context, sessionID string) (*service.ResolveResult, error) {
 			if sessionID != "sess-abc" {
 				t.Errorf("sessionID = %q, want %q", sessionID, "sess-abc")
 			}
@@ -156,7 +150,7 @@ func TestGetResolve_ExistingSession(t *testing.T) {
 func TestGetResolve_MissingCookie_CreatesSession(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(&mockService{
-		resolveOrCreateSessionFn: func(_ context.Context, sessionID string) (*service.ResolveResult, error) {
+		resolveSessionFn: func(_ context.Context, sessionID string) (*service.ResolveResult, error) {
 			if sessionID != "" {
 				t.Errorf("sessionID = %q, want empty", sessionID)
 			}
@@ -190,7 +184,7 @@ func TestGetResolve_MissingCookie_CreatesSession(t *testing.T) {
 func TestGetResolve_NoIdleRunner(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(&mockService{
-		resolveOrCreateSessionFn: func(_ context.Context, _ string) (*service.ResolveResult, error) {
+		resolveSessionFn: func(_ context.Context, _ string) (*service.ResolveResult, error) {
 			return nil, store.ErrNoIdleRunner
 		},
 	})
@@ -209,7 +203,7 @@ func TestGetResolve_NoIdleRunner(t *testing.T) {
 func TestGetResolve_InternalError(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(&mockService{
-		resolveOrCreateSessionFn: func(_ context.Context, _ string) (*service.ResolveResult, error) {
+		resolveSessionFn: func(_ context.Context, _ string) (*service.ResolveResult, error) {
 			return nil, errors.New("unexpected")
 		},
 	})
@@ -335,7 +329,7 @@ func TestDeleteRunner_InternalError(t *testing.T) {
 func TestWriteError_IncludesRequestID(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(&mockService{
-		resolveOrCreateSessionFn: func(_ context.Context, _ string) (*service.ResolveResult, error) {
+		resolveSessionFn: func(_ context.Context, _ string) (*service.ResolveResult, error) {
 			return nil, errors.New("unexpected")
 		},
 	})
@@ -439,7 +433,7 @@ func TestValidateRunnerURL(t *testing.T) {
 func TestGetResolve_CookieSecure(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(&mockService{
-		resolveOrCreateSessionFn: func(_ context.Context, _ string) (*service.ResolveResult, error) {
+		resolveSessionFn: func(_ context.Context, _ string) (*service.ResolveResult, error) {
 			return &service.ResolveResult{SessionID: "new-sess", RunnerURL: "http://10.0.0.1:8080", Created: true}, nil
 		},
 	})

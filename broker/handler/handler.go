@@ -55,7 +55,7 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 // cookie が無い、またはセッションが見つからない場合は新規作成して Set-Cookie を返す。
 func (h *Handler) GetResolve(c *gin.Context) {
 	sessionID, _ := c.Cookie(runnerIDCookie)
-	result, err := h.svc.ResolveOrCreateSession(c.Request.Context(), sessionID)
+	result, err := h.svc.ResolveSession(c.Request.Context(), sessionID)
 	if err != nil {
 		if errors.Is(err, store.ErrNoIdleRunner) {
 			writeError(c, http.StatusServiceUnavailable, model.CodeNoIdleRunner, "no idle runner available")
