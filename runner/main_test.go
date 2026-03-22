@@ -21,6 +21,12 @@ import (
 func TestMainSuccess(t *testing.T) {
 	t.Setenv("RUNNER_PORT", "3000")
 
+	broker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer broker.Close()
+	t.Setenv("BROKER_URL", broker.URL)
+
 	orig := fatalf
 	defer func() { fatalf = orig }()
 
@@ -332,6 +338,12 @@ func TestRunShutdownTimeout(t *testing.T) {
 // TestStartAndShutdown verifies that start binds to the given address and
 // shuts down when SIGTERM is delivered to the process.
 func TestStartAndShutdown(t *testing.T) {
+	broker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer broker.Close()
+	t.Setenv("BROKER_URL", broker.URL)
+
 	// Reserve a free port, then release it so start can bind to it.
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -446,6 +458,94 @@ func TestStartEphemeralPort(t *testing.T) {
 
 	if gotPort == "0" || gotPort == "" {
 		t.Fatalf("port should be resolved to actual ephemeral port, got %q", gotPort)
+	}
+}
+
+// TestStartMissingBrokerURL verifies that start returns an error when
+// BROKER_URL is not set.
+func TestStartMissingBrokerURL(t *testing.T) {
+	t.Setenv("BROKER_URL", "")
+
+	err := start("127.0.0.1:0")
+	if err == nil {
+		t.Fatal("start should return error when BROKER_URL is missing")
+	}
+	if !strings.Contains(err.Error(), "BROKER_URL") {
+		t.Fatalf("error should mention BROKER_URL, got: %v", err)
+	}
+}
+
+// TestStartRegisterError verifies that start returns an error when
+// broker registration fails.
+func TestStartRegisterError(t *testing.T) {
+	t.Setenv("BROKER_URL", "http://broker:8080")
+
+	orig := registerFn
+	defer func() { registerFn = orig }()
+
+	registerFn = func(ctx context.Context, deps registerDeps) error {
+		return errors.New("register failed")
+	}
+
+	err := start("127.0.0.1:0")
+	if err == nil {
+		t.Fatal("start should return error when registration fails")
+	}
+	if !strings.Contains(err.Error(), "register failed") {
+		t.Fatalf("error should mention register failed, got: %v", err)
+	}
+}
+
+// TestStartRegisterCanceledBySignal verifies that start cancels registration
+// when a termination signal is received during the registration phase.
+func TestStartRegisterCanceledBySignal(t *testing.T) {
+	t.Setenv("BROKER_URL", "http://broker:8080")
+
+	orig := registerFn
+	defer func() { registerFn = orig }()
+
+	registerFn = func(ctx context.Context, deps registerDeps) error {
+		proc, _ := os.FindProcess(os.Getpid())
+		proc.Signal(syscall.SIGTERM)
+		<-ctx.Done()
+		return ctx.Err()
+	}
+
+	err := start("127.0.0.1:0")
+	if err == nil {
+		t.Fatal("start should return error when registration is canceled by signal")
+	}
+}
+
+// TestStartRegisterReceivesBrokerURL verifies that the broker URL from
+// the environment is passed to the register function.
+func TestStartRegisterReceivesBrokerURL(t *testing.T) {
+	broker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer broker.Close()
+	t.Setenv("BROKER_URL", broker.URL)
+
+	orig := registerFn
+	defer func() { registerFn = orig }()
+
+	var gotBrokerURL string
+	registerFn = func(ctx context.Context, deps registerDeps) error {
+		gotBrokerURL = deps.brokerURL
+		return nil
+	}
+
+	// start will call run which blocks, so send SIGTERM after a short delay.
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		proc, _ := os.FindProcess(os.Getpid())
+		proc.Signal(syscall.SIGTERM)
+	}()
+
+	start("127.0.0.1:0")
+
+	if gotBrokerURL != broker.URL {
+		t.Errorf("brokerURL = %q, want %q", gotBrokerURL, broker.URL)
 	}
 }
 
