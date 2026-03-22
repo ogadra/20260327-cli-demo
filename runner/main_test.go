@@ -382,6 +382,25 @@ func TestStartListenError(t *testing.T) {
 	}
 }
 
+// TestStartIdentityError verifies that start returns an error and closes the
+// listener when identity resolution fails.
+func TestStartIdentityError(t *testing.T) {
+	orig := resolveIdentityFn
+	defer func() { resolveIdentityFn = orig }()
+
+	resolveIdentityFn = func(ctx context.Context, deps identityDeps) (Identity, error) {
+		return Identity{}, errors.New("identity failure")
+	}
+
+	err := start("127.0.0.1:0")
+	if err == nil {
+		t.Fatal("start should return error when identity resolution fails")
+	}
+	if !strings.Contains(err.Error(), "identity failure") {
+		t.Fatalf("error should mention identity failure, got: %v", err)
+	}
+}
+
 // waitForServer polls the given address with a TCP dial until it accepts a connection or times out.
 // It uses a raw TCP connection instead of an HTTP request to avoid side effects such as creating sessions.
 func waitForServer(t *testing.T, addr string) {
