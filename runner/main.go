@@ -17,6 +17,10 @@ import (
 // and can be replaced in tests to avoid os.Exit.
 var fatalf = log.Fatalf
 
+// resolveIdentityFn is the function used to resolve the runner identity.
+// It defaults to resolveIdentity and can be replaced in tests.
+var resolveIdentityFn = resolveIdentity
+
 // main reads the RUNNER_PORT environment variable and starts the HTTP server
 // with graceful shutdown on SIGTERM/SIGINT.
 // The empty host binds to all interfaces, which is intentional for use inside a Docker container.
@@ -31,14 +35,30 @@ func main() {
 	}
 }
 
-// start binds to the given address, registers signal handlers, and runs the
-// server until a termination signal is received. It returns any error from
-// the server lifecycle.
+// start binds to the given address, resolves the runner identity,
+// registers signal handlers, and runs the server until a termination
+// signal is received. It returns any error from the server lifecycle.
 func start(addr string) error {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
+
+	_, port, _ := net.SplitHostPort(ln.Addr().String())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	identity, err := resolveIdentityFn(ctx, identityDeps{
+		getenv:   os.Getenv,
+		hostname: os.Hostname,
+		httpGet:  defaultHTTPGet,
+		port:     port,
+	})
+	if err != nil {
+		ln.Close()
+		return fmt.Errorf("resolve identity: %w", err)
+	}
+	log.Printf("runner identity: id=%s url=%s", identity.RunnerID, identity.PrivateURL)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)

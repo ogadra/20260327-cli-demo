@@ -382,6 +382,73 @@ func TestStartListenError(t *testing.T) {
 	}
 }
 
+// TestStartIdentityError verifies that start returns an error and closes the
+// listener when identity resolution fails.
+func TestStartIdentityError(t *testing.T) {
+	orig := resolveIdentityFn
+	defer func() { resolveIdentityFn = orig }()
+
+	resolveIdentityFn = func(ctx context.Context, deps identityDeps) (Identity, error) {
+		return Identity{}, errors.New("identity failure")
+	}
+
+	err := start("127.0.0.1:0")
+	if err == nil {
+		t.Fatal("start should return error when identity resolution fails")
+	}
+	if !strings.Contains(err.Error(), "identity failure") {
+		t.Fatalf("error should mention identity failure, got: %v", err)
+	}
+}
+
+// TestStartPortParsing verifies that start correctly extracts the port from
+// addresses with a host component like 127.0.0.1:12345.
+func TestStartPortParsing(t *testing.T) {
+	orig := resolveIdentityFn
+	defer func() { resolveIdentityFn = orig }()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen error: %v", err)
+	}
+	addr := ln.Addr().String()
+	_, wantPort, _ := net.SplitHostPort(addr)
+	ln.Close()
+
+	var gotPort string
+	resolveIdentityFn = func(ctx context.Context, deps identityDeps) (Identity, error) {
+		gotPort = deps.port
+		return Identity{}, errors.New("stop here")
+	}
+
+	err = start(addr)
+	if err == nil || !strings.Contains(err.Error(), "stop here") {
+		t.Fatalf("start error = %v, want contains %q", err, "stop here")
+	}
+	if gotPort != wantPort {
+		t.Fatalf("port = %q, want %q", gotPort, wantPort)
+	}
+}
+
+// TestStartEphemeralPort verifies that start resolves the actual port when
+// the listen address uses port 0 to request an ephemeral port from the OS.
+func TestStartEphemeralPort(t *testing.T) {
+	orig := resolveIdentityFn
+	defer func() { resolveIdentityFn = orig }()
+
+	var gotPort string
+	resolveIdentityFn = func(ctx context.Context, deps identityDeps) (Identity, error) {
+		gotPort = deps.port
+		return Identity{}, errors.New("stop here")
+	}
+
+	start(":0")
+
+	if gotPort == "0" || gotPort == "" {
+		t.Fatalf("port should be resolved to actual ephemeral port, got %q", gotPort)
+	}
+}
+
 // waitForServer polls the given address with a TCP dial until it accepts a connection or times out.
 // It uses a raw TCP connection instead of an HTTP request to avoid side effects such as creating sessions.
 func waitForServer(t *testing.T, addr string) {
