@@ -246,7 +246,7 @@ func TestGetResolve_MissingCookie(t *testing.T) {
 	}
 }
 
-// TestGetResolve_NotFound はセッションが見つからない場合に 404 を返すことを検証する。
+// TestGetResolve_NotFound はセッションが見つからない場合に 401 を返すことを検証する。
 func TestGetResolve_NotFound(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(&mockService{
@@ -261,8 +261,8 @@ func TestGetResolve_NotFound(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
 }
 

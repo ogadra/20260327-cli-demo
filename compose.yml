@@ -43,6 +43,8 @@ services:
       - ./front/src:/app/src:ro
       - ./front/index.html:/app/index.html:ro
       - ./front/vite.config.ts:/app/vite.config.ts:ro
+    environment:
+      VITE_API_TARGET: http://nginx
     profiles:
       - front
 
