@@ -9,43 +9,52 @@ direnv allow        # Nix devShell 有効化
 lefthook install    # pre-commit フック設定
 ```
 
-## Runnerコンテナのビルド・テスト・実行
+## ビルド・テスト
 
 ```bash
-docker build --target test runner/   # テスト
-docker build -t runner runner/       # ビルド
-docker run --rm -p 3000:3000 runner  # 起動
+docker build --target test broker/
+docker build --target test runner/
+docker build --target test front/
+docker build --target config-test nginx/
 ```
 
-## Runner API
+## ローカル起動
 
-ポート: `3000`
+```bash
+# 全サービス起動
+docker compose --profile broker --profile runner --profile nginx --profile front up --build
+```
+
+ブラウザで http://localhost:5173 を開く。
+
+## サービス一覧
+
+| サービス | ポート | 説明 |
+|---------|--------|------|
+| front | 5173 | Vite dev server |
+| nginx | 80 | リバースプロキシ |
+| broker | 8080 | 制御プレーン (DynamoDB) |
+| runner | 3000 | コマンド実行サーバー |
+
+## API
+
+### NGINX 経由
 
 | メソッド | パス | 説明 |
 |---------|------|------|
-| POST | `/api/session` | セッション作成。`{"sessionId": "..."}` を返す |
-| DELETE | `/api/session` | セッション削除。`X-Session-Id` ヘッダ必須 |
-| POST | `/api/execute` | コマンド実行。`X-Session-Id` ヘッダと `{"command": "..."}` が必要。SSE でストリーム返却 |
+| POST | `/api/session` | bash セッション作成。`session_id` cookie を返す |
+| DELETE | `/api/session` | bash セッション削除 |
+| POST | `/api/execute` | コマンド実行 (SSE ストリーム)。`{"command": "..."}` |
 
-SSE イベント種別: `stdout`, `stderr`, `complete`（`exitCode` 付き）
+初回アクセス時に Broker が自動で Runner を割り当て、`runner_id` cookie を発行する。
 
-## Runner 単体のローカル動作確認
+SSE イベント種別: `stdout` (リアルタイム), `stderr` (完了時), `complete` (`exitCode` 付き)
 
-```bash
-# runner を起動
-docker compose --profile runner up --build
+### Broker 内部 API
 
-# セッション作成
-SESSION_ID=$(curl -s -X POST http://localhost:3000/api/session | jq -r .sessionId)
-
-# コマンド実行（SSE ストリーム）
-# -N でバッファリングを無効にし、リアルタイムに出力を受け取る
-curl -N -X POST http://localhost:3000/api/execute \
-  -H "X-Session-Id: $SESSION_ID" \
-  -H "Content-Type: application/json" \
-  -d '{"command":"ls"}'
-
-# セッション削除
-curl -X DELETE http://localhost:3000/api/session \
-  -H "X-Session-Id: $SESSION_ID"
-```
+| メソッド | パス | 説明 |
+|---------|------|------|
+| GET | `/resolve` | セッション解決 or 新規作成 |
+| DELETE | `/sessions/{sessionId}` | セッション終了 |
+| POST | `/internal/runners/register` | Runner 登録 |
+| DELETE | `/internal/runners/{runnerId}` | Runner 登録解除 |
