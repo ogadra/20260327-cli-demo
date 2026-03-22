@@ -4,7 +4,7 @@ services:
     profiles:
       - nginx
     ports:
-      - "80:80"
+      - "${NGINX_PORT}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/errors.conf:/etc/nginx/errors.conf:ro
@@ -12,7 +12,7 @@ services:
   broker:
     build: broker/
     ports:
-      - "8080:8080"
+      - "${BROKER_PORT}:8080"
     env_file:
       - broker/.env.example
     depends_on:
@@ -38,7 +38,7 @@ services:
       context: front/
       target: dev
     ports:
-      - "5173:5173"
+      - "${FRONT_PORT}:5173"
     volumes:
       - ./front/src:/app/src:ro
       - ./front/index.html:/app/index.html:ro
@@ -48,8 +48,6 @@ services:
 
   runner:
     build: runner/
-    ports:
-      - "3000:3000"
     env_file:
       - runner/.env.example
     profiles:
@@ -57,8 +55,6 @@ services:
 
   dynamodb-local:
     image: amazon/dynamodb-local:3.3.0
-    ports:
-      - "8000:8000"
     healthcheck:
       test: ["CMD", "/bin/bash", "-c", "echo > /dev/tcp/localhost/8000"]
       interval: 5s
