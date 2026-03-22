@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 
@@ -17,16 +18,24 @@ var randReader io.Reader = rand.Reader
 
 // Service はブローカーのビジネスロジックを定義するインターフェース。
 type Service interface {
-	// CreateSession は idle runner を確保しセッションを作成する。
-	CreateSession(ctx context.Context) (*CreateSessionResult, error)
 	// CloseSession はセッションを終了し紐づく runner を削除する。
 	CloseSession(ctx context.Context, sessionID string) error
-	// ResolveSession はセッション ID から runner のプライベート URL を返す。
-	ResolveSession(ctx context.Context, sessionID string) (string, error)
+	// ResolveSession はセッション ID から runner を解決し、見つからなければ新規作成する。
+	ResolveSession(ctx context.Context, sessionID string) (*ResolveResult, error)
 	// RegisterRunner は runner を idle として登録する。
 	RegisterRunner(ctx context.Context, runnerID, privateURL string) error
 	// DeregisterRunner は runner を削除する。
 	DeregisterRunner(ctx context.Context, runnerID string) error
+}
+
+// ResolveResult はセッション解決または作成の結果を表す。
+type ResolveResult struct {
+	// SessionID はセッション ID。新規作成時は新しい ID、既存時は入力と同じ値。
+	SessionID string
+	// RunnerURL は runner のプライベート URL。
+	RunnerURL string
+	// Created は新規作成されたかどうかを示す。
+	Created bool
 }
 
 // CreateSessionResult はセッション作成の結果を表す。
@@ -76,8 +85,8 @@ func defaultSessionFn() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// CreateSession は idle runner を確保しセッションを作成する。
-func (s *BrokerService) CreateSession(ctx context.Context) (*CreateSessionResult, error) {
+// createSession は idle runner を確保しセッションを作成する。ResolveOrCreateSession から呼ばれる。
+func (s *BrokerService) createSession(ctx context.Context) (*CreateSessionResult, error) {
 	sessionID, err := s.sessionFn()
 	if err != nil {
 		return nil, err
@@ -98,13 +107,23 @@ func (s *BrokerService) CloseSession(ctx context.Context, sessionID string) erro
 	return s.repo.Delete(ctx, runner.RunnerID)
 }
 
-// ResolveSession はセッション ID から runner のプライベート URL を返す。
-func (s *BrokerService) ResolveSession(ctx context.Context, sessionID string) (string, error) {
-	runner, err := s.repo.FindBySessionID(ctx, sessionID)
-	if err != nil {
-		return "", err
+// ResolveSession はセッション ID から runner を解決し、見つからなければ新規作成する。
+// sessionID が空の場合は検索をスキップして即座に新規作成する。
+func (s *BrokerService) ResolveSession(ctx context.Context, sessionID string) (*ResolveResult, error) {
+	if sessionID != "" {
+		runner, err := s.repo.FindBySessionID(ctx, sessionID)
+		if err == nil {
+			return &ResolveResult{SessionID: sessionID, RunnerURL: runner.PrivateURL, Created: false}, nil
+		}
+		if !errors.Is(err, store.ErrNotFound) {
+			return nil, err
+		}
 	}
-	return runner.PrivateURL, nil
+	result, err := s.createSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &ResolveResult{SessionID: result.SessionID, RunnerURL: result.Runner.PrivateURL, Created: true}, nil
 }
 
 // RegisterRunner は runner を idle として登録する。
