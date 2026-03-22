@@ -12,7 +12,7 @@ resource "aws_vpc" "main" {
 
 # Public subnets
 resource "aws_subnet" "public" {
-  count = 3
+  count = length(local.azs)
 
   vpc_id            = aws_vpc.main.id
   cidr_block        = local.public_cidrs[count.index]
@@ -25,7 +25,7 @@ resource "aws_subnet" "public" {
 
 # Private subnets
 resource "aws_subnet" "private" {
-  count = 3
+  count = length(local.azs)
 
   vpc_id            = aws_vpc.main.id
   cidr_block        = local.private_cidrs[count.index]
@@ -47,7 +47,7 @@ resource "aws_internet_gateway" "main" {
 
 # Elastic IPs for NAT Gateways
 resource "aws_eip" "nat" {
-  count = 3
+  count = length(local.azs)
 
   domain = "vpc"
 
@@ -58,7 +58,7 @@ resource "aws_eip" "nat" {
 
 # NAT Gateways, one per AZ
 resource "aws_nat_gateway" "main" {
-  count = 3
+  count = length(local.azs)
 
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
@@ -86,7 +86,7 @@ resource "aws_route_table" "public" {
 
 resource "aws_route_table_association" "public" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
-  count = 3
+  count = length(local.azs)
 
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
@@ -94,7 +94,7 @@ resource "aws_route_table_association" "public" {
 
 # Private route tables, one per AZ
 resource "aws_route_table" "private" {
-  count = 3
+  count = length(local.azs)
 
   vpc_id = aws_vpc.main.id
 
@@ -110,7 +110,7 @@ resource "aws_route_table" "private" {
 
 resource "aws_route_table_association" "private" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
-  count = 3
+  count = length(local.azs)
 
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
