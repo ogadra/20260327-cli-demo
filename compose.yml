@@ -89,6 +89,7 @@ services:
     build: integration/
     environment:
       NGINX_URL: "http://nginx"
+      BROKER_URL: "http://broker:8080"
     depends_on:
       - nginx
       - broker
