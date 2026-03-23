@@ -19,6 +19,7 @@ resource "aws_iam_role" "ecs_task_execution" {
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   role       = aws_iam_role.ecs_task_execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
@@ -44,6 +45,7 @@ resource "aws_iam_role" "broker_task" {
 }
 
 resource "aws_iam_role_policy" "broker_dynamodb" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   name = "bunshin-broker-dynamodb"
   role = aws_iam_role.broker_task.id
 

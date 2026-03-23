@@ -44,6 +44,7 @@ resource "aws_ecr_repository" "runner" {
 }
 
 resource "aws_ecr_lifecycle_policy" "nginx" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   repository = aws_ecr_repository.nginx.name
 
   policy = jsonencode({
@@ -63,6 +64,7 @@ resource "aws_ecr_lifecycle_policy" "nginx" {
 }
 
 resource "aws_ecr_lifecycle_policy" "broker" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   repository = aws_ecr_repository.broker.name
 
   policy = jsonencode({
@@ -82,6 +84,7 @@ resource "aws_ecr_lifecycle_policy" "broker" {
 }
 
 resource "aws_ecr_lifecycle_policy" "runner" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   repository = aws_ecr_repository.runner.name
 
   policy = jsonencode({
