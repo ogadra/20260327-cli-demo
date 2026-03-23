@@ -45,26 +45,14 @@ resource "aws_internet_gateway" "main" {
   })
 }
 
-# Elastic IPs for NAT Gateways
-resource "aws_eip" "nat" {
-  count = length(local.azs)
-
-  domain = "vpc"
-
-  tags = merge(local.common_tags, {
-    Name = "bunshin-nat-${local.azs[count.index]}"
-  })
-}
-
-# NAT Gateways, one per AZ
+# Regional NAT Gateway
 resource "aws_nat_gateway" "main" {
-  count = length(local.azs)
-
-  allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = aws_subnet.public[count.index].id
+  vpc_id            = aws_vpc.main.id
+  availability_mode = "regional"
+  connectivity_type = "public"
 
   tags = merge(local.common_tags, {
-    Name = "bunshin-nat-${local.azs[count.index]}"
+    Name = "bunshin-nat"
   })
 
   depends_on = [aws_internet_gateway.main]
@@ -92,19 +80,17 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# Private route tables, one per AZ
+# Private route table
 resource "aws_route_table" "private" {
-  count = length(local.azs)
-
   vpc_id = aws_vpc.main.id
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
+    nat_gateway_id = aws_nat_gateway.main.id
   }
 
   tags = merge(local.common_tags, {
-    Name = "bunshin-private-${local.azs[count.index]}"
+    Name = "bunshin-private"
   })
 }
 
@@ -113,7 +99,7 @@ resource "aws_route_table_association" "private" {
   count = length(local.azs)
 
   subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private[count.index].id
+  route_table_id = aws_route_table.private.id
 }
 
 # VPC Gateway Endpoint for DynamoDB
@@ -122,7 +108,7 @@ resource "aws_vpc_endpoint" "dynamodb" {
   service_name = "com.amazonaws.ap-northeast-1.dynamodb"
 
   vpc_endpoint_type = "Gateway"
-  route_table_ids   = aws_route_table.private[*].id
+  route_table_ids   = [aws_route_table.private.id]
 
   tags = merge(local.common_tags, {
     Name = "bunshin-dynamodb"
