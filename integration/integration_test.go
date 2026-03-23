@@ -93,8 +93,14 @@ func createSession(t *testing.T, baseURL string) sessionCookies {
 // Cookie ヘッダは手動で設定する。Secure フラグが HTTP 環境の cookie jar と非互換のため。
 func executeCommand(t *testing.T, baseURL string, cookies sessionCookies, command string) []sseEvent {
 	t.Helper()
-	body := fmt.Sprintf(`{"command":%q}`, command)
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/execute", strings.NewReader(body))
+	payload := struct {
+		Command string `json:"command"`
+	}{Command: command}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal request body: %v", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/execute", strings.NewReader(string(body)))
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
