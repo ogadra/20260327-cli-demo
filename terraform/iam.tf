@@ -116,3 +116,19 @@ resource "aws_iam_role_policy" "broker_dynamodb" {
     }]
   })
 }
+
+# runner: Bedrock InvokeModel access
+resource "aws_iam_role_policy" "runner_bedrock" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
+  name = "bunshin-runner-bedrock"
+  role = aws_iam_role.task["runner"].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "bedrock:InvokeModel"
+      Resource = "arn:aws:bedrock:ap-northeast-1::foundation-model/*"
+    }]
+  })
+}
