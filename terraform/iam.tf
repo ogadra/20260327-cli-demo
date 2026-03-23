@@ -34,7 +34,7 @@ resource "aws_iam_role_policy" "execution_ecr" {
           "ecr:BatchGetImage",
           "ecr:BatchCheckLayerAvailability",
         ]
-        Resource = [for s in local.services : aws_ecr_repository.service[s].arn]
+        Resource = [for s in local.ecs_service_names : aws_ecr_repository.service[s].arn]
       },
       {
         Effect   = "Allow"
@@ -59,14 +59,14 @@ resource "aws_iam_role_policy" "execution_logs" {
         "logs:CreateLogStream",
         "logs:PutLogEvents",
       ]
-      Resource = [for s in local.services : "${aws_cloudwatch_log_group.ecs[s].arn}:*"]
+      Resource = [for s in local.ecs_service_names : "${aws_cloudwatch_log_group.ecs[s].arn}:*"]
     }]
   })
 }
 
 # Task roles per service
 resource "aws_iam_role" "task" {
-  for_each = local.services
+  for_each = local.ecs_service_names
 
   name = "bunshin-${each.key}-task"
 

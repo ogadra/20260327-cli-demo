@@ -2,7 +2,7 @@
 resource "aws_cloudwatch_log_group" "ecs" {
   # checkov:skip=CKV_AWS_158:KMS encryption is not required for this use case
   # checkov:skip=CKV_AWS_338:30 days retention is sufficient for ephemeral runner logs
-  for_each = local.services
+  for_each = local.ecs_service_names
 
   name              = "/ecs/bunshin-${each.key}"
   retention_in_days = 30

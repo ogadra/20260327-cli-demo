@@ -1,7 +1,7 @@
 # trivy:ignore:AVD-AWS-0033 -- AWS managed encryption is sufficient
 resource "aws_ecr_repository" "service" {
   # checkov:skip=CKV_AWS_136:AWS managed encryption is sufficient
-  for_each = local.services
+  for_each = local.ecs_service_names
 
   name                 = "bunshin/${each.key}"
   image_tag_mutability = "IMMUTABLE"
@@ -17,7 +17,7 @@ resource "aws_ecr_repository" "service" {
 
 resource "aws_ecr_lifecycle_policy" "service" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
-  for_each = local.services
+  for_each = local.ecs_service_names
 
   repository = aws_ecr_repository.service[each.key].name
 
