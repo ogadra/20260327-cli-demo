@@ -39,6 +39,7 @@ resource "aws_cloudfront_distribution" "main" {
   # checkov:skip=CKV2_AWS_32:Response headers policy is not needed for initial deployment
   enabled             = true
   default_root_object = "index.html"
+  price_class         = "PriceClass_200"
   aliases             = [var.domain_name]
 
   # S3 origin for static assets
@@ -67,6 +68,7 @@ resource "aws_cloudfront_distribution" "main" {
     cached_methods         = ["GET", "HEAD"]
     target_origin_id       = "s3"
     viewer_protocol_policy = "redirect-to-https"
+    compress               = true
 
     forwarded_values {
       query_string = false
@@ -79,17 +81,19 @@ resource "aws_cloudfront_distribution" "main" {
       event_type   = "viewer-request"
       function_arn = aws_cloudfront_function.spa_rewrite.arn
     }
-
-    compress = true
   }
 
-  # /api/* behavior: forward to ALB
+  # /api/* behavior: forward to ALB with no caching
   ordered_cache_behavior {
     path_pattern           = "/api/*"
     allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods         = ["GET", "HEAD"]
     target_origin_id       = "alb"
     viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 0
+    max_ttl                = 0
+    compress               = false
 
     forwarded_values {
       query_string = true
@@ -98,8 +102,6 @@ resource "aws_cloudfront_distribution" "main" {
         forward = "all"
       }
     }
-
-    compress = false
   }
 
   restrictions {
