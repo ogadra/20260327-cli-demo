@@ -34,7 +34,7 @@ resource "aws_ecs_task_definition" "nginx" {
     essential = true
 
     portMappings = [{
-      containerPort = 80
+      containerPort = local.ecs_services["nginx"].port
       protocol      = "tcp"
     }]
 
@@ -75,7 +75,7 @@ resource "aws_ecs_task_definition" "broker" {
     readonlyRootFilesystem = true
 
     portMappings = [{
-      containerPort = 8080
+      containerPort = local.ecs_services["broker"].port
       protocol      = "tcp"
     }]
 
@@ -119,13 +119,13 @@ resource "aws_ecs_task_definition" "runner" {
     essential = true
 
     portMappings = [{
-      containerPort = 3000
+      containerPort = local.ecs_services["runner"].port
       protocol      = "tcp"
     }]
 
     environment = [
-      { name = "RUNNER_PORT", value = "3000" },
-      { name = "BROKER_URL", value = "http://${aws_service_discovery_service.broker.name}.${aws_service_discovery_private_dns_namespace.internal.name}:8080" },
+      { name = "RUNNER_PORT", value = tostring(local.ecs_services["runner"].port) },
+      { name = "BROKER_URL", value = "http://${aws_service_discovery_service.broker.name}.${aws_service_discovery_private_dns_namespace.internal.name}:${local.ecs_services["broker"].port}" },
     ]
 
     logConfiguration = {
