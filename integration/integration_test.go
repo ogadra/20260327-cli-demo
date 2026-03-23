@@ -128,7 +128,9 @@ func discoverRunnerHostnames() ([]string, error) {
 		// クリーンアップ: resolve で作成されたセッションを閉じる
 		for _, c := range resp.Cookies() {
 			if c.Name == "runner_id" {
-				deleteFromBroker(brokerBase + "/sessions/" + c.Value)
+				if err := deleteFromBroker(brokerBase + "/sessions/" + c.Value); err != nil {
+					return nil, fmt.Errorf("cleanup session: %w", err)
+				}
 			}
 		}
 	}
@@ -139,36 +141,53 @@ func discoverRunnerHostnames() ([]string, error) {
 
 	// 全 runner を idle 状態で再登録
 	for _, h := range hostnames {
-		registerRunnerOnBroker(h)
+		if err := registerRunnerOnBroker(h); err != nil {
+			return nil, fmt.Errorf("register runner %s: %w", h, err)
+		}
 	}
 
 	return hostnames, nil
 }
 
 // deleteFromBroker は broker のエンドポイントに DELETE リクエストを送信する。
-func deleteFromBroker(url string) {
-	req, _ := http.NewRequest(http.MethodDelete, url, nil)
+func deleteFromBroker(url string) error {
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return
+		return fmt.Errorf("do request: %w", err)
 	}
 	resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("unexpected status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // registerRunnerOnBroker は runner を broker に登録する。
-func registerRunnerOnBroker(hostname string) {
+func registerRunnerOnBroker(hostname string) error {
 	body := fmt.Sprintf(`{"runnerId":%q,"privateUrl":"http://%s:3000"}`, hostname, hostname)
-	req, _ := http.NewRequest(http.MethodPost, brokerBase+"/internal/runners/register", strings.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, brokerBase+"/internal/runners/register", strings.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return
+		return fmt.Errorf("do request: %w", err)
 	}
 	resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("unexpected status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // resetRunners は全 runner を broker から削除し再登録することで idle 状態に戻す。
 // sessionID が空でなければ先に broker セッションを閉じる。
+// セッション削除は既に削除済みの場合 404 が返るため許容する。
 func resetRunners(t *testing.T, sessionID string) {
 	t.Helper()
 	if sessionID != "" {
@@ -176,7 +195,9 @@ func resetRunners(t *testing.T, sessionID string) {
 	}
 	for _, h := range runnerHostnames {
 		deleteFromBroker(brokerBase + "/internal/runners/" + h)
-		registerRunnerOnBroker(h)
+		if err := registerRunnerOnBroker(h); err != nil {
+			t.Errorf("register runner %s: %v", h, err)
+		}
 	}
 }
 
@@ -427,12 +448,14 @@ func TestExecuteAfterSessionDelete(t *testing.T) {
 // broker の resolve-or-create が新規セッションを作成して runner に転送するが、
 // session_id cookie が欠落しているため runner が 400 を返す。
 func TestExecuteWithoutCookies(t *testing.T) {
-	// resolve-or-create で runner が割り当てられるので cleanup で全 runner をリセット
-	t.Cleanup(func() { resetRunners(t, "") })
-
 	body := `{"command":"pwd"}`
 	resp := doRequest(t, http.MethodPost, nginxBase+"/api/execute", body, "")
 	defer resp.Body.Close()
+
+	// resolve-or-create で作成されたセッションをクリーンアップする
+	// nginx の error_page では Set-Cookie が返らないため、レスポンスからは取得できない
+	// resetRunners で全 runner を削除・再登録することでセッションを無効化する
+	t.Cleanup(func() { resetRunners(t, "") })
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("expected 400 for execute without cookies, got %d", resp.StatusCode)
