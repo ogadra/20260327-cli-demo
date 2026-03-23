@@ -128,7 +128,7 @@ resource "aws_iam_role_policy" "runner_bedrock" {
     Statement = [{
       Effect   = "Allow"
       Action   = "bedrock:InvokeModel"
-      Resource = "arn:aws:bedrock:ap-northeast-1::foundation-model/*"
+      Resource = "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-*"
     }]
   })
 }
