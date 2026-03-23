@@ -43,7 +43,6 @@ resource "aws_security_group_rule" "alb_egress_nginx" {
 }
 
 resource "aws_security_group" "nginx" {
-  # checkov:skip=CKV2_AWS_5:ALB and ECS services are defined in separate steps
   name_prefix = "bunshin-nginx-"
   description = "Security group for nginx ECS tasks"
   vpc_id      = aws_vpc.main.id
@@ -95,7 +94,6 @@ resource "aws_security_group_rule" "nginx_egress_runner" {
 }
 
 resource "aws_security_group" "broker" {
-  # checkov:skip=CKV2_AWS_5:ALB and ECS services are defined in separate steps
   name_prefix = "bunshin-broker-"
   description = "Security group for broker ECS tasks"
   vpc_id      = aws_vpc.main.id
@@ -147,7 +145,6 @@ resource "aws_security_group_rule" "broker_egress_dynamodb" {
 }
 
 resource "aws_security_group" "runner" {
-  # checkov:skip=CKV2_AWS_5:ALB and ECS services are defined in separate steps
   name_prefix = "bunshin-runner-"
   description = "Security group for runner ECS tasks"
   vpc_id      = aws_vpc.main.id
