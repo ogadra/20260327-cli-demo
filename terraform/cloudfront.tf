@@ -33,14 +33,13 @@ resource "aws_cloudfront_distribution" "main" {
   # checkov:skip=CKV_AWS_310:CloudFront origin failover is not needed
   # checkov:skip=CKV2_AWS_47:WAF is out of scope for initial deployment
   # checkov:skip=CKV_AWS_86:CloudFront access logs are optional for initial deployment
-  # checkov:skip=CKV2_AWS_42:Custom domain is configured separately via variables
+  # checkov:skip=CKV2_AWS_42:Custom domain is configured via variables
   # checkov:skip=CKV_AWS_374:Geo restriction is not needed
-  # checkov:skip=CKV_AWS_174:Default certificate uses CloudFront-managed TLS
   # checkov:skip=CKV_AWS_68:WAF is out of scope for initial deployment
   # checkov:skip=CKV2_AWS_32:Response headers policy is not needed for initial deployment
   enabled             = true
   default_root_object = "index.html"
-  aliases             = var.domain_name != "" ? [var.domain_name] : []
+  aliases             = [var.domain_name]
 
   # S3 origin for static assets
   origin {
@@ -110,10 +109,9 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = var.acm_certificate_arn == ""
-    acm_certificate_arn            = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
-    ssl_support_method             = var.acm_certificate_arn != "" ? "sni-only" : null
-    minimum_protocol_version       = var.acm_certificate_arn != "" ? "TLSv1.2_2021" : "TLSv1"
+    acm_certificate_arn      = var.acm_certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 
   tags = merge(local.common_tags, {
