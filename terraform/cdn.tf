@@ -9,7 +9,8 @@ resource "aws_s3_bucket" "front" {
   # checkov:skip=CKV2_AWS_62:Event notifications are not needed
   # checkov:skip=CKV2_AWS_61:Lifecycle configuration is not needed for static assets
   # checkov:skip=CKV_AWS_21:Versioning is not needed for build output
-  bucket = "bunshin-front"
+  bucket           = "bunshin-front"
+  bucket_namespace = "account-regional"
 
   tags = merge(local.common_tags, {
     Service = "front"
@@ -67,11 +68,7 @@ resource "aws_cloudfront_function" "spa_rewrite" {
   code    = <<-EOF
     function handler(event) {
       var request = event.request;
-      var uri = request.uri;
-      if (uri.startsWith('/api/')) {
-        return request;
-      }
-      if (!uri.includes('.')) {
+      if (!request.uri.includes('.')) {
         request.uri = '/index.html';
       }
       return request;
