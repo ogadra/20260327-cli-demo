@@ -34,8 +34,8 @@ resource "aws_security_group_rule" "alb_ingress_cloudfront" {
 resource "aws_security_group_rule" "alb_egress_nginx" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   type                     = "egress"
-  from_port                = 80
-  to_port                  = 80
+  from_port                = local.ecs_services["nginx"].port
+  to_port                  = local.ecs_services["nginx"].port
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.nginx.id
   security_group_id        = aws_security_group.alb.id
@@ -43,7 +43,6 @@ resource "aws_security_group_rule" "alb_egress_nginx" {
 }
 
 resource "aws_security_group" "nginx" {
-  # checkov:skip=CKV2_AWS_5:ALB and ECS services are defined in separate steps
   name_prefix = "bunshin-nginx-"
   description = "Security group for nginx ECS tasks"
   vpc_id      = aws_vpc.main.id
@@ -62,8 +61,8 @@ resource "aws_security_group" "nginx" {
 resource "aws_security_group_rule" "nginx_ingress_alb" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   type                     = "ingress"
-  from_port                = 80
-  to_port                  = 80
+  from_port                = local.ecs_services["nginx"].port
+  to_port                  = local.ecs_services["nginx"].port
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.alb.id
   security_group_id        = aws_security_group.nginx.id
@@ -74,8 +73,8 @@ resource "aws_security_group_rule" "nginx_ingress_alb" {
 resource "aws_security_group_rule" "nginx_egress_broker" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   type                     = "egress"
-  from_port                = 8080
-  to_port                  = 8080
+  from_port                = local.ecs_services["broker"].port
+  to_port                  = local.ecs_services["broker"].port
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.broker.id
   security_group_id        = aws_security_group.nginx.id
@@ -86,8 +85,8 @@ resource "aws_security_group_rule" "nginx_egress_broker" {
 resource "aws_security_group_rule" "nginx_egress_runner" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   type                     = "egress"
-  from_port                = 3000
-  to_port                  = 3000
+  from_port                = local.ecs_services["runner"].port
+  to_port                  = local.ecs_services["runner"].port
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.runner.id
   security_group_id        = aws_security_group.nginx.id
@@ -95,7 +94,6 @@ resource "aws_security_group_rule" "nginx_egress_runner" {
 }
 
 resource "aws_security_group" "broker" {
-  # checkov:skip=CKV2_AWS_5:ALB and ECS services are defined in separate steps
   name_prefix = "bunshin-broker-"
   description = "Security group for broker ECS tasks"
   vpc_id      = aws_vpc.main.id
@@ -114,8 +112,8 @@ resource "aws_security_group" "broker" {
 resource "aws_security_group_rule" "broker_ingress_nginx" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   type                     = "ingress"
-  from_port                = 8080
-  to_port                  = 8080
+  from_port                = local.ecs_services["broker"].port
+  to_port                  = local.ecs_services["broker"].port
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.nginx.id
   security_group_id        = aws_security_group.broker.id
@@ -126,8 +124,8 @@ resource "aws_security_group_rule" "broker_ingress_nginx" {
 resource "aws_security_group_rule" "broker_ingress_runner" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   type                     = "ingress"
-  from_port                = 8080
-  to_port                  = 8080
+  from_port                = local.ecs_services["broker"].port
+  to_port                  = local.ecs_services["broker"].port
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.runner.id
   security_group_id        = aws_security_group.broker.id
@@ -147,7 +145,6 @@ resource "aws_security_group_rule" "broker_egress_dynamodb" {
 }
 
 resource "aws_security_group" "runner" {
-  # checkov:skip=CKV2_AWS_5:ALB and ECS services are defined in separate steps
   name_prefix = "bunshin-runner-"
   description = "Security group for runner ECS tasks"
   vpc_id      = aws_vpc.main.id
@@ -166,8 +163,8 @@ resource "aws_security_group" "runner" {
 resource "aws_security_group_rule" "runner_ingress_nginx" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   type                     = "ingress"
-  from_port                = 3000
-  to_port                  = 3000
+  from_port                = local.ecs_services["runner"].port
+  to_port                  = local.ecs_services["runner"].port
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.nginx.id
   security_group_id        = aws_security_group.runner.id
@@ -178,8 +175,8 @@ resource "aws_security_group_rule" "runner_ingress_nginx" {
 resource "aws_security_group_rule" "runner_egress_broker" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   type                     = "egress"
-  from_port                = 8080
-  to_port                  = 8080
+  from_port                = local.ecs_services["broker"].port
+  to_port                  = local.ecs_services["broker"].port
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.broker.id
   security_group_id        = aws_security_group.runner.id

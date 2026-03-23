@@ -1,6 +1,6 @@
 # ECS task execution roles per service
 resource "aws_iam_role" "ecs_task_execution" {
-  for_each = local.ecs_service_names
+  for_each = local.ecs_services
 
   name = "bunshin-${each.key}-task-execution"
 
@@ -23,7 +23,7 @@ resource "aws_iam_role" "ecs_task_execution" {
 # ECR pull permissions scoped to each service repository
 resource "aws_iam_role_policy" "execution_ecr" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
-  for_each = local.ecs_service_names
+  for_each = local.ecs_services
 
   name = "bunshin-${each.key}-execution-ecr"
   role = aws_iam_role.ecs_task_execution[each.key].id
@@ -52,7 +52,7 @@ resource "aws_iam_role_policy" "execution_ecr" {
 # CloudWatch Logs permissions scoped to each service log group
 resource "aws_iam_role_policy" "execution_logs" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
-  for_each = local.ecs_service_names
+  for_each = local.ecs_services
 
   name = "bunshin-${each.key}-execution-logs"
   role = aws_iam_role.ecs_task_execution[each.key].id
@@ -72,7 +72,7 @@ resource "aws_iam_role_policy" "execution_logs" {
 
 # Task roles per service
 resource "aws_iam_role" "task" {
-  for_each = local.ecs_service_names
+  for_each = local.ecs_services
 
   name = "bunshin-${each.key}-task"
 
