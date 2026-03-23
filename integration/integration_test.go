@@ -14,6 +14,11 @@ import (
 	"time"
 )
 
+// httpClient はテスト用の HTTP クライアント。タイムアウトを設定して CI でのハングを防止する。
+var httpClient = &http.Client{
+	Timeout: 10 * time.Second,
+}
+
 // sseEvent は SSE ストリームから受信する単一イベントを表す。
 type sseEvent struct {
 	Type     string `json:"type"`
@@ -43,7 +48,7 @@ func waitForNginx(t *testing.T, baseURL string) {
 	t.Helper()
 	deadline := time.Now().Add(60 * time.Second)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(baseURL + "/health")
+		resp, err := httpClient.Get(baseURL + "/health")
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
@@ -63,7 +68,7 @@ func createSession(t *testing.T, baseURL string) sessionCookies {
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST /api/session: %v", err)
 	}
@@ -106,7 +111,7 @@ func executeCommand(t *testing.T, baseURL string, cookies sessionCookies, comman
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Cookie", fmt.Sprintf("runner_id=%s; session_id=%s", cookies.RunnerID, cookies.SessionID))
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST /api/execute: %v", err)
 	}
@@ -122,6 +127,7 @@ func parseSSEEvents(t *testing.T, resp *http.Response) []sseEvent {
 	t.Helper()
 	var events []sseEvent
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "data: ") {
@@ -148,7 +154,7 @@ func deleteSession(t *testing.T, baseURL string, cookies sessionCookies) {
 		t.Fatalf("create request: %v", err)
 	}
 	req.Header.Set("Cookie", fmt.Sprintf("runner_id=%s; session_id=%s", cookies.RunnerID, cookies.SessionID))
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		t.Fatalf("DELETE /api/session: %v", err)
 	}
@@ -163,7 +169,7 @@ func TestHealthCheck(t *testing.T) {
 	base := nginxURL(t)
 	waitForNginx(t, base)
 
-	resp, err := http.Get(base + "/health")
+	resp, err := httpClient.Get(base + "/health")
 	if err != nil {
 		t.Fatalf("GET /health: %v", err)
 	}
@@ -180,6 +186,7 @@ func TestSmoke_CreateSessionAndExecute(t *testing.T) {
 	waitForNginx(t, base)
 
 	cookies := createSession(t, base)
+	t.Cleanup(func() { deleteSession(t, base, cookies) })
 
 	events := executeCommand(t, base, cookies, "pwd")
 
@@ -199,6 +206,4 @@ func TestSmoke_CreateSessionAndExecute(t *testing.T) {
 	if !hasComplete {
 		t.Errorf("complete event with exitCode=0 not found in events: %+v", events)
 	}
-
-	deleteSession(t, base, cookies)
 }
