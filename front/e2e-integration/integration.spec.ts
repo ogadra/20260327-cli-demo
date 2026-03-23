@@ -25,8 +25,9 @@ test.describe.serial("integration", () => {
   let sharedPage: Page;
 
   test.beforeAll(async ({ browser }) => {
-    sharedPage = await browser.newPage();
-    await sharedPage.goto("http://localhost:5173");
+    const context = await browser.newContext();
+    sharedPage = await context.newPage();
+    await sharedPage.goto("/");
     await waitForReady(sharedPage);
   });
 
