@@ -10,7 +10,7 @@ on:
       - "runner/**"
       - "nginx/**"
       - "integration/**"
-      - "front/e2e/integration*"
+      - "front/e2e-integration/**"
       - "front/playwright.integration*"
       - "compose.yml"
       - "init/**"
