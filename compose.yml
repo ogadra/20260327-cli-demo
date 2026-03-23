@@ -50,12 +50,19 @@ services:
     profiles:
       - front
 
-  runner:
+  runner-1:
     build: runner/
     env_file:
       - runner/.env.example
     profiles:
       - runner
+      - integration
+
+  runner-2:
+    build: runner/
+    env_file:
+      - runner/.env.example
+    profiles:
       - integration
 
   dynamodb-init:
@@ -89,9 +96,11 @@ services:
     build: integration/
     environment:
       NGINX_URL: "http://nginx"
+      BROKER_URL: "http://broker:8080"
     depends_on:
       - nginx
       - broker
-      - runner
+      - runner-1
+      - runner-2
     profiles:
       - integration
