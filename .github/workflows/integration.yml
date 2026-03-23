@@ -4,17 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "broker/**"
-      - "runner/**"
-      - "nginx/**"
-      - "integration/**"
-      - "front/e2e/integration*"
-      - "front/playwright.integration*"
-      - "compose.yml"
-      - "init/**"
-      - ".env.example"
-      - ".github/workflows/integration.yml"
   pull_request:
     paths:
       - "broker/**"
