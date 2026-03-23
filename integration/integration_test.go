@@ -41,10 +41,13 @@ func (c sessionCookies) cookieHeader() string {
 // base は nginx の URL。TestMain で初期化される。
 var base string
 
-// brokerBase は broker の URL。TestMain で初期化される。
+// brokerBase は broker の内部 URL。TestMain で初期化される。
+// compose 環境では runner が1台のみのため、テスト間で runner の状態をリセットする必要がある。
+// そのために broker の内部 API を直接呼び出してセッション削除・runner 再登録を行う。
 var brokerBase string
 
 // runnerHostname は runner のホスト名。TestMain で初期化される。
+// テスト間の runner リセットに使用する。
 var runnerHostname string
 
 // TestMain はテスト実行前にサービスの起動を待機し、runner のホスト名を解決する。
