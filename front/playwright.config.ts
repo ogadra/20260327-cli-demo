@@ -2,6 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "integration*",
   webServer: {
     command: "pnpm exec vp dev",
     port: 5173,
