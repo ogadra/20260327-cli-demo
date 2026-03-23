@@ -1,5 +1,4 @@
 resource "aws_security_group" "alb" {
-  # checkov:skip=CKV2_AWS_5:ALB and ECS services are defined in separate steps
   name_prefix = "bunshin-alb-"
   description = "Security group for ALB"
   vpc_id      = aws_vpc.main.id
