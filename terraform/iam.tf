@@ -1,6 +1,8 @@
-# ECS task execution role shared by all services
+# ECS task execution roles per service
 resource "aws_iam_role" "ecs_task_execution" {
-  name = "bunshin-ecs-task-execution"
+  for_each = local.ecs_service_names
+
+  name = "bunshin-${each.key}-task-execution"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -14,15 +16,17 @@ resource "aws_iam_role" "ecs_task_execution" {
   })
 
   tags = merge(local.common_tags, {
-    Service = "ecs"
+    Service = each.key
   })
 }
 
-# ECR pull permissions for task execution role
+# ECR pull permissions scoped to each service repository
 resource "aws_iam_role_policy" "execution_ecr" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
-  name = "bunshin-execution-ecr"
-  role = aws_iam_role.ecs_task_execution.id
+  for_each = local.ecs_service_names
+
+  name = "bunshin-${each.key}-execution-ecr"
+  role = aws_iam_role.ecs_task_execution[each.key].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -34,7 +38,7 @@ resource "aws_iam_role_policy" "execution_ecr" {
           "ecr:BatchGetImage",
           "ecr:BatchCheckLayerAvailability",
         ]
-        Resource = [for s in local.ecs_service_names : aws_ecr_repository.service[s].arn]
+        Resource = aws_ecr_repository.service[each.key].arn
       },
       {
         Effect   = "Allow"
@@ -48,8 +52,10 @@ resource "aws_iam_role_policy" "execution_ecr" {
 # CloudWatch Logs permissions scoped to each service log group
 resource "aws_iam_role_policy" "execution_logs" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
-  name = "bunshin-execution-logs"
-  role = aws_iam_role.ecs_task_execution.id
+  for_each = local.ecs_service_names
+
+  name = "bunshin-${each.key}-execution-logs"
+  role = aws_iam_role.ecs_task_execution[each.key].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -59,7 +65,7 @@ resource "aws_iam_role_policy" "execution_logs" {
         "logs:CreateLogStream",
         "logs:PutLogEvents",
       ]
-      Resource = [for s in local.ecs_service_names : "${aws_cloudwatch_log_group.ecs[s].arn}:*"]
+      Resource = "${aws_cloudwatch_log_group.ecs[each.key].arn}:*"
     }]
   })
 }
