@@ -125,7 +125,7 @@ resource "aws_ecs_task_definition" "runner" {
 
     environment = [
       { name = "RUNNER_PORT", value = "3000" },
-      { name = "BROKER_URL", value = "http://broker.internal:8080" },
+      { name = "BROKER_URL", value = "http://${aws_service_discovery_service.broker.name}.${aws_service_discovery_private_dns_namespace.internal.name}:8080" },
     ]
 
     logConfiguration = {
