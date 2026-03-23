@@ -1,0 +1,33 @@
+name: Integration
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - "broker/**"
+      - "runner/**"
+      - "nginx/**"
+      - "integration/**"
+      - "front/e2e/integration*"
+      - "front/playwright.integration*"
+      - "compose.yml"
+      - "init/**"
+      - ".env.example"
+      - ".github/workflows/integration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  integration-go:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Run integration tests
+        run: docker compose --env-file .env.example --profile integration run --rm integration-test
+      - name: Cleanup
+        if: always()
+        run: docker compose --env-file .env.example --profile integration down -v
