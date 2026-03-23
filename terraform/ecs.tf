@@ -143,17 +143,23 @@ resource "aws_ecs_task_definition" "runner" {
   })
 }
 
-# nginx ECS service
 resource "aws_ecs_service" "nginx" {
-  name            = "bunshin-nginx"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.nginx.arn
-  desired_count   = 6
-  launch_type     = "FARGATE"
+  name                              = "bunshin-nginx"
+  cluster                           = aws_ecs_cluster.main.id
+  task_definition                   = aws_ecs_task_definition.nginx.arn
+  desired_count                     = 6
+  launch_type                       = "FARGATE"
+  health_check_grace_period_seconds = 60
 
   network_configuration {
     subnets         = aws_subnet.private[*].id
     security_groups = [aws_security_group.nginx.id]
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.nginx.arn
+    container_name   = "nginx"
+    container_port   = local.ecs_services["nginx"].port
   }
 
   tags = merge(local.common_tags, {
