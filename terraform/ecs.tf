@@ -144,11 +144,12 @@ resource "aws_ecs_task_definition" "runner" {
 }
 
 resource "aws_ecs_service" "nginx" {
-  name            = "bunshin-nginx"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.nginx.arn
-  desired_count   = 6
-  launch_type     = "FARGATE"
+  name                              = "bunshin-nginx"
+  cluster                           = aws_ecs_cluster.main.id
+  task_definition                   = aws_ecs_task_definition.nginx.arn
+  desired_count                     = 6
+  launch_type                       = "FARGATE"
+  health_check_grace_period_seconds = 60
 
   network_configuration {
     subnets         = aws_subnet.private[*].id
