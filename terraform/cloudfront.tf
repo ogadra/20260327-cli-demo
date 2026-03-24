@@ -1,4 +1,5 @@
 # Cache policy for S3 static assets: no caching, no cookies/query strings
+# 将来的に変更するのでマネージドポリシーではなく自前定義
 resource "aws_cloudfront_cache_policy" "static_assets" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   name        = "bunshin-static-assets"
@@ -18,27 +19,6 @@ resource "aws_cloudfront_cache_policy" "static_assets" {
     }
     enable_accept_encoding_gzip   = false
     enable_accept_encoding_brotli = false
-  }
-}
-
-# Cache policy for API: no caching, pass through all requests
-resource "aws_cloudfront_cache_policy" "api_no_cache" {
-  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
-  name        = "bunshin-api-no-cache"
-  min_ttl     = 0
-  default_ttl = 0
-  max_ttl     = 0
-
-  parameters_in_cache_key_and_forwarded_to_origin {
-    cookies_config {
-      cookie_behavior = "none"
-    }
-    headers_config {
-      header_behavior = "none"
-    }
-    query_strings_config {
-      query_string_behavior = "none"
-    }
   }
 }
 
@@ -65,6 +45,16 @@ resource "aws_cloudfront_origin_access_control" "front" {
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
+}
+
+# AWS managed cache policy: no caching for API Gateway origins
+data "aws_cloudfront_cache_policy" "caching_disabled" {
+  name = "Managed-CachingDisabled"
+}
+
+# AWS managed origin request policy: forward all viewer headers except Host
+data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" {
+  name = "Managed-AllViewerExceptHostHeader"
 }
 
 # CloudFront function for SPA routing
@@ -122,6 +112,32 @@ resource "aws_cloudfront_distribution" "main" {
     }
   }
 
+  # WebSocket API Gateway origin for presenter slide sync
+  origin {
+    domain_name = "${aws_apigatewayv2_api.presenter_websocket.id}.execute-api.${data.aws_region.current.id}.amazonaws.com"
+    origin_id   = local.presenter_cf_origin_id.websocket
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  # HTTP API Gateway origin for presenter login
+  origin {
+    domain_name = "${aws_apigatewayv2_api.presenter_login.id}.execute-api.${data.aws_region.current.id}.amazonaws.com"
+    origin_id   = local.presenter_cf_origin_id.login
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
   # Default behavior: S3 static assets
   default_cache_behavior {
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
@@ -146,8 +162,32 @@ resource "aws_cloudfront_distribution" "main" {
     target_origin_id         = "alb"
     viewer_protocol_policy   = "redirect-to-https"
     compress                 = false
-    cache_policy_id          = aws_cloudfront_cache_policy.api_no_cache.id
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id = aws_cloudfront_origin_request_policy.api_all_viewer.id
+  }
+
+  # /ws behavior: forward to WebSocket API Gateway
+  ordered_cache_behavior {
+    path_pattern             = "/ws"
+    allowed_methods          = ["GET", "HEAD"]
+    cached_methods           = ["GET", "HEAD"]
+    target_origin_id         = local.presenter_cf_origin_id.websocket
+    viewer_protocol_policy   = "https-only"
+    compress                 = false
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+  }
+
+  # /login behavior: forward to HTTP API Gateway
+  ordered_cache_behavior {
+    path_pattern             = "/login"
+    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods           = ["GET", "HEAD"]
+    target_origin_id         = local.presenter_cf_origin_id.login
+    viewer_protocol_policy   = "https-only"
+    compress                 = false
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
   }
 
   restrictions {
