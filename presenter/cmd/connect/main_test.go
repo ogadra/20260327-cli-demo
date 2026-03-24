@@ -7,7 +7,6 @@ import (
 
 // TestMain_success は main 関数が正常に完了することを検証する。
 func TestMain_success(t *testing.T) {
-	t.Parallel()
 
 	origFatalf := fatalf
 	origStart := startLambda
@@ -26,7 +25,6 @@ func TestMain_success(t *testing.T) {
 
 // TestMain_error は run がエラーを返した場合に fatalf が呼ばれることを検証する。
 func TestMain_error(t *testing.T) {
-	t.Parallel()
 
 	origFatalf := fatalf
 	origRun := runFn
@@ -52,7 +50,6 @@ func TestMain_error(t *testing.T) {
 
 // TestRun は run が startLambda を呼び出しエラーなく完了することを検証する。
 func TestRun(t *testing.T) {
-	t.Parallel()
 
 	origStart := startLambda
 	defer func() { startLambda = origStart }()
@@ -66,7 +63,6 @@ func TestRun(t *testing.T) {
 
 // TestHandler はプレースホルダーハンドラーがエラーを返さないことを検証する。
 func TestHandler(t *testing.T) {
-	t.Parallel()
 
 	if err := handler(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
