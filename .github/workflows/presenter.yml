@@ -1,0 +1,52 @@
+name: Presenter
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - "presenter/**"
+      - ".github/workflows/presenter.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  lint-presenter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version: "1.26"
+      - name: gofmt check
+        run: |
+          unformatted="$(gofmt -l presenter/)" || exit 1
+          test -z "$unformatted" || {
+            printf '%s\n' "$unformatted"
+            exit 1
+          }
+      - name: go vet
+        run: cd presenter && go vet ./...
+
+  test-presenter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Run tests and enforce 100% coverage
+        run: docker build --target test presenter/
+
+  test-presenter-race:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Run race detector
+        run: docker build --target test-race presenter/
+
+  build-presenter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Build
+        run: docker build --target binary presenter/

@@ -1,0 +1,45 @@
+name: Deploy Presenter
+
+on:
+  workflow_run:
+    workflows: ["Presenter"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-presenter
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04-arm
+    if: github.event.workflow_run.conclusion == 'success'
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          role-to-assume: ${{ secrets.DEPLOY_PRESENTER_ROLE_ARN }}
+          aws-region: ap-northeast-1
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version: "1.26"
+      - name: Build and deploy Lambda functions
+        run: |
+          cd presenter
+          for fn in connect disconnect message login; do
+            GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o bootstrap "./cmd/${fn}"
+            zip "${fn}.zip" bootstrap
+            rm bootstrap
+            aws lambda update-function-code \
+              --function-name "bunshin-presenter-${fn}" \
+              --zip-file "fileb://${fn}.zip"
+            aws lambda wait function-updated \
+              --function-name "bunshin-presenter-${fn}"
+          done
