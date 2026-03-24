@@ -11,6 +11,9 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 )
 
 // fatalf is the function called on fatal errors. It defaults to log.Fatalf
@@ -24,6 +27,35 @@ var resolveIdentityFn = resolveIdentity
 // registerFn is the function used to register with the broker.
 // It defaults to register and can be replaced in tests.
 var registerFn = register
+
+// defaultModelID is the Bedrock model used when BEDROCK_MODEL_ID is not set.
+const defaultModelID = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+
+// newValidatorFn creates a Validator for LLM command safety checks.
+// It defaults to newBedrockValidatorFromEnv and can be replaced in tests.
+var newValidatorFn = newBedrockValidatorFromEnv
+
+// loadAWSConfigFn loads AWS SDK configuration. It defaults to awsconfig.LoadDefaultConfig
+// and can be replaced in tests to simulate config loading failures.
+var loadAWSConfigFn = awsconfig.LoadDefaultConfig
+
+// newBedrockValidatorFromEnv loads AWS config and returns a BedrockValidator
+// using the BEDROCK_MODEL_ID environment variable or the default model ID.
+func newBedrockValidatorFromEnv(ctx context.Context) (Validator, error) {
+	cfg, err := loadAWSConfigFn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load aws config: %w", err)
+	}
+	if cfg.Region == "" {
+		return nil, errors.New("aws region is required for bedrock runtime")
+	}
+	client := bedrockruntime.NewFromConfig(cfg)
+	modelID := os.Getenv("BEDROCK_MODEL_ID")
+	if modelID == "" {
+		modelID = defaultModelID
+	}
+	return NewBedrockValidator(client, modelID), nil
+}
 
 // main reads the RUNNER_PORT environment variable and starts the HTTP server
 // with graceful shutdown on SIGTERM/SIGINT.
@@ -70,6 +102,14 @@ func start(addr string) error {
 		return fmt.Errorf("missing required environment variable: BROKER_URL")
 	}
 
+	valCtx, valCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer valCancel()
+	validator, err := newValidatorFn(valCtx)
+	if err != nil {
+		ln.Close()
+		return fmt.Errorf("create validator: %w", err)
+	}
+
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
 	defer signal.Stop(sig)
@@ -98,6 +138,7 @@ func start(addr string) error {
 
 	cfg := serverConfig{
 		sm:              NewSessionManager(),
+		validator:       validator,
 		shutdownTimeout: 10 * time.Second,
 	}
 
