@@ -1,4 +1,5 @@
 # Terraform operations with environment-specific tfvars
+# Available environments: stg, prd
 
 # Initialize terraform
 init:
