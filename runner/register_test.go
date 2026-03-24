@@ -242,3 +242,93 @@ func TestDefaultHTTPPostCanceledContext(t *testing.T) {
 		t.Fatal("expected error for canceled context")
 	}
 }
+
+// TestDeregisterSuccess verifies that deregister sends DELETE to the correct URL
+// and returns nil when the broker responds with 204.
+func TestDeregisterSuccess(t *testing.T) {
+	var gotMethod string
+	var gotPath string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer ts.Close()
+
+	var logged string
+	deps := deregisterDeps{
+		brokerURL: ts.URL,
+		runnerID:  "r1",
+		httpDo:    http.DefaultClient.Do,
+		logf:      func(f string, a ...any) { logged = f },
+	}
+
+	err := deregister(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotMethod != http.MethodDelete {
+		t.Errorf("method = %q, want DELETE", gotMethod)
+	}
+	if gotPath != "/internal/runners/r1" {
+		t.Errorf("path = %q, want %q", gotPath, "/internal/runners/r1")
+	}
+	if logged != "deregistered from broker: id=%s" {
+		t.Errorf("unexpected log format: %q", logged)
+	}
+}
+
+// TestDeregisterNon204Status verifies that deregister returns an error
+// when the broker responds with a non-204 status.
+func TestDeregisterNon204Status(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	deps := deregisterDeps{
+		brokerURL: ts.URL,
+		runnerID:  "r1",
+		httpDo:    http.DefaultClient.Do,
+		logf:      func(f string, a ...any) {},
+	}
+
+	err := deregister(context.Background(), deps)
+	if err == nil {
+		t.Fatal("expected error for non-204 status")
+	}
+}
+
+// TestDeregisterHTTPError verifies that deregister returns an error
+// when the HTTP request fails.
+func TestDeregisterHTTPError(t *testing.T) {
+	deps := deregisterDeps{
+		brokerURL: "http://127.0.0.1:1",
+		runnerID:  "r1",
+		httpDo: func(req *http.Request) (*http.Response, error) {
+			return nil, errors.New("connection refused")
+		},
+		logf: func(f string, a ...any) {},
+	}
+
+	err := deregister(context.Background(), deps)
+	if err == nil {
+		t.Fatal("expected error for HTTP failure")
+	}
+}
+
+// TestDeregisterInvalidURL verifies that deregister returns an error
+// when the broker URL is malformed.
+func TestDeregisterInvalidURL(t *testing.T) {
+	deps := deregisterDeps{
+		brokerURL: "://bad",
+		runnerID:  "r1",
+		httpDo:    http.DefaultClient.Do,
+		logf:      func(f string, a ...any) {},
+	}
+
+	err := deregister(context.Background(), deps)
+	if err == nil {
+		t.Fatal("expected error for invalid URL")
+	}
+}

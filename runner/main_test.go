@@ -208,6 +208,100 @@ func TestRunCloseAllError(t *testing.T) {
 	}
 }
 
+// TestRunDeregisterOnShutdown verifies that run calls deregisterFn during
+// graceful shutdown when brokerURL and runnerID are set in serverConfig.
+func TestRunDeregisterOnShutdown(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen error: %v", err)
+	}
+	addr := ln.Addr().String()
+
+	orig := deregisterFn
+	defer func() { deregisterFn = orig }()
+
+	var called bool
+	var gotRunnerID string
+	deregisterFn = func(ctx context.Context, deps deregisterDeps) error {
+		called = true
+		gotRunnerID = deps.runnerID
+		return nil
+	}
+
+	sigCh := make(chan os.Signal, 1)
+	cfg := serverConfig{
+		sm:              NewSessionManager(),
+		shutdownTimeout: 10 * time.Second,
+		brokerURL:       "http://broker:8080",
+		runnerID:        "test-runner",
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- run(ln, sigCh, cfg)
+	}()
+
+	waitForServer(t, addr)
+	sigCh <- os.Interrupt
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("run returned error: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("run did not return within 10 seconds")
+	}
+
+	if !called {
+		t.Fatal("deregisterFn should have been called on shutdown")
+	}
+	if gotRunnerID != "test-runner" {
+		t.Errorf("runnerID = %q, want %q", gotRunnerID, "test-runner")
+	}
+}
+
+// TestRunDeregisterFailureNonFatal verifies that run completes gracefully
+// even when deregisterFn returns an error.
+func TestRunDeregisterFailureNonFatal(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen error: %v", err)
+	}
+	addr := ln.Addr().String()
+
+	orig := deregisterFn
+	defer func() { deregisterFn = orig }()
+	deregisterFn = func(ctx context.Context, deps deregisterDeps) error {
+		return errors.New("deregister failed")
+	}
+
+	sigCh := make(chan os.Signal, 1)
+	cfg := serverConfig{
+		sm:              NewSessionManager(),
+		shutdownTimeout: 10 * time.Second,
+		brokerURL:       "http://broker:8080",
+		runnerID:        "test-runner",
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- run(ln, sigCh, cfg)
+	}()
+
+	waitForServer(t, addr)
+	sigCh <- os.Interrupt
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("run should succeed even when deregister fails, got: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("run did not return within 10 seconds")
+	}
+}
+
 // TestIntegrationCreateExecuteDelete verifies the full lifecycle of creating a session,
 // executing a command, and deleting the session through the HTTP API using httptest.
 func TestIntegrationCreateExecuteDelete(t *testing.T) {

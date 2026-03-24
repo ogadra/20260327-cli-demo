@@ -28,6 +28,10 @@ var resolveIdentityFn = resolveIdentity
 // It defaults to register and can be replaced in tests.
 var registerFn = register
 
+// deregisterFn is the function used to deregister from the broker on shutdown.
+// It defaults to deregister and can be replaced in tests.
+var deregisterFn = deregister
+
 // defaultModelID is the Bedrock model used when BEDROCK_MODEL_ID is not set.
 const defaultModelID = "us.anthropic.claude-sonnet-4-20250514-v1:0"
 
@@ -140,6 +144,8 @@ func start(addr string) error {
 		sm:              NewSessionManager(),
 		validator:       validator,
 		shutdownTimeout: 10 * time.Second,
+		brokerURL:       brokerURL,
+		runnerID:        identity.RunnerID,
 	}
 
 	return run(ln, sig, cfg)
@@ -152,6 +158,8 @@ type serverConfig struct {
 	validator       Validator
 	shutdownTimeout time.Duration
 	handler         http.Handler
+	brokerURL       string
+	runnerID        string
 }
 
 // run starts the HTTP server on the given listener and blocks until a signal is
@@ -184,6 +192,17 @@ func run(ln net.Listener, sigCh <-chan os.Signal, cfg serverConfig) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.shutdownTimeout)
 	defer cancel()
+
+	if cfg.brokerURL != "" && cfg.runnerID != "" {
+		if err := deregisterFn(ctx, deregisterDeps{
+			brokerURL: cfg.brokerURL,
+			runnerID:  cfg.runnerID,
+			httpDo:    http.DefaultClient.Do,
+			logf:      log.Printf,
+		}); err != nil {
+			log.Printf("WARNING: deregister from broker failed: %v", err)
+		}
+	}
 
 	var firstErr error
 	if err := srv.Shutdown(ctx); err != nil {
