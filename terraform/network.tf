@@ -152,7 +152,7 @@ resource "aws_vpc_endpoint" "ecr_api" {
   service_name      = "com.amazonaws.ap-northeast-1.ecr.api"
   vpc_endpoint_type = "Interface"
 
-  subnet_ids         = aws_subnet.private[*].id
+  subnet_ids         = [aws_subnet.private[0].id]
   security_group_ids = [aws_security_group.ecr_endpoint.id]
 
   private_dns_enabled = true
@@ -167,7 +167,7 @@ resource "aws_vpc_endpoint" "ecr_dkr" {
   service_name      = "com.amazonaws.ap-northeast-1.ecr.dkr"
   vpc_endpoint_type = "Interface"
 
-  subnet_ids         = aws_subnet.private[*].id
+  subnet_ids         = [aws_subnet.private[0].id]
   security_group_ids = [aws_security_group.ecr_endpoint.id]
 
   private_dns_enabled = true
@@ -182,7 +182,7 @@ resource "aws_vpc_endpoint" "logs" {
   service_name      = "com.amazonaws.ap-northeast-1.logs"
   vpc_endpoint_type = "Interface"
 
-  subnet_ids         = aws_subnet.private[*].id
+  subnet_ids         = slice(aws_subnet.private[*].id, 1, 3)
   security_group_ids = [aws_security_group.ecr_endpoint.id]
 
   private_dns_enabled = true
