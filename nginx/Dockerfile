@@ -4,3 +4,8 @@ COPY . /etc/nginx/
 RUN nginx -t
 # USER is added to satisfy trivy DS-0002; nginx -t requires root so this must come after RUN
 USER nginx
+
+# checkov:skip=CKV_DOCKER_2:health check is managed by ECS task definition
+FROM nginx:1.29.6-alpine
+COPY . /etc/nginx/
+USER nginx
