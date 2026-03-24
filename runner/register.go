@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -60,6 +61,35 @@ func register(ctx context.Context, deps registerDeps) error {
 		case <-deps.afterFunc(registerRetryInterval):
 		}
 	}
+}
+
+// deregisterDeps holds injectable dependencies for broker deregistration.
+type deregisterDeps struct {
+	brokerURL string
+	runnerID  string
+	httpDo    func(req *http.Request) (*http.Response, error)
+	logf      func(string, ...any)
+}
+
+// deregister sends DELETE /internal/runners/:runnerId to broker to remove this
+// runner from the pool. It is called during graceful shutdown so that the broker
+// stops routing requests to this runner immediately.
+func deregister(ctx context.Context, deps deregisterDeps) error {
+	url := deps.brokerURL + "/internal/runners/" + deps.runnerID
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("create deregister request: %w", err)
+	}
+	resp, err := deps.httpDo(req)
+	if err != nil {
+		return fmt.Errorf("deregister request: %w", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("deregister returned status %d", resp.StatusCode)
+	}
+	deps.logf("deregistered from broker: id=%s", deps.runnerID)
+	return nil
 }
 
 // defaultHTTPPost performs an HTTP POST request with the given context.
