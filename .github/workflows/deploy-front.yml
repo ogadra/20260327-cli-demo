@@ -40,4 +40,4 @@ jobs:
             exit 1
           fi
       - name: Sync to S3
-        run: aws s3 sync ./dist s3://bunshin-front --delete
+        run: aws s3 sync ./dist "s3://${{ vars.FRONT_S3_BUCKET }}" --delete
