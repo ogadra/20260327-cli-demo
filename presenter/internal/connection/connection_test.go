@@ -322,6 +322,193 @@ func TestQueryByRoom_QueryError(t *testing.T) {
 	}
 }
 
+// TestQueryByRoom_Pagination は複数ページにまたがる Query 結果を全件取得できることを検証する。
+func TestQueryByRoom_Pagination(t *testing.T) {
+	t.Parallel()
+	callCount := 0
+	mock := &mockDynamoDBAPI{
+		queryFn: func(_ context.Context, params *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			callCount++
+			if callCount == 1 {
+				return &dynamodb.QueryOutput{
+					Items: []map[string]types.AttributeValue{
+						{
+							"room":         &types.AttributeValueMemberS{Value: "default"},
+							"connectionId": &types.AttributeValueMemberS{Value: "conn-1"},
+							"role":         &types.AttributeValueMemberS{Value: "viewer"},
+							"ttl":          &types.AttributeValueMemberN{Value: "9999999999"},
+						},
+					},
+					LastEvaluatedKey: map[string]types.AttributeValue{
+						"room":         &types.AttributeValueMemberS{Value: "default"},
+						"connectionId": &types.AttributeValueMemberS{Value: "conn-1"},
+					},
+				}, nil
+			}
+			if params.ExclusiveStartKey == nil {
+				t.Error("expected ExclusiveStartKey on second call")
+			}
+			return &dynamodb.QueryOutput{
+				Items: []map[string]types.AttributeValue{
+					{
+						"room":         &types.AttributeValueMemberS{Value: "default"},
+						"connectionId": &types.AttributeValueMemberS{Value: "conn-2"},
+						"role":         &types.AttributeValueMemberS{Value: "presenter"},
+						"ttl":          &types.AttributeValueMemberN{Value: "9999999999"},
+					},
+				},
+			}, nil
+		},
+	}
+	store := NewStore(mock, "t")
+
+	conns, err := store.QueryByRoom(context.Background(), "default")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(conns) != 2 {
+		t.Fatalf("len = %d, want 2", len(conns))
+	}
+	if conns[0].ConnectionID != "conn-1" || conns[1].ConnectionID != "conn-2" {
+		t.Errorf("unexpected connections: %+v", conns)
+	}
+	if callCount != 2 {
+		t.Errorf("callCount = %d, want 2", callCount)
+	}
+}
+
+// TestCountByRoom_Pagination は複数ページにまたがる Count を累積できることを検証する。
+func TestCountByRoom_Pagination(t *testing.T) {
+	t.Parallel()
+	callCount := 0
+	mock := &mockDynamoDBAPI{
+		queryFn: func(_ context.Context, params *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			callCount++
+			if callCount == 1 {
+				return &dynamodb.QueryOutput{
+					Count: 30,
+					LastEvaluatedKey: map[string]types.AttributeValue{
+						"room":         &types.AttributeValueMemberS{Value: "default"},
+						"connectionId": &types.AttributeValueMemberS{Value: "conn-30"},
+					},
+				}, nil
+			}
+			if params.ExclusiveStartKey == nil {
+				t.Error("expected ExclusiveStartKey on second call")
+			}
+			return &dynamodb.QueryOutput{Count: 12}, nil
+		},
+	}
+	store := NewStore(mock, "t")
+
+	count, err := store.CountByRoom(context.Background(), "default")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if count != 42 {
+		t.Errorf("count = %d, want 42", count)
+	}
+	if callCount != 2 {
+		t.Errorf("callCount = %d, want 2", callCount)
+	}
+}
+
+// TestQueryByRoom_PaginationQueryError は2ページ目の Query がエラーを返す場合を検証する。
+func TestQueryByRoom_PaginationQueryError(t *testing.T) {
+	t.Parallel()
+	callCount := 0
+	mock := &mockDynamoDBAPI{
+		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			callCount++
+			if callCount == 1 {
+				return &dynamodb.QueryOutput{
+					Items: []map[string]types.AttributeValue{
+						{
+							"room":         &types.AttributeValueMemberS{Value: "default"},
+							"connectionId": &types.AttributeValueMemberS{Value: "conn-1"},
+							"role":         &types.AttributeValueMemberS{Value: "viewer"},
+							"ttl":          &types.AttributeValueMemberN{Value: "9999999999"},
+						},
+					},
+					LastEvaluatedKey: map[string]types.AttributeValue{
+						"room": &types.AttributeValueMemberS{Value: "default"},
+					},
+				}, nil
+			}
+			return nil, errors.New("page 2 error")
+		},
+	}
+	store := NewStore(mock, "t")
+
+	_, err := store.QueryByRoom(context.Background(), "default")
+	if err == nil {
+		t.Fatal("expected error on second page")
+	}
+}
+
+// TestQueryByRoom_PaginationUnmarshalError は2ページ目の unmarshal がエラーを返す場合を検証する。
+func TestQueryByRoom_PaginationUnmarshalError(t *testing.T) {
+	t.Parallel()
+	callCount := 0
+	mock := &mockDynamoDBAPI{
+		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			callCount++
+			if callCount == 1 {
+				return &dynamodb.QueryOutput{
+					Items: []map[string]types.AttributeValue{
+						{
+							"room":         &types.AttributeValueMemberS{Value: "default"},
+							"connectionId": &types.AttributeValueMemberS{Value: "conn-1"},
+							"role":         &types.AttributeValueMemberS{Value: "viewer"},
+							"ttl":          &types.AttributeValueMemberN{Value: "9999999999"},
+						},
+					},
+					LastEvaluatedKey: map[string]types.AttributeValue{
+						"room": &types.AttributeValueMemberS{Value: "default"},
+					},
+				}, nil
+			}
+			return &dynamodb.QueryOutput{
+				Items: []map[string]types.AttributeValue{
+					{"room": &types.AttributeValueMemberL{Value: []types.AttributeValue{}}},
+				},
+			}, nil
+		},
+	}
+	store := NewStore(mock, "t")
+
+	_, err := store.QueryByRoom(context.Background(), "default")
+	if err == nil {
+		t.Fatal("expected unmarshal error on second page")
+	}
+}
+
+// TestCountByRoom_PaginationQueryError は2ページ目の Count Query がエラーを返す場合を検証する。
+func TestCountByRoom_PaginationQueryError(t *testing.T) {
+	t.Parallel()
+	callCount := 0
+	mock := &mockDynamoDBAPI{
+		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			callCount++
+			if callCount == 1 {
+				return &dynamodb.QueryOutput{
+					Count: 10,
+					LastEvaluatedKey: map[string]types.AttributeValue{
+						"room": &types.AttributeValueMemberS{Value: "default"},
+					},
+				}, nil
+			}
+			return nil, errors.New("page 2 count error")
+		},
+	}
+	store := NewStore(mock, "t")
+
+	_, err := store.CountByRoom(context.Background(), "default")
+	if err == nil {
+		t.Fatal("expected error on second page")
+	}
+}
+
 // TestQueryByRoom_UnmarshalError は Query 結果の unmarshal 失敗を検証する。
 func TestQueryByRoom_UnmarshalError(t *testing.T) {
 	t.Parallel()

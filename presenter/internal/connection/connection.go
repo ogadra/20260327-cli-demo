@@ -113,9 +113,9 @@ func (s *Store) Delete(ctx context.Context, room, connectionID string) error {
 	return nil
 }
 
-// QueryByRoom は room 内の全接続を取得する。
+// QueryByRoom は room 内の全接続を取得する。DynamoDB のページングを処理して全件返す。
 func (s *Store) QueryByRoom(ctx context.Context, room string) ([]Connection, error) {
-	out, err := s.client.Query(ctx, &dynamodb.QueryInput{
+	input := &dynamodb.QueryInput{
 		TableName:              &s.tableName,
 		KeyConditionExpression: aws.String("#r = :room"),
 		ExpressionAttributeNames: map[string]string{
@@ -124,24 +124,30 @@ func (s *Store) QueryByRoom(ctx context.Context, room string) ([]Connection, err
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":room": &types.AttributeValueMemberS{Value: room},
 		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("query by room: %w", err)
 	}
-	conns := make([]Connection, 0, len(out.Items))
-	for _, item := range out.Items {
-		var conn Connection
-		if err := attributevalue.UnmarshalMap(item, &conn); err != nil {
-			return nil, fmt.Errorf("unmarshal connection: %w", err)
+	conns := make([]Connection, 0)
+	for {
+		out, err := s.client.Query(ctx, input)
+		if err != nil {
+			return nil, fmt.Errorf("query by room: %w", err)
 		}
-		conns = append(conns, conn)
+		for _, item := range out.Items {
+			var conn Connection
+			if err := attributevalue.UnmarshalMap(item, &conn); err != nil {
+				return nil, fmt.Errorf("unmarshal connection: %w", err)
+			}
+			conns = append(conns, conn)
+		}
+		if len(out.LastEvaluatedKey) == 0 {
+			return conns, nil
+		}
+		input.ExclusiveStartKey = out.LastEvaluatedKey
 	}
-	return conns, nil
 }
 
-// CountByRoom は room 内の接続数を取得する。
+// CountByRoom は room 内の接続数を取得する。DynamoDB のページングを処理して全件の合計を返す。
 func (s *Store) CountByRoom(ctx context.Context, room string) (int, error) {
-	out, err := s.client.Query(ctx, &dynamodb.QueryInput{
+	input := &dynamodb.QueryInput{
 		TableName:              &s.tableName,
 		KeyConditionExpression: aws.String("#r = :room"),
 		ExpressionAttributeNames: map[string]string{
@@ -151,11 +157,19 @@ func (s *Store) CountByRoom(ctx context.Context, room string) (int, error) {
 			":room": &types.AttributeValueMemberS{Value: room},
 		},
 		Select: types.SelectCount,
-	})
-	if err != nil {
-		return 0, fmt.Errorf("count by room: %w", err)
 	}
-	return int(out.Count), nil
+	total := 0
+	for {
+		out, err := s.client.Query(ctx, input)
+		if err != nil {
+			return 0, fmt.Errorf("count by room: %w", err)
+		}
+		total += int(out.Count)
+		if len(out.LastEvaluatedKey) == 0 {
+			return total, nil
+		}
+		input.ExclusiveStartKey = out.LastEvaluatedKey
+	}
 }
 
 // SessionStore はセッショントークンの検証を提供する。
