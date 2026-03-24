@@ -33,13 +33,21 @@ jobs:
       - name: Build and deploy Lambda functions
         run: |
           cd presenter
-          for fn in connect disconnect message login; do
+          for fn in connect disconnect message; do
             GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o bootstrap "./cmd/${fn}"
             zip "${fn}.zip" bootstrap
             rm bootstrap
             aws lambda update-function-code \
-              --function-name "bunshin-presenter-${fn}" \
+              --function-name "bunshin-presenter-ws-${fn}" \
               --zip-file "fileb://${fn}.zip"
             aws lambda wait function-updated \
-              --function-name "bunshin-presenter-${fn}"
+              --function-name "bunshin-presenter-ws-${fn}"
           done
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o bootstrap "./cmd/login"
+          zip "login.zip" bootstrap
+          rm bootstrap
+          aws lambda update-function-code \
+            --function-name "bunshin-presenter-login" \
+            --zip-file "fileb://login.zip"
+          aws lambda wait function-updated \
+            --function-name "bunshin-presenter-login"
