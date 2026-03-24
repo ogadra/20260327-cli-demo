@@ -55,6 +55,19 @@ pre-commit:
       root: "front/"
       glob: "**/*.{ts,tsx}"
       run: pnpm exec vp lint --deny-warnings
+    051_fmt_presenter:
+      root: "presenter/"
+      glob: "*.go"
+      stage_fixed: true
+      run: gofmt -w {staged_files}
+    052_fmt_check_presenter:
+      root: "presenter/"
+      glob: "*.go"
+      run: gofmt -l {staged_files} | grep . && exit 1 || true
+    053_vet_presenter:
+      root: "presenter/"
+      glob: "*.go"
+      run: go vet ./...
     041_nginx_config_test:
       root: "nginx/"
       glob: "**/*.conf"
