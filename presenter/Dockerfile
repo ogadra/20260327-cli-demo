@@ -21,7 +21,8 @@ RUN apk add --no-cache gcc musl-dev \
 
 # binary build for arm64 Lambda
 FROM build AS binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /out/connect/bootstrap ./cmd/connect \
+RUN mkdir -p /out/connect /out/disconnect /out/message /out/login \
+    && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /out/connect/bootstrap ./cmd/connect \
     && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /out/disconnect/bootstrap ./cmd/disconnect \
     && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /out/message/bootstrap ./cmd/message \
     && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /out/login/bootstrap ./cmd/login
