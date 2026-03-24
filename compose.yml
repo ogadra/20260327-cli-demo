@@ -5,7 +5,7 @@ services:
       - nginx
       - integration
     ports:
-      - "${NGINX_PORT}:80"
+      - "${NGINX_PORT}:8080"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/errors.conf:/etc/nginx/errors.conf:ro
@@ -46,7 +46,7 @@ services:
       - ./front/index.html:/app/index.html:ro
       - ./front/vite.config.ts:/app/vite.config.ts:ro
     environment:
-      VITE_API_TARGET: http://nginx
+      VITE_API_TARGET: http://nginx:8080
     profiles:
       - front
 
@@ -95,7 +95,7 @@ services:
   integration-test:
     build: integration/
     environment:
-      NGINX_URL: "http://nginx"
+      NGINX_URL: "http://nginx:8080"
       BROKER_URL: "http://broker:8080"
     depends_on:
       - nginx
