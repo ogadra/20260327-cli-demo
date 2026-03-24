@@ -7,5 +7,6 @@ USER nginx
 
 # checkov:skip=CKV_DOCKER_2:health check is managed by ECS task definition
 FROM nginx:1.29.6-alpine
-COPY . /etc/nginx/
+RUN chown -R nginx:nginx /var/cache/nginx /run
 USER nginx
+COPY . /etc/nginx/
