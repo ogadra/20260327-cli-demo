@@ -649,15 +649,35 @@ func TestStartValidatorFallback(t *testing.T) {
 		return nil
 	}
 
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen error: %v", err)
+	}
+	addr := ln.Addr().String()
+	ln.Close()
+
+	errCh := make(chan error, 1)
 	go func() {
-		time.Sleep(200 * time.Millisecond)
-		proc, _ := os.FindProcess(os.Getpid())
-		proc.Signal(syscall.SIGTERM)
+		errCh <- start(addr)
 	}()
 
-	err := start("127.0.0.1:0")
+	waitForServer(t, addr)
+
+	proc, err := os.FindProcess(os.Getpid())
 	if err != nil {
-		t.Fatalf("start should succeed even when validator fails, got: %v", err)
+		t.Fatalf("FindProcess error: %v", err)
+	}
+	if err := proc.Signal(syscall.SIGTERM); err != nil {
+		t.Fatalf("Signal error: %v", err)
+	}
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("start should succeed even when validator fails, got: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("start did not return within 10 seconds")
 	}
 }
 
