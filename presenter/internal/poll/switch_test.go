@@ -13,7 +13,7 @@ import (
 func TestSwitch_Success(t *testing.T) {
 	t.Parallel()
 	var deletedSK, putSK string
-	var updateCalled bool
+	var updateCallCount int
 	client := &mockDynamoDBAPI{
 		deleteItemFn: func(_ context.Context, params *dynamodb.DeleteItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
 			deletedSK = params.Key["connectionId"].(*types.AttributeValueMemberS).Value
@@ -24,7 +24,7 @@ func TestSwitch_Success(t *testing.T) {
 			return &dynamodb.PutItemOutput{}, nil
 		},
 		updateItemFn: func(_ context.Context, _ *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
-			updateCalled = true
+			updateCallCount++
 			return &dynamodb.UpdateItemOutput{}, nil
 		},
 	}
@@ -39,8 +39,8 @@ func TestSwitch_Success(t *testing.T) {
 	if putSK != "visitor1#B" {
 		t.Errorf("expected visitor1#B put, got %s", putSK)
 	}
-	if !updateCalled {
-		t.Error("expected UpdateItem to be called")
+	if updateCallCount != 1 {
+		t.Errorf("expected UpdateItem to be called once, got %d", updateCallCount)
 	}
 }
 
@@ -77,7 +77,7 @@ func TestSwitch_DeleteError(t *testing.T) {
 // TestSwitch_DuplicateToWithRollback は新選択肢の重複で旧選択肢が復元されることを検証する。
 func TestSwitch_DuplicateToWithRollback(t *testing.T) {
 	t.Parallel()
-	var rollbackCalled bool
+	var rollbackSK string
 	putCount := 0
 	client := &mockDynamoDBAPI{
 		deleteItemFn: func(_ context.Context, _ *dynamodb.DeleteItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
@@ -88,7 +88,7 @@ func TestSwitch_DuplicateToWithRollback(t *testing.T) {
 			if putCount == 1 {
 				return nil, &types.ConditionalCheckFailedException{Message: stringPtr("duplicate")}
 			}
-			rollbackCalled = true
+			rollbackSK = params.Item["connectionId"].(*types.AttributeValueMemberS).Value
 			return &dynamodb.PutItemOutput{}, nil
 		},
 	}
@@ -97,8 +97,34 @@ func TestSwitch_DuplicateToWithRollback(t *testing.T) {
 	if err != ErrDuplicateVote {
 		t.Errorf("expected ErrDuplicateVote, got %v", err)
 	}
-	if !rollbackCalled {
-		t.Error("expected rollback PutItem to be called")
+	if rollbackSK != "visitor1#A" {
+		t.Errorf("expected rollback to restore visitor1#A, got %s", rollbackSK)
+	}
+}
+
+// TestSwitch_DuplicateToWithRollbackFailure は重複検出後のロールバック失敗を検証する。
+func TestSwitch_DuplicateToWithRollbackFailure(t *testing.T) {
+	t.Parallel()
+	putCount := 0
+	client := &mockDynamoDBAPI{
+		deleteItemFn: func(_ context.Context, _ *dynamodb.DeleteItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
+			return &dynamodb.DeleteItemOutput{}, nil
+		},
+		putItemFn: func(_ context.Context, _ *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+			putCount++
+			if putCount == 1 {
+				return nil, &types.ConditionalCheckFailedException{Message: stringPtr("duplicate")}
+			}
+			return nil, fmt.Errorf("rollback error")
+		},
+	}
+	s := NewStore(client, "table")
+	err := s.Switch(context.Background(), "q1", "visitor1", "A", "B")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if err == ErrDuplicateVote {
+		t.Error("should not return ErrDuplicateVote when rollback fails")
 	}
 }
 

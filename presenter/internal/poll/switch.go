@@ -41,7 +41,9 @@ func (s *Store) Switch(ctx context.Context, pollID, visitorID, from, to string) 
 	})
 	if err != nil {
 		if isConditionalCheckFailed(err) {
-			s.rollbackDelete(ctx, pollID, fromSK)
+			if rbErr := s.rollbackDelete(ctx, pollID, fromSK); rbErr != nil {
+				return fmt.Errorf("rollback after duplicate vote failed: %w", rbErr)
+			}
 			return ErrDuplicateVote
 		}
 		return fmt.Errorf("put new vote: %w", err)
@@ -71,8 +73,8 @@ func (s *Store) Switch(ctx context.Context, pollID, visitorID, from, to string) 
 }
 
 // rollbackDelete は削除した投票レコードを復元する。
-func (s *Store) rollbackDelete(ctx context.Context, pollID, sk string) {
-	_, _ = s.client.PutItem(ctx, &dynamodb.PutItemInput{
+func (s *Store) rollbackDelete(ctx context.Context, pollID, sk string) error {
+	_, err := s.client.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: &s.tableName,
 		Item: map[string]types.AttributeValue{
 			"pollId":       &types.AttributeValueMemberS{Value: pollID},
@@ -80,4 +82,8 @@ func (s *Store) rollbackDelete(ctx context.Context, pollID, sk string) {
 			"ttl":          &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", s.nowFn().Add(ttlDuration).Unix())},
 		},
 	})
+	if err != nil {
+		return fmt.Errorf("rollback put: %w", err)
+	}
+	return nil
 }
