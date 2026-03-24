@@ -30,6 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bash=5.2* \
     coreutils=9.1* \
     && rm -rf /var/lib/apt/lists/*
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=binary /server /server
 EXPOSE 3000
 CMD ["/server"]
