@@ -1,21 +1,3 @@
-# Terraform と AWS プロバイダのバージョン制約
-terraform {
-  required_version = ">= 1.14"
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 6.37"
-    }
-  }
-}
-
-# AWS プロバイダ設定。環境ごとの tfvars で profile を切り替える
-provider "aws" {
-  region  = "ap-northeast-1"
-  profile = var.aws_profile
-}
-
 # Runner の状態管理テーブル。Session は独立エンティティとしては持たず、
 # Runner の属性として currentSessionId を保持する単一テーブル設計。
 #
