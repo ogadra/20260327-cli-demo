@@ -21,6 +21,13 @@ async function getTerminalText(page: Page): Promise<string> {
   return (await page.locator(".xterm-rows").textContent()) ?? "";
 }
 
+/** Wait for the terminal text to change from the previously captured snapshot. */
+async function waitForTerminalChange(page: Page, previousText: string): Promise<string> {
+  const rows = page.locator(".xterm-rows");
+  await expect(rows).not.toHaveText(previousText, { timeout: 10_000 });
+  return (await rows.textContent()) ?? "";
+}
+
 test.describe.serial("integration", () => {
   let sharedPage: Page;
 
@@ -36,16 +43,17 @@ test.describe.serial("integration", () => {
   });
 
   test("executes command and shows output", async () => {
+    const before1 = await getTerminalText(sharedPage);
     await executeCommand(sharedPage, "pwd");
-    const text1 = await getTerminalText(sharedPage);
+    const text1 = await waitForTerminalChange(sharedPage, before1);
     expect(text1, "Expected pwd command to display current directory").toMatch(/\//);
 
-    const text2 = await getTerminalText(sharedPage);
-    const prompts = text2.split("$ ").length - 1;
+    const prompts = text1.split("$ ").length - 1;
     expect(prompts, "Expected at least 2 prompts").toBeGreaterThanOrEqual(2);
 
+    const before2 = await getTerminalText(sharedPage);
     await executeCommand(sharedPage, "uname");
-    const text3 = await getTerminalText(sharedPage);
-    expect(text3, "Expected uname command to display OS information").toContain("Linux");
+    const text2 = await waitForTerminalChange(sharedPage, before2);
+    expect(text2, "Expected uname command to display OS information").toContain("Linux");
   });
 });
