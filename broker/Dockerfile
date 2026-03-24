@@ -33,6 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     coreutils=9.1* \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd -r -s /usr/sbin/nologin appuser
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=binary /server /server
 USER appuser
 EXPOSE 8080
