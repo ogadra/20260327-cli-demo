@@ -15,8 +15,10 @@
     {
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [
+          awscli2
           checkov
           gitleaks
+          just
           go_1_26
           lefthook
           nodejs_24
