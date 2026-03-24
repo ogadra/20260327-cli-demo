@@ -194,6 +194,42 @@ resource "aws_security_group_rule" "runner_egress_https" {
   description       = "HTTPS to internet"
 }
 
+# ECS tasks outbound: to VPC endpoints for ECR and CloudWatch Logs
+resource "aws_security_group_rule" "vpc_endpoint_for_ecs_egress" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
+  for_each = {
+    nginx  = aws_security_group.nginx.id
+    broker = aws_security_group.broker.id
+    runner = aws_security_group.runner.id
+  }
+
+  type                     = "egress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.vpc_endpoint_for_ecs.id
+  security_group_id        = each.value
+  description              = "HTTPS to VPC endpoints for ECS"
+}
+
+# ECS tasks outbound: to S3 Gateway Endpoint for ECR image layers
+resource "aws_security_group_rule" "ecs_egress_s3" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
+  for_each = {
+    nginx  = aws_security_group.nginx.id
+    broker = aws_security_group.broker.id
+    runner = aws_security_group.runner.id
+  }
+
+  type              = "egress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  prefix_list_ids   = [aws_vpc_endpoint.s3.prefix_list_id]
+  security_group_id = each.value
+  description       = "HTTPS to S3 VPC endpoint"
+}
+
 # runner outbound: to Bedrock Runtime VPC endpoint
 resource "aws_security_group_rule" "runner_egress_bedrock" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
