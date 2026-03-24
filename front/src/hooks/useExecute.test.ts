@@ -32,11 +32,11 @@ interface MockTerminalRef {
 }
 
 /** Create a mock TerminalHandle ref for testing. */
-function makeTerminalRef(): MockTerminalRef {
+const makeTerminalRef = (): MockTerminalRef => {
   const write = vi.fn();
   const writeln = vi.fn();
   return { ref: { current: { write, writeln } }, write, writeln };
-}
+};
 
 describe("useExecute", () => {
   it("writes stdout to terminal", async () => {
