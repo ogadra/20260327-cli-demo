@@ -49,6 +49,7 @@ func TestNewHandler(t *testing.T) {
 func TestHandle_Success(t *testing.T) {
 	t.Parallel()
 	var capturedExclude string
+	var capturedPayload []byte
 	h := NewHandler(
 		&mockConnectionGetter{
 			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
@@ -56,8 +57,9 @@ func TestHandle_Success(t *testing.T) {
 			},
 		},
 		&mockBroadcaster{
-			sendFn: func(_ context.Context, _ string, _ []byte, exclude string) error {
+			sendFn: func(_ context.Context, _ string, payload []byte, exclude string) error {
 				capturedExclude = exclude
+				capturedPayload = payload
 				return nil
 			},
 		},
@@ -68,6 +70,10 @@ func TestHandle_Success(t *testing.T) {
 	}
 	if capturedExclude != "conn1" {
 		t.Errorf("expected conn1 excluded, got %s", capturedExclude)
+	}
+	expected := `{"type":"slide_sync","page":3}`
+	if string(capturedPayload) != expected {
+		t.Errorf("expected %s, got %s", expected, string(capturedPayload))
 	}
 }
 
