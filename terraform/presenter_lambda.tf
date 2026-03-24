@@ -73,9 +73,6 @@ resource "aws_lambda_function" "presenter_ws" {
     Service = "presenter-ws-${each.key}"
   })
 
-  lifecycle {
-    ignore_changes = [s3_key, s3_object_version, source_code_hash]
-  }
 }
 
 # API Gateway invoke permissions for WebSocket handlers
@@ -121,9 +118,6 @@ resource "aws_lambda_function" "presenter_login" {
     Service = "presenter-login"
   })
 
-  lifecycle {
-    ignore_changes = [s3_key, s3_object_version, source_code_hash]
-  }
 }
 
 # API Gateway invoke permission for login handler
