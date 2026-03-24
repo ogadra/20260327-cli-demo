@@ -1,4 +1,4 @@
-# Cache policy for S3 static assets: cache with gzip/brotli, no cookies/query strings
+# Cache policy for S3 static assets: no caching, no cookies/query strings
 resource "aws_cloudfront_cache_policy" "static_assets" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   name        = "bunshin-static-assets"
@@ -16,8 +16,8 @@ resource "aws_cloudfront_cache_policy" "static_assets" {
     query_strings_config {
       query_string_behavior = "none"
     }
-    enable_accept_encoding_gzip   = true
-    enable_accept_encoding_brotli = true
+    enable_accept_encoding_gzip   = false
+    enable_accept_encoding_brotli = false
   }
 }
 
