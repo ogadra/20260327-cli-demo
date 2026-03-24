@@ -48,7 +48,7 @@ resource "aws_lb_listener" "http" {
   # checkov:skip=CKV_AWS_2:HTTPS terminates at CloudFront, ALB uses HTTP
   # checkov:skip=CKV_AWS_103:HTTPS terminates at CloudFront, ALB uses HTTP
   load_balancer_arn = aws_lb.main.arn
-  port              = local.ecs_services["nginx"].port
+  port              = 80
   protocol          = "HTTP"
 
   default_action {
