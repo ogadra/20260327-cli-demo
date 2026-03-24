@@ -106,8 +106,8 @@ func start(addr string) error {
 	defer valCancel()
 	validator, err := newValidatorFn(valCtx)
 	if err != nil {
-		ln.Close()
-		return fmt.Errorf("create validator: %w", err)
+		log.Printf("WARNING: LLM validator unavailable, non-whitelisted commands will be rejected: %v", err)
+		validator = nil
 	}
 
 	sig := make(chan os.Signal, 1)
