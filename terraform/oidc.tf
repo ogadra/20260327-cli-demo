@@ -10,9 +10,16 @@ resource "aws_iam_openid_connect_provider" "github" {
   })
 }
 
-# IAM role for GitHub Actions deployment workflows
+locals {
+  # ECS services that need deploy roles with ECR push and ECS update permissions
+  ecs_deploy_services = toset(["nginx", "broker", "runner"])
+}
+
+# IAM roles for GitHub Actions deployment workflows per service
 resource "aws_iam_role" "github_actions_deploy" {
-  name = "bunshin-github-actions-deploy"
+  for_each = toset(concat(tolist(local.ecs_deploy_services), ["front"]))
+
+  name = "bunshin-deploy-${each.key}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -32,15 +39,17 @@ resource "aws_iam_role" "github_actions_deploy" {
   })
 
   tags = merge(local.common_tags, {
-    Service = "cd"
+    Service = each.key
   })
 }
 
-# ECR push permissions for all service repositories
-resource "aws_iam_role_policy" "github_actions_ecr" {
+# ECR push permissions scoped to each service repository
+resource "aws_iam_role_policy" "deploy_ecr" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
-  name = "bunshin-github-actions-ecr"
-  role = aws_iam_role.github_actions_deploy.id
+  for_each = local.ecs_deploy_services
+
+  name = "bunshin-deploy-${each.key}-ecr"
+  role = aws_iam_role.github_actions_deploy[each.key].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -56,7 +65,7 @@ resource "aws_iam_role_policy" "github_actions_ecr" {
           "ecr:UploadLayerPart",
           "ecr:CompleteLayerUpload",
         ]
-        Resource = [for repo in aws_ecr_repository.service : repo.arn]
+        Resource = aws_ecr_repository.service[each.key].arn
       },
       {
         Effect   = "Allow"
@@ -67,11 +76,13 @@ resource "aws_iam_role_policy" "github_actions_ecr" {
   })
 }
 
-# ECS deploy permissions
-resource "aws_iam_role_policy" "github_actions_ecs" {
+# ECS deploy permissions scoped to each service
+resource "aws_iam_role_policy" "deploy_ecs" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
-  name = "bunshin-github-actions-ecs"
-  role = aws_iam_role.github_actions_deploy.id
+  for_each = local.ecs_deploy_services
+
+  name = "bunshin-deploy-${each.key}-ecs"
+  role = aws_iam_role.github_actions_deploy[each.key].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -81,41 +92,30 @@ resource "aws_iam_role_policy" "github_actions_ecs" {
         "ecs:UpdateService",
         "ecs:DescribeServices",
       ]
-      Resource = [
-        aws_ecs_service.nginx.id,
-        aws_ecs_service.broker.id,
-        aws_ecs_service.runner.id,
-      ]
+      Resource = "arn:aws:ecs:*:*:service/bunshin/bunshin-${each.key}"
     }]
   })
 }
 
-# S3 and CloudFront permissions for front deployment
-resource "aws_iam_role_policy" "github_actions_front" {
+# S3 permissions for front deployment
+resource "aws_iam_role_policy" "deploy_front_s3" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
-  name = "bunshin-github-actions-front"
-  role = aws_iam_role.github_actions_deploy.id
+  name = "bunshin-deploy-front-s3"
+  role = aws_iam_role.github_actions_deploy["front"].id
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:DeleteObject",
-          "s3:ListBucket",
-        ]
-        Resource = [
-          aws_s3_bucket.front.arn,
-          "${aws_s3_bucket.front.arn}/*",
-        ]
-      },
-      {
-        Effect   = "Allow"
-        Action   = "cloudfront:CreateInvalidation"
-        Resource = aws_cloudfront_distribution.main.arn
-      },
-    ]
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:ListBucket",
+      ]
+      Resource = [
+        aws_s3_bucket.front.arn,
+        "${aws_s3_bucket.front.arn}/*",
+      ]
+    }]
   })
 }
