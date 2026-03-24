@@ -18,12 +18,12 @@ func (m *mockConnectionCounter) CountByRoom(ctx context.Context, room string) (i
 
 // mockSingleSender は SingleSender のモック。
 type mockSingleSender struct {
-	sendToOneFn func(ctx context.Context, connectionID string, payload []byte) error
+	sendToOneFn func(ctx context.Context, room, connectionID string, payload []byte) error
 }
 
 // SendToOne はモックの SendToOne を呼び出す。
-func (m *mockSingleSender) SendToOne(ctx context.Context, connectionID string, payload []byte) error {
-	return m.sendToOneFn(ctx, connectionID, payload)
+func (m *mockSingleSender) SendToOne(ctx context.Context, room, connectionID string, payload []byte) error {
+	return m.sendToOneFn(ctx, room, connectionID, payload)
 }
 
 // TestNewHandler は Handler の生成を検証する。
@@ -55,7 +55,7 @@ func TestHandle_Success(t *testing.T) {
 			},
 		},
 		&mockSingleSender{
-			sendToOneFn: func(_ context.Context, connectionID string, payload []byte) error {
+			sendToOneFn: func(_ context.Context, _, connectionID string, payload []byte) error {
 				capturedID = connectionID
 				capturedPayload = payload
 				return nil
@@ -122,7 +122,7 @@ func TestHandle_SendError(t *testing.T) {
 			},
 		},
 		&mockSingleSender{
-			sendToOneFn: func(_ context.Context, _ string, _ []byte) error {
+			sendToOneFn: func(_ context.Context, _, _ string, _ []byte) error {
 				return fmt.Errorf("send error")
 			},
 		},

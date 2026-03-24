@@ -16,7 +16,7 @@ type ConnectionCounter interface {
 // SingleSender は単一接続にメッセージを送信するインターフェース。
 type SingleSender interface {
 	// SendToOne は単一の接続にメッセージを送信する。
-	SendToOne(ctx context.Context, connectionID string, payload []byte) error
+	SendToOne(ctx context.Context, room, connectionID string, payload []byte) error
 }
 
 // Handler は接続数通知ハンドラー。
@@ -35,8 +35,8 @@ func NewHandler(counter ConnectionCounter, sender SingleSender) *Handler {
 	}
 }
 
-// viewerCountMessage は接続数通知メッセージ。
-type viewerCountMessage struct {
+// ViewerCountMessage は接続数通知メッセージ。
+type ViewerCountMessage struct {
 	Type  string `json:"type"`
 	Count int    `json:"count"`
 }
@@ -48,13 +48,13 @@ func (h *Handler) Handle(ctx context.Context, room, connectionID string) error {
 		return fmt.Errorf("count connections: %w", err)
 	}
 
-	msg := viewerCountMessage{Type: "viewer_count", Count: count}
+	msg := ViewerCountMessage{Type: "viewer_count", Count: count}
 	payload, err := h.jsonMarshal(msg)
 	if err != nil {
 		return fmt.Errorf("marshal viewer_count: %w", err)
 	}
 
-	if err := h.sender.SendToOne(ctx, connectionID, payload); err != nil {
+	if err := h.sender.SendToOne(ctx, room, connectionID, payload); err != nil {
 		return fmt.Errorf("send viewer_count: %w", err)
 	}
 
