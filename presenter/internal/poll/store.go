@@ -3,7 +3,7 @@ package poll
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -61,16 +61,16 @@ type PollError struct {
 }
 
 // ErrMaxChoicesExceeded は最大選択数を超過した場合のエラー。
-var ErrMaxChoicesExceeded = fmt.Errorf("max choices exceeded")
+var ErrMaxChoicesExceeded = errors.New("max choices exceeded")
 
 // ErrDuplicateVote は重複投票の場合のエラー。
-var ErrDuplicateVote = fmt.Errorf("duplicate vote")
+var ErrDuplicateVote = errors.New("duplicate vote")
 
 // ErrVoteNotFound は投票が存在しない場合のエラー。
-var ErrVoteNotFound = fmt.Errorf("vote not found")
+var ErrVoteNotFound = errors.New("vote not found")
 
 // ErrPollNotFound はアンケートが存在しない場合のエラー。
-var ErrPollNotFound = fmt.Errorf("poll not found")
+var ErrPollNotFound = errors.New("poll not found")
 
 // metaSK は META レコードのソートキー。
 const metaSK = "META"

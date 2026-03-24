@@ -55,4 +55,7 @@ func TestNewStore(t *testing.T) {
 	if s.nowFn == nil {
 		t.Error("nowFn should not be nil")
 	}
+	if s.marshalMapFn == nil {
+		t.Error("marshalMapFn should not be nil")
+	}
 }
