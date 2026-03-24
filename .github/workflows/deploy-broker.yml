@@ -21,6 +21,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       - uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           role-to-assume: ${{ vars.DEPLOY_BROKER_ROLE_ARN }}
@@ -30,12 +32,14 @@ jobs:
       - name: Build and push image
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
         run: |
           docker build \
+            -t "$ECR_REGISTRY/bunshin/broker:${IMAGE_TAG}" \
             -t "$ECR_REGISTRY/bunshin/broker:${IMAGE_TAG::7}" \
             -t "$ECR_REGISTRY/bunshin/broker:latest" \
             broker/
+          docker push "$ECR_REGISTRY/bunshin/broker:${IMAGE_TAG}"
           docker push "$ECR_REGISTRY/bunshin/broker:${IMAGE_TAG::7}"
           docker push "$ECR_REGISTRY/bunshin/broker:latest"
       - name: Deploy to ECS
