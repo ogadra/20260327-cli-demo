@@ -17,6 +17,7 @@
         packages = with pkgs; [
           checkov
           gitleaks
+          just
           go_1_26
           lefthook
           nodejs_24
