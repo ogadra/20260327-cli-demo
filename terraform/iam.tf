@@ -127,7 +127,7 @@ data "aws_iam_policy_document" "runner_bedrock" {
   statement {
     effect    = "Allow"
     actions   = ["bedrock:InvokeModel", "bedrock:Converse"]
-    resources = ["arn:aws:bedrock:ap-northeast-1:${data.aws_caller_identity.current.account_id}:inference-profile/apac.anthropic.claude-sonnet-4-20250514-v1:0"]
+    resources = ["arn:aws:bedrock:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:inference-profile/apac.anthropic.claude-sonnet-4-20250514-v1:0"]
   }
 }
 
