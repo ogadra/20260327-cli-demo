@@ -1,6 +1,7 @@
 # Route53 hosted zone for the parent domain
 data "aws_route53_zone" "main" {
-  name = join(".", slice(split(".", var.domain_name), 1, length(split(".", var.domain_name))))
+  name         = var.hosted_zone_name
+  private_zone = false
 }
 
 # DNS alias record pointing the custom domain to the CloudFront distribution
