@@ -39,7 +39,7 @@ pre-commit:
     023_terraform_validate:
       root: "terraform/"
       glob: "*.tf"
-      run: terraform validate
+      run: terraform validate -json | jq -e '.warning_count == 0 and .error_count == 0'
     024_tflint:
       root: "terraform/"
       glob: "*.tf"

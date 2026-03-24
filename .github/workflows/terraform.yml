@@ -25,7 +25,7 @@ jobs:
       - name: terraform init
         run: terraform -chdir=terraform init -backend=false
       - name: terraform validate
-        run: terraform -chdir=terraform validate
+        run: terraform -chdir=terraform validate -json | jq -e '.warning_count == 0 and .error_count == 0'
 
   tflint:
     runs-on: ubuntu-latest
