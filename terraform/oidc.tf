@@ -98,24 +98,37 @@ resource "aws_iam_role_policy" "deploy_ecs" {
 }
 
 # S3 permissions for front deployment
+data "aws_iam_policy_document" "deploy_front_s3" {
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "s3:ListBucket",
+    ]
+
+    resources = [
+      aws_s3_bucket.front.arn,
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "s3:PutObject",
+      "s3:DeleteObject",
+    ]
+
+    resources = [
+      "${aws_s3_bucket.front.arn}/*",
+    ]
+  }
+}
+
 resource "aws_iam_role_policy" "deploy_front_s3" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   name = "bunshin-deploy-front-s3"
   role = aws_iam_role.github_actions_deploy["front"].id
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "s3:PutObject",
-        "s3:DeleteObject",
-        "s3:ListBucket",
-      ]
-      Resource = [
-        aws_s3_bucket.front.arn,
-        "${aws_s3_bucket.front.arn}/*",
-      ]
-    }]
-  })
+  policy = data.aws_iam_policy_document.deploy_front_s3.json
 }
