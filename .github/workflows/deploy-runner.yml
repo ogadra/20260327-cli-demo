@@ -1,8 +1,8 @@
-name: Deploy Broker
+name: Deploy Runner
 
 on:
   workflow_run:
-    workflows: ["Broker"]
+    workflows: ["Runner"]
     types: [completed]
     branches: [main]
 
@@ -11,12 +11,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-broker
+  group: deploy-runner
   cancel-in-progress: false
 
 jobs:
   deploy:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     if: github.event.workflow_run.conclusion == 'success'
     timeout-minutes: 15
     steps:
@@ -25,7 +25,7 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
       - uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
-          role-to-assume: ${{ vars.DEPLOY_BROKER_ROLE_ARN }}
+          role-to-assume: ${{ vars.DEPLOY_RUNNER_ROLE_ARN }}
           aws-region: ap-northeast-1
       - uses: aws-actions/amazon-ecr-login@261fc3d4806db1fa66a15cc11113c456db8870a7 # v2.1.0
         id: ecr-login
@@ -35,19 +35,19 @@ jobs:
           IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
         run: |
           docker build \
-            -t "$ECR_REGISTRY/bunshin/broker:${IMAGE_TAG}" \
-            -t "$ECR_REGISTRY/bunshin/broker:${IMAGE_TAG::7}" \
-            -t "$ECR_REGISTRY/bunshin/broker:latest" \
-            broker/
-          docker push "$ECR_REGISTRY/bunshin/broker:${IMAGE_TAG}"
-          docker push "$ECR_REGISTRY/bunshin/broker:${IMAGE_TAG::7}"
-          docker push "$ECR_REGISTRY/bunshin/broker:latest"
+            -t "$ECR_REGISTRY/bunshin/runner:${IMAGE_TAG}" \
+            -t "$ECR_REGISTRY/bunshin/runner:${IMAGE_TAG::7}" \
+            -t "$ECR_REGISTRY/bunshin/runner:latest" \
+            runner/
+          docker push "$ECR_REGISTRY/bunshin/runner:${IMAGE_TAG}"
+          docker push "$ECR_REGISTRY/bunshin/runner:${IMAGE_TAG::7}"
+          docker push "$ECR_REGISTRY/bunshin/runner:latest"
       - name: Deploy to ECS
         run: |
           aws ecs update-service \
             --cluster bunshin \
-            --service bunshin-broker \
+            --service bunshin-runner \
             --force-new-deployment
           aws ecs wait services-stable \
             --cluster bunshin \
-            --services bunshin-broker
+            --services bunshin-runner
