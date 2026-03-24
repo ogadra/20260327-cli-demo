@@ -114,6 +114,102 @@ resource "aws_vpc_endpoint" "dynamodb" {
   })
 }
 
+# VPC Interface Endpoints for ECR and CloudWatch Logs
+resource "aws_security_group" "ecr_endpoint" {
+  name_prefix = "bunshin-ecr-ep-"
+  description = "Security group for ECR and CloudWatch Logs VPC endpoints"
+  vpc_id      = aws_vpc.main.id
+
+  tags = merge(local.common_tags, {
+    Name    = "bunshin-ecr-endpoint"
+    Service = "ecr"
+  })
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_security_group_rule" "ecr_endpoint_ingress_nginx" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
+  type                     = "ingress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.nginx.id
+  security_group_id        = aws_security_group.ecr_endpoint.id
+  description              = "HTTPS from nginx"
+}
+
+resource "aws_security_group_rule" "ecr_endpoint_ingress_broker" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
+  type                     = "ingress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.broker.id
+  security_group_id        = aws_security_group.ecr_endpoint.id
+  description              = "HTTPS from broker"
+}
+
+resource "aws_vpc_endpoint" "ecr_api" {
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.ap-northeast-1.ecr.api"
+  vpc_endpoint_type = "Interface"
+
+  subnet_ids         = aws_subnet.private[*].id
+  security_group_ids = [aws_security_group.ecr_endpoint.id]
+
+  private_dns_enabled = true
+
+  tags = merge(local.common_tags, {
+    Name = "bunshin-ecr-api"
+  })
+}
+
+resource "aws_vpc_endpoint" "ecr_dkr" {
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.ap-northeast-1.ecr.dkr"
+  vpc_endpoint_type = "Interface"
+
+  subnet_ids         = aws_subnet.private[*].id
+  security_group_ids = [aws_security_group.ecr_endpoint.id]
+
+  private_dns_enabled = true
+
+  tags = merge(local.common_tags, {
+    Name = "bunshin-ecr-dkr"
+  })
+}
+
+resource "aws_vpc_endpoint" "logs" {
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.ap-northeast-1.logs"
+  vpc_endpoint_type = "Interface"
+
+  subnet_ids         = aws_subnet.private[*].id
+  security_group_ids = [aws_security_group.ecr_endpoint.id]
+
+  private_dns_enabled = true
+
+  tags = merge(local.common_tags, {
+    Name = "bunshin-logs"
+  })
+}
+
+# S3 Gateway Endpoint for ECR image layer storage
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id       = aws_vpc.main.id
+  service_name = "com.amazonaws.ap-northeast-1.s3"
+
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = [aws_route_table.private.id]
+
+  tags = merge(local.common_tags, {
+    Name = "bunshin-s3"
+  })
+}
+
 # VPC Interface Endpoint for Bedrock Runtime
 resource "aws_security_group" "bedrock_endpoint" {
   name_prefix = "bunshin-bedrock-ep-"

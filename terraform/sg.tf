@@ -80,6 +80,30 @@ resource "aws_security_group_rule" "nginx_egress_broker" {
   description              = "HTTP to broker"
 }
 
+# nginx outbound: to ECR and CloudWatch Logs VPC endpoints
+resource "aws_security_group_rule" "nginx_egress_ecr" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
+  type                     = "egress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.ecr_endpoint.id
+  security_group_id        = aws_security_group.nginx.id
+  description              = "HTTPS to ECR and CloudWatch Logs VPC endpoints"
+}
+
+# nginx outbound: to S3 Gateway Endpoint for ECR image layers
+resource "aws_security_group_rule" "nginx_egress_s3" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
+  type              = "egress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  prefix_list_ids   = [aws_vpc_endpoint.s3.prefix_list_id]
+  security_group_id = aws_security_group.nginx.id
+  description       = "HTTPS to S3 VPC endpoint"
+}
+
 # nginx outbound: to runner
 resource "aws_security_group_rule" "nginx_egress_runner" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
@@ -129,6 +153,30 @@ resource "aws_security_group_rule" "broker_ingress_runner" {
   source_security_group_id = aws_security_group.runner.id
   security_group_id        = aws_security_group.broker.id
   description              = "HTTP from runner"
+}
+
+# broker outbound: to ECR and CloudWatch Logs VPC endpoints
+resource "aws_security_group_rule" "broker_egress_ecr" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
+  type                     = "egress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.ecr_endpoint.id
+  security_group_id        = aws_security_group.broker.id
+  description              = "HTTPS to ECR and CloudWatch Logs VPC endpoints"
+}
+
+# broker outbound: to S3 Gateway Endpoint for ECR image layers
+resource "aws_security_group_rule" "broker_egress_s3" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
+  type              = "egress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  prefix_list_ids   = [aws_vpc_endpoint.s3.prefix_list_id]
+  security_group_id = aws_security_group.broker.id
+  description       = "HTTPS to S3 VPC endpoint"
 }
 
 # broker outbound: to DynamoDB VPC endpoint
