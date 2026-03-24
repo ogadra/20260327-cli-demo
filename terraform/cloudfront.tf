@@ -134,7 +134,7 @@ resource "aws_cloudfront_distribution" "main" {
 
   # WebSocket API Gateway origin for presenter slide sync
   origin {
-    domain_name = "${aws_apigatewayv2_api.presenter_websocket.id}.execute-api.ap-northeast-1.amazonaws.com"
+    domain_name = "${aws_apigatewayv2_api.presenter_websocket.id}.execute-api.${data.aws_region.current.id}.amazonaws.com"
     origin_id   = local.presenter_cf_origin_id.websocket
 
     custom_origin_config {
@@ -147,7 +147,7 @@ resource "aws_cloudfront_distribution" "main" {
 
   # HTTP API Gateway origin for presenter login
   origin {
-    domain_name = "${aws_apigatewayv2_api.presenter_login.id}.execute-api.ap-northeast-1.amazonaws.com"
+    domain_name = "${aws_apigatewayv2_api.presenter_login.id}.execute-api.${data.aws_region.current.id}.amazonaws.com"
     origin_id   = local.presenter_cf_origin_id.login
 
     custom_origin_config {
