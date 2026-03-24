@@ -35,8 +35,14 @@ type Store struct {
 	marshalMapFn func(in interface{}) (map[string]types.AttributeValue, error)
 }
 
-// NewStore は Store を生成する。
+// NewStore は Store を生成する。client が nil または tableName が空の場合は panic する。
 func NewStore(client DynamoDBAPI, tableName string) *Store {
+	if client == nil {
+		panic("poll: dynamodb client is required")
+	}
+	if tableName == "" {
+		panic("poll: table name is required")
+	}
 	return &Store{
 		client:       client,
 		tableName:    tableName,
