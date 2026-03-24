@@ -3,7 +3,6 @@ package handler
 
 import (
 	"errors"
-	"log"
 	"net/http"
 	"net/url"
 
@@ -46,7 +45,6 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 			writeError(c, http.StatusNotFound, model.CodeSessionNotFound, "session not found")
 			return
 		}
-		log.Printf("ERROR DeleteSession: sessionID=%s err=%v", sessionID, err)
 		writeError(c, http.StatusInternalServerError, model.CodeInternalError, "failed to close session")
 		return
 	}
@@ -63,7 +61,6 @@ func (h *Handler) GetResolve(c *gin.Context) {
 			writeError(c, http.StatusServiceUnavailable, model.CodeNoIdleRunner, "no idle runner available")
 			return
 		}
-		log.Printf("ERROR GetResolve: sessionID=%s err=%v", sessionID, err)
 		writeError(c, http.StatusInternalServerError, model.CodeInternalError, "failed to resolve session")
 		return
 	}
@@ -103,7 +100,6 @@ func (h *Handler) PostRegister(c *gin.Context) {
 	}
 	err := h.svc.RegisterRunner(c.Request.Context(), req.RunnerID, req.PrivateURL)
 	if err != nil {
-		log.Printf("ERROR PostRegister: runnerID=%s err=%v", req.RunnerID, err)
 		writeError(c, http.StatusInternalServerError, model.CodeInternalError, "failed to register runner")
 		return
 	}
@@ -115,7 +111,6 @@ func (h *Handler) DeleteRunner(c *gin.Context) {
 	runnerID := c.Param("runnerId")
 	err := h.svc.DeregisterRunner(c.Request.Context(), runnerID)
 	if err != nil {
-		log.Printf("ERROR DeleteRunner: runnerID=%s err=%v", runnerID, err)
 		writeError(c, http.StatusInternalServerError, model.CodeInternalError, "failed to deregister runner")
 		return
 	}
