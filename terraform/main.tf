@@ -54,9 +54,7 @@ resource "aws_dynamodb_table" "runners" {
 
   # busy な Runner だけが載る sparse GSI。sessionId から Runner を逆引きする
   global_secondary_index {
-    name = "session-index"
-    # TODO: クエリパターン確定後に projection_type を KEYS_ONLY または INCLUDE に最適化する
-    # See: https://github.com/ogadra/20260327-cli-demo/issues/12
+    name            = "session-index"
     projection_type = "ALL"
 
     key_schema {
@@ -67,9 +65,7 @@ resource "aws_dynamodb_table" "runners" {
 
   # idle な Runner だけが載る sparse GSI。空き Runner の検索に使う
   global_secondary_index {
-    name = "idle-index"
-    # TODO: クエリパターン確定後に projection_type を KEYS_ONLY または INCLUDE に最適化する
-    # See: https://github.com/ogadra/20260327-cli-demo/issues/12
+    name            = "idle-index"
     projection_type = "ALL"
 
     key_schema {
