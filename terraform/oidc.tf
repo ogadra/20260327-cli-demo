@@ -6,7 +6,7 @@ resource "aws_iam_openid_connect_provider" "github" {
   thumbprint_list = ["ffffffffffffffffffffffffffffffffffffffff"]
 
   tags = merge(local.common_tags, {
-    Service = "ci-cd"
+    Service = "cd"
   })
 }
 
@@ -32,7 +32,7 @@ resource "aws_iam_role" "github_actions_deploy" {
   })
 
   tags = merge(local.common_tags, {
-    Service = "ci-cd"
+    Service = "cd"
   })
 }
 
