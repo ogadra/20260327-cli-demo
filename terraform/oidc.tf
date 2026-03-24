@@ -13,6 +13,13 @@ resource "aws_iam_openid_connect_provider" "github" {
 locals {
   # ECS services that need deploy roles with ECR push and ECS update permissions
   ecs_deploy_services = toset(["nginx", "broker", "runner"])
+
+  # Map of service name to ECS service ID for IAM policy resource references
+  ecs_service_ids = {
+    nginx  = aws_ecs_service.nginx.id
+    broker = aws_ecs_service.broker.id
+    runner = aws_ecs_service.runner.id
+  }
 }
 
 # IAM roles for GitHub Actions deployment workflows per service
@@ -92,7 +99,7 @@ resource "aws_iam_role_policy" "deploy_ecs" {
         "ecs:UpdateService",
         "ecs:DescribeServices",
       ]
-      Resource = "arn:aws:ecs:*:*:service/bunshin/bunshin-${each.key}"
+      Resource = local.ecs_service_ids[each.key]
     }]
   })
 }
