@@ -29,6 +29,8 @@ jobs:
         run: cd front && pnpm install --frozen-lockfile
       - name: vp check
         run: cd front && pnpm exec vp check
+      - name: vp lint --deny-warnings
+        run: cd front && pnpm exec vp lint --deny-warnings
 
   test-front-host:
     runs-on: ubuntu-latest

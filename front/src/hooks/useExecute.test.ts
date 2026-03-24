@@ -21,14 +21,26 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** Mock terminal methods returned alongside the ref for assertion. */
+interface MockTerminalRef {
+  /** Ref object to pass to useExecute. */
+  ref: RefObject<TerminalHandle>;
+  /** Mock for TerminalHandle.write. */
+  write: ReturnType<typeof vi.fn>;
+  /** Mock for TerminalHandle.writeln. */
+  writeln: ReturnType<typeof vi.fn>;
+}
+
 /** Create a mock TerminalHandle ref for testing. */
-function makeTerminalRef(): RefObject<TerminalHandle> {
-  return { current: { write: vi.fn(), writeln: vi.fn() } };
+function makeTerminalRef(): MockTerminalRef {
+  const write = vi.fn();
+  const writeln = vi.fn();
+  return { ref: { current: { write, writeln } }, write, writeln };
 }
 
 describe("useExecute", () => {
   it("writes stdout to terminal", async () => {
-    const termRef = makeTerminalRef();
+    const { ref, write, writeln } = makeTerminalRef();
 
     async function* fakeExecute() {
       yield { type: "stdout" as const, data: "hello\n" };
@@ -36,19 +48,19 @@ describe("useExecute", () => {
     }
     mockExecute.mockReturnValue(fakeExecute());
 
-    const { result } = renderHook(() => useExecute(true, termRef));
+    const { result } = renderHook(() => useExecute(true, ref));
 
     await act(async () => {
       await result.current.run("echo hello");
     });
 
-    expect(termRef.current.writeln).toHaveBeenCalledWith("echo hello");
-    expect(termRef.current.write).toHaveBeenCalledWith("hello\n");
-    expect(termRef.current.write).toHaveBeenCalledWith("$ ");
+    expect(writeln).toHaveBeenCalledWith("echo hello");
+    expect(write).toHaveBeenCalledWith("hello\n");
+    expect(write).toHaveBeenCalledWith("$ ");
   });
 
   it("writes stderr in red", async () => {
-    const termRef = makeTerminalRef();
+    const { ref, write, writeln } = makeTerminalRef();
 
     async function* fakeExecute() {
       yield { type: "stderr" as const, data: "err\n" };
@@ -56,21 +68,21 @@ describe("useExecute", () => {
     }
     mockExecute.mockReturnValue(fakeExecute());
 
-    const { result } = renderHook(() => useExecute(true, termRef));
+    const { result } = renderHook(() => useExecute(true, ref));
 
     await act(async () => {
       await result.current.run("bad");
     });
 
-    expect(termRef.current.write).toHaveBeenCalledWith("\x1b[31merr\n\x1b[0m");
-    expect(termRef.current.writeln).toHaveBeenCalledWith("\x1b[31mexit code: 1\x1b[0m");
-    expect(termRef.current.write).toHaveBeenCalledWith("$ ");
+    expect(write).toHaveBeenCalledWith("\x1b[31merr\n\x1b[0m");
+    expect(writeln).toHaveBeenCalledWith("\x1b[31mexit code: 1\x1b[0m");
+    expect(write).toHaveBeenCalledWith("$ ");
   });
 
   it("does not run when session is not ready", async () => {
-    const termRef = makeTerminalRef();
+    const { ref } = makeTerminalRef();
 
-    const { result } = renderHook(() => useExecute(false, termRef));
+    const { result } = renderHook(() => useExecute(false, ref));
 
     await act(async () => {
       await result.current.run("cmd");
@@ -80,7 +92,7 @@ describe("useExecute", () => {
   });
 
   it("prevents concurrent executions", async () => {
-    const termRef = makeTerminalRef();
+    const { ref } = makeTerminalRef();
 
     let resolveFirst!: () => void;
     const firstPromise = new Promise<void>((resolve) => {
@@ -93,7 +105,7 @@ describe("useExecute", () => {
     }
     mockExecute.mockReturnValue(slowExecute());
 
-    const { result } = renderHook(() => useExecute(true, termRef));
+    const { result } = renderHook(() => useExecute(true, ref));
 
     const firstRun = act(async () => {
       await result.current.run("first");
@@ -110,7 +122,7 @@ describe("useExecute", () => {
   });
 
   it("displays error message in terminal on execute failure", async () => {
-    const termRef = makeTerminalRef();
+    const { ref, write, writeln } = makeTerminalRef();
 
     async function* failingExecute() {
       throw new Error("connection refused");
@@ -118,15 +130,13 @@ describe("useExecute", () => {
     }
     mockExecute.mockReturnValue(failingExecute());
 
-    const { result } = renderHook(() => useExecute(true, termRef));
+    const { result } = renderHook(() => useExecute(true, ref));
 
     await act(async () => {
       await result.current.run("bad-cmd");
     });
 
-    expect(termRef.current.writeln).toHaveBeenCalledWith(
-      "\x1b[31mError: connection refused\x1b[0m",
-    );
-    expect(termRef.current.write).toHaveBeenCalledWith("$ ");
+    expect(writeln).toHaveBeenCalledWith("\x1b[31mError: connection refused\x1b[0m");
+    expect(write).toHaveBeenCalledWith("$ ");
   });
 });

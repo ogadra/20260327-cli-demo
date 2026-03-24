@@ -51,6 +51,10 @@ pre-commit:
       glob: "**/*.{ts,tsx}"
       stage_fixed: true
       run: pnpm exec vp check --fix
+    032_lint_front_strict:
+      root: "front/"
+      glob: "**/*.{ts,tsx}"
+      run: pnpm exec vp lint --deny-warnings
     041_nginx_config_test:
       root: "nginx/"
       glob: "**/*.conf"
