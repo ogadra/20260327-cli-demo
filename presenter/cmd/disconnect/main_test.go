@@ -183,6 +183,8 @@ func TestRun_Success(t *testing.T) {
 		loadConfig = origLoadConfig
 	}()
 
+	t.Setenv("CONNECTIONS_TABLE", "conn-table")
+
 	startLambda = func(handler any) {}
 	loadConfig = func(_ context.Context, _ ...func(*config.LoadOptions) error) (aws.Config, error) {
 		return aws.Config{}, nil
@@ -202,6 +204,7 @@ func TestRun_SuccessWithEndpoint(t *testing.T) {
 		loadConfig = origLoadConfig
 	}()
 
+	t.Setenv("CONNECTIONS_TABLE", "conn-table")
 	t.Setenv("APIGW_ENDPOINT", "https://example.com")
 
 	startLambda = func(handler any) {}
@@ -211,6 +214,27 @@ func TestRun_SuccessWithEndpoint(t *testing.T) {
 
 	if err := run(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestRun_MissingConnectionsTable は CONNECTIONS_TABLE 未設定時にエラーを返すことを検証する。
+func TestRun_MissingConnectionsTable(t *testing.T) {
+	origStart := startLambda
+	origLoadConfig := loadConfig
+	defer func() {
+		startLambda = origStart
+		loadConfig = origLoadConfig
+	}()
+
+	t.Setenv("CONNECTIONS_TABLE", "")
+
+	startLambda = func(handler any) {}
+	loadConfig = func(_ context.Context, _ ...func(*config.LoadOptions) error) (aws.Config, error) {
+		return aws.Config{}, nil
+	}
+
+	if err := run(); err == nil {
+		t.Fatal("expected error")
 	}
 }
 

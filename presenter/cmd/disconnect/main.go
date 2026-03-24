@@ -98,6 +98,9 @@ func run() error {
 
 	ddbClient := dynamodb.NewFromConfig(cfg)
 	connTable := os.Getenv("CONNECTIONS_TABLE")
+	if connTable == "" {
+		return fmt.Errorf("CONNECTIONS_TABLE environment variable is required")
+	}
 	apigwEndpoint := os.Getenv("APIGW_ENDPOINT")
 
 	apigwClient := apigatewaymanagementapi.NewFromConfig(cfg, func(o *apigatewaymanagementapi.Options) {
