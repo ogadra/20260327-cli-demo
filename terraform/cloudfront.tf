@@ -1,4 +1,5 @@
 # Cache policy for S3 static assets: no caching, no cookies/query strings
+# 将来的に変更するのでマネージドポリシーではなく自前定義
 resource "aws_cloudfront_cache_policy" "static_assets" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   name        = "bunshin-static-assets"
@@ -18,27 +19,6 @@ resource "aws_cloudfront_cache_policy" "static_assets" {
     }
     enable_accept_encoding_gzip   = false
     enable_accept_encoding_brotli = false
-  }
-}
-
-# Cache policy for API: no caching, pass through all requests
-resource "aws_cloudfront_cache_policy" "api_no_cache" {
-  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
-  name        = "bunshin-api-no-cache"
-  min_ttl     = 0
-  default_ttl = 0
-  max_ttl     = 0
-
-  parameters_in_cache_key_and_forwarded_to_origin {
-    cookies_config {
-      cookie_behavior = "none"
-    }
-    headers_config {
-      header_behavior = "none"
-    }
-    query_strings_config {
-      query_string_behavior = "none"
-    }
   }
 }
 
@@ -182,7 +162,7 @@ resource "aws_cloudfront_distribution" "main" {
     target_origin_id         = "alb"
     viewer_protocol_policy   = "redirect-to-https"
     compress                 = false
-    cache_policy_id          = aws_cloudfront_cache_policy.api_no_cache.id
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id = aws_cloudfront_origin_request_policy.api_all_viewer.id
   }
 
