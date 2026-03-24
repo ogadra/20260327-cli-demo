@@ -632,10 +632,10 @@ func TestNewBedrockValidatorFromEnvCustomModel(t *testing.T) {
 	}
 }
 
-// TestStartValidatorError verifies that start returns an error when
-// the validator factory function fails.
-func TestStartValidatorError(t *testing.T) {
-	t.Setenv("BROKER_URL", "http://broker:8080")
+// TestStartValidatorFallback verifies that start continues with a nil validator
+// when the validator factory function fails, logging a warning instead of failing.
+func TestStartValidatorFallback(t *testing.T) {
+	t.Setenv("BROKER_URL", "http://dummy:8080")
 
 	orig := newValidatorFn
 	defer func() { newValidatorFn = orig }()
@@ -643,12 +643,21 @@ func TestStartValidatorError(t *testing.T) {
 		return nil, errors.New("validator init failed")
 	}
 
-	err := start("127.0.0.1:0")
-	if err == nil {
-		t.Fatal("start should return error when validator creation fails")
+	origReg := registerFn
+	defer func() { registerFn = origReg }()
+	registerFn = func(ctx context.Context, deps registerDeps) error {
+		return nil
 	}
-	if !strings.Contains(err.Error(), "validator init failed") {
-		t.Fatalf("error should mention validator init failed, got: %v", err)
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		proc, _ := os.FindProcess(os.Getpid())
+		proc.Signal(syscall.SIGTERM)
+	}()
+
+	err := start("127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("start should succeed even when validator fails, got: %v", err)
 	}
 }
 
