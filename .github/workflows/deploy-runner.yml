@@ -25,7 +25,7 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
       - uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
-          role-to-assume: ${{ vars.DEPLOY_RUNNER_ROLE_ARN }}
+          role-to-assume: ${{ secrets.DEPLOY_RUNNER_ROLE_ARN }}
           aws-region: ap-northeast-1
       - uses: aws-actions/amazon-ecr-login@261fc3d4806db1fa66a15cc11113c456db8870a7 # v2.1.0
         id: ecr-login

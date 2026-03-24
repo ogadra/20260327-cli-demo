@@ -58,3 +58,15 @@ SSE イベント種別: `stdout` (リアルタイム), `stderr` (完了時), `co
 | DELETE | `/sessions/{sessionId}` | セッション終了 |
 | POST | `/internal/runners/register` | Runner 登録 |
 | DELETE | `/internal/runners/{runnerId}` | Runner 登録解除 |
+
+## GitHub Actions シークレット
+
+デプロイワークフローで必要な Repository secrets。OIDC によるロール引き受けを使用するため、AWS クレデンシャルの直接設定は不要。
+
+| シークレット名 | 用途 |
+|---------------|------|
+| `DEPLOY_BROKER_ROLE_ARN` | broker デプロイ用 IAM ロール ARN |
+| `DEPLOY_FRONT_ROLE_ARN` | front デプロイ用 IAM ロール ARN |
+| `DEPLOY_NGINX_ROLE_ARN` | nginx デプロイ用 IAM ロール ARN |
+| `DEPLOY_RUNNER_ROLE_ARN` | runner デプロイ用 IAM ロール ARN |
+| `FRONT_S3_BUCKET` | front アセット配信用 S3 バケット名 |
