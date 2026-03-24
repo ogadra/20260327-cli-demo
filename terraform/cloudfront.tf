@@ -67,6 +67,16 @@ resource "aws_cloudfront_origin_access_control" "front" {
   signing_protocol                  = "sigv4"
 }
 
+# AWS managed cache policy: no caching for API Gateway origins
+data "aws_cloudfront_cache_policy" "caching_disabled" {
+  name = "Managed-CachingDisabled"
+}
+
+# AWS managed origin request policy: forward all viewer headers except Host
+data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" {
+  name = "Managed-AllViewerExceptHostHeader"
+}
+
 # CloudFront function for SPA routing
 resource "aws_cloudfront_function" "spa_rewrite" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
@@ -122,6 +132,32 @@ resource "aws_cloudfront_distribution" "main" {
     }
   }
 
+  # WebSocket API Gateway origin for presenter slide sync
+  origin {
+    domain_name = "${aws_apigatewayv2_api.presenter_websocket.id}.execute-api.ap-northeast-1.amazonaws.com"
+    origin_id   = local.presenter_cf_origin_id.websocket
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  # HTTP API Gateway origin for presenter login
+  origin {
+    domain_name = "${aws_apigatewayv2_api.presenter_login.id}.execute-api.ap-northeast-1.amazonaws.com"
+    origin_id   = local.presenter_cf_origin_id.login
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
   # Default behavior: S3 static assets
   default_cache_behavior {
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
@@ -148,6 +184,30 @@ resource "aws_cloudfront_distribution" "main" {
     compress                 = false
     cache_policy_id          = aws_cloudfront_cache_policy.api_no_cache.id
     origin_request_policy_id = aws_cloudfront_origin_request_policy.api_all_viewer.id
+  }
+
+  # /ws behavior: forward to WebSocket API Gateway
+  ordered_cache_behavior {
+    path_pattern             = "/ws"
+    allowed_methods          = ["GET", "HEAD"]
+    cached_methods           = ["GET", "HEAD"]
+    target_origin_id         = local.presenter_cf_origin_id.websocket
+    viewer_protocol_policy   = "https-only"
+    compress                 = false
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+  }
+
+  # /login behavior: forward to HTTP API Gateway
+  ordered_cache_behavior {
+    path_pattern             = "/login"
+    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods           = ["GET", "HEAD"]
+    target_origin_id         = local.presenter_cf_origin_id.login
+    viewer_protocol_policy   = "https-only"
+    compress                 = false
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
   }
 
   restrictions {
