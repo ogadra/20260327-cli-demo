@@ -984,7 +984,7 @@ func TestViewerCountAdapter_SendToOne(t *testing.T) {
 		},
 	}
 	adapter := &viewerCountAdapter{sender: mock}
-	err := adapter.SendToOne(context.Background(), "conn1", []byte("test"))
+	err := adapter.SendToOne(context.Background(), "ignored-room", "conn1", []byte("test"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1008,7 +1008,7 @@ func TestViewerCountAdapter_SendToOneError(t *testing.T) {
 		},
 	}
 	adapter := &viewerCountAdapter{sender: mock}
-	err := adapter.SendToOne(context.Background(), "conn1", []byte("test"))
+	err := adapter.SendToOne(context.Background(), "ignored-room", "conn1", []byte("test"))
 	if err == nil {
 		t.Fatal("expected error")
 	}

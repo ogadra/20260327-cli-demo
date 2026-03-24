@@ -359,8 +359,8 @@ type viewerCountAdapter struct {
 	sender singleSender
 }
 
-// SendToOne は room を固定して singleSender.SendToOne を呼び出す。
-func (a *viewerCountAdapter) SendToOne(ctx context.Context, connectionID string, payload []byte) error {
+// SendToOne は viewercount.SingleSender を満たす。room 引数を無視し固定の room 定数で委譲する。
+func (a *viewerCountAdapter) SendToOne(ctx context.Context, _, connectionID string, payload []byte) error {
 	return a.sender.SendToOne(ctx, room, connectionID, payload)
 }
 
