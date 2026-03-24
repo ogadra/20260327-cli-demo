@@ -11,7 +11,11 @@ resource "aws_s3_bucket" "front" {
   # checkov:skip=CKV2_AWS_62:Event notifications are not needed
   # checkov:skip=CKV2_AWS_61:Lifecycle configuration is not needed for static assets
   # checkov:skip=CKV_AWS_21:Versioning is not needed for build output
-  bucket           = format("bunshin-front-%s-%s", data.aws_caller_identity.current.account_id, data.aws_region.current.id)
+  bucket = format(
+    "bunshin-front-%s-%s-an",
+    data.aws_caller_identity.current.account_id,
+    data.aws_region.current.id,
+  )
   bucket_namespace = "account-regional"
 
   tags = merge(local.common_tags, {
