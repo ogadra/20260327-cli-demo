@@ -26,10 +26,14 @@ RUN CGO_ENABLED=0 go build -o /server .
 
 # production image
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash=5.2* \
-    coreutils=9.1* \
-    && rm -rf /var/lib/apt/lists/*
+
+FROM nixos/nix:2.34.3
+
+RUN mkdir -p /etc/nix && \
+    printf '%s\n' 'extra-experimental-features = nix-command flakes' > /etc/nix/nix.conf
+
+RUN nix-channel --update && nix-env -iA nixpkgs.bash nixpkgs.coreutils
+
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=binary /server /server
 EXPOSE 3000
