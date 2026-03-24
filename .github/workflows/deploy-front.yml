@@ -1,0 +1,43 @@
+name: Deploy Front
+
+on:
+  workflow_run:
+    workflows: ["Front"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-front
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          role-to-assume: ${{ vars.DEPLOY_FRONT_ROLE_ARN }}
+          aws-region: ap-northeast-1
+      - name: Build front assets
+        run: |
+          docker build --target build -t front-build front/
+          docker create --name front-extract front-build
+          docker cp front-extract:/app/dist ./dist
+          docker rm front-extract
+      - name: Verify dist directory
+        run: |
+          if [ ! -d "./dist" ] || [ -z "$(ls -A ./dist)" ]; then
+            echo "Error: dist directory is empty or does not exist"
+            exit 1
+          fi
+      - name: Sync to S3
+        run: aws s3 sync ./dist "s3://${{ vars.FRONT_S3_BUCKET }}" --delete
