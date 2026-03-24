@@ -91,7 +91,14 @@ func TestPut_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	ttlVal := capturedItem["ttl"].(*types.AttributeValueMemberN)
+	ttlRaw, ok := capturedItem["ttl"]
+	if !ok {
+		t.Fatal("ttl attribute is missing")
+	}
+	ttlVal, ok := ttlRaw.(*types.AttributeValueMemberN)
+	if !ok {
+		t.Fatalf("ttl attribute type = %T, want *types.AttributeValueMemberN", ttlRaw)
+	}
 	expectedTTL := fixedTime.Add(24 * time.Hour).Unix()
 	if ttlVal.Value != fmt.Sprintf("%d", expectedTTL) {
 		t.Errorf("ttl = %s, want %d", ttlVal.Value, expectedTTL)
@@ -584,7 +591,14 @@ func TestNewSessionStore(t *testing.T) {
 func TestIsValid_ValidToken(t *testing.T) {
 	t.Parallel()
 	mock := &mockSessionDynamoDBAPI{
-		getItemFn: func(_ context.Context, _ *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+		getItemFn: func(_ context.Context, in *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+			if in.TableName == nil || *in.TableName != "sessions" {
+				t.Fatalf("tableName = %v, want sessions", in.TableName)
+			}
+			tokenAttr, ok := in.Key["token"].(*types.AttributeValueMemberS)
+			if !ok || tokenAttr.Value != "abc123" {
+				t.Fatalf("unexpected token key: %#v", in.Key["token"])
+			}
 			return &dynamodb.GetItemOutput{
 				Item: map[string]types.AttributeValue{
 					"token":  &types.AttributeValueMemberS{Value: "abc123"},
