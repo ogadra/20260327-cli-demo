@@ -1,26 +1,8 @@
-# Deploy role ARNs for GitHub Actions OIDC authentication
-output "deploy_broker_role_arn" {
-  description = "IAM role ARN for broker deployment workflow"
-  value       = aws_iam_role.github_actions_deploy["broker"].arn
-}
-
-output "deploy_front_role_arn" {
-  description = "IAM role ARN for front deployment workflow"
-  value       = aws_iam_role.github_actions_deploy["front"].arn
-}
-
-output "deploy_nginx_role_arn" {
-  description = "IAM role ARN for nginx deployment workflow"
-  value       = aws_iam_role.github_actions_deploy["nginx"].arn
-}
-
-output "deploy_runner_role_arn" {
-  description = "IAM role ARN for runner deployment workflow"
-  value       = aws_iam_role.github_actions_deploy["runner"].arn
-}
-
-# S3 bucket name for front asset deployment
-output "front_s3_bucket" {
-  description = "S3 bucket name for front static assets"
-  value       = aws_s3_bucket.front.bucket
+# GitHub Actions secrets to configure for deploy workflows
+output "github_actions_secrets" {
+  description = "Map of GitHub Actions secret names to their values"
+  value = merge(
+    { for k, v in aws_iam_role.github_actions_deploy : "DEPLOY_${upper(k)}_ROLE_ARN" => v.arn },
+    { "FRONT_S3_BUCKET" = aws_s3_bucket.front.bucket }
+  )
 }
