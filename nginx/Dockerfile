@@ -12,10 +12,12 @@ USER nginx
 # checkov:skip=CKV_DOCKER_2:health check is managed by ECS task definition
 FROM nginx:1.29.6-alpine
 RUN chown -R nginx:nginx /var/cache/nginx /run
-COPY errors.conf /etc/nginx/errors.conf
-COPY nginx.conf /etc/nginx/nginx.conf.template
+COPY --chown=nginx:nginx errors.conf /etc/nginx/errors.conf
+COPY --chown=nginx:nginx nginx.conf /etc/nginx/nginx.conf.template
 ARG NGINX_RESOLVER
 ARG BROKER_HOST
 RUN envsubst '${NGINX_RESOLVER} ${BROKER_HOST}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf \
-    && nginx -t
+    && chown nginx:nginx /etc/nginx/nginx.conf \
+    && nginx -t \
+    && rm -f /run/nginx.pid
 USER nginx
