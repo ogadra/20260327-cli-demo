@@ -4,6 +4,7 @@ package broadcast
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/apigatewaymanagementapi"
@@ -78,10 +79,10 @@ func TestNewBroadcaster(t *testing.T) {
 // TestSend_Success は全接続への正常送信を検証する。
 func TestSend_Success(t *testing.T) {
 	t.Parallel()
-	posted := make(map[string]bool)
+	var posted sync.Map
 	apigw := &mockAPIGatewayManagementAPI{
 		postToConnectionFn: func(_ context.Context, params *apigatewaymanagementapi.PostToConnectionInput, _ ...func(*apigatewaymanagementapi.Options)) (*apigatewaymanagementapi.PostToConnectionOutput, error) {
-			posted[*params.ConnectionId] = true
+			posted.Store(*params.ConnectionId, true)
 			return &apigatewaymanagementapi.PostToConnectionOutput{}, nil
 		},
 	}
@@ -99,18 +100,20 @@ func TestSend_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !posted["conn1"] || !posted["conn2"] {
-		t.Errorf("expected both connections to receive message, got %v", posted)
+	_, ok1 := posted.Load("conn1")
+	_, ok2 := posted.Load("conn2")
+	if !ok1 || !ok2 {
+		t.Error("expected both connections to receive message")
 	}
 }
 
 // TestSend_ExcludeConnection は除外接続がスキップされることを検証する。
 func TestSend_ExcludeConnection(t *testing.T) {
 	t.Parallel()
-	posted := make(map[string]bool)
+	var posted sync.Map
 	apigw := &mockAPIGatewayManagementAPI{
 		postToConnectionFn: func(_ context.Context, params *apigatewaymanagementapi.PostToConnectionInput, _ ...func(*apigatewaymanagementapi.Options)) (*apigatewaymanagementapi.PostToConnectionOutput, error) {
-			posted[*params.ConnectionId] = true
+			posted.Store(*params.ConnectionId, true)
 			return &apigatewaymanagementapi.PostToConnectionOutput{}, nil
 		},
 	}
@@ -129,10 +132,13 @@ func TestSend_ExcludeConnection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !posted["conn1"] || !posted["conn3"] {
+	_, ok1 := posted.Load("conn1")
+	_, ok3 := posted.Load("conn3")
+	if !ok1 || !ok3 {
 		t.Error("expected conn1 and conn3 to receive message")
 	}
-	if posted["conn2"] {
+	_, ok2 := posted.Load("conn2")
+	if ok2 {
 		t.Error("expected conn2 to be excluded")
 	}
 }
@@ -155,7 +161,7 @@ func TestSend_QueryError(t *testing.T) {
 // TestSend_GoneException は GoneException 時に接続が自動削除されることを検証する。
 func TestSend_GoneException(t *testing.T) {
 	t.Parallel()
-	deleted := make(map[string]bool)
+	var deleted sync.Map
 	apigw := &mockAPIGatewayManagementAPI{
 		postToConnectionFn: func(_ context.Context, params *apigatewaymanagementapi.PostToConnectionInput, _ ...func(*apigatewaymanagementapi.Options)) (*apigatewaymanagementapi.PostToConnectionOutput, error) {
 			if *params.ConnectionId == "gone-conn" {
@@ -173,8 +179,8 @@ func TestSend_GoneException(t *testing.T) {
 		},
 	}
 	deleter := &mockConnectionDeleter{
-		deleteFn: func(_ context.Context, room, connectionID string) error {
-			deleted[connectionID] = true
+		deleteFn: func(_ context.Context, _, connectionID string) error {
+			deleted.Store(connectionID, true)
 			return nil
 		},
 	}
@@ -183,7 +189,8 @@ func TestSend_GoneException(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !deleted["gone-conn"] {
+	_, ok := deleted.Load("gone-conn")
+	if !ok {
 		t.Error("expected gone-conn to be deleted")
 	}
 }
@@ -263,7 +270,7 @@ func TestSendToOne_Success(t *testing.T) {
 		},
 	}
 	b := NewBroadcaster(apigw, &mockConnectionQuerier{}, &mockConnectionDeleter{})
-	err := b.SendToOne(context.Background(), "conn1", []byte(`{"type":"test"}`))
+	err := b.SendToOne(context.Background(), "default", "conn1", []byte(`{"type":"test"}`))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -281,9 +288,54 @@ func TestSendToOne_Error(t *testing.T) {
 		},
 	}
 	b := NewBroadcaster(apigw, &mockConnectionQuerier{}, &mockConnectionDeleter{})
-	err := b.SendToOne(context.Background(), "conn1", []byte(`{}`))
+	err := b.SendToOne(context.Background(), "default", "conn1", []byte(`{}`))
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+// TestSendToOne_GoneException は GoneException 時に接続が自動削除されることを検証する。
+func TestSendToOne_GoneException(t *testing.T) {
+	t.Parallel()
+	var deletedConn string
+	apigw := &mockAPIGatewayManagementAPI{
+		postToConnectionFn: func(_ context.Context, _ *apigatewaymanagementapi.PostToConnectionInput, _ ...func(*apigatewaymanagementapi.Options)) (*apigatewaymanagementapi.PostToConnectionOutput, error) {
+			return nil, &goneError{}
+		},
+	}
+	deleter := &mockConnectionDeleter{
+		deleteFn: func(_ context.Context, _, connectionID string) error {
+			deletedConn = connectionID
+			return nil
+		},
+	}
+	b := NewBroadcaster(apigw, &mockConnectionQuerier{}, deleter)
+	err := b.SendToOne(context.Background(), "default", "gone-conn", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if deletedConn != "gone-conn" {
+		t.Errorf("expected gone-conn to be deleted, got %s", deletedConn)
+	}
+}
+
+// TestSendToOne_GoneExceptionDeleteError は GoneException 時の削除失敗が無視されることを検証する。
+func TestSendToOne_GoneExceptionDeleteError(t *testing.T) {
+	t.Parallel()
+	apigw := &mockAPIGatewayManagementAPI{
+		postToConnectionFn: func(_ context.Context, _ *apigatewaymanagementapi.PostToConnectionInput, _ ...func(*apigatewaymanagementapi.Options)) (*apigatewaymanagementapi.PostToConnectionOutput, error) {
+			return nil, &goneError{}
+		},
+	}
+	deleter := &mockConnectionDeleter{
+		deleteFn: func(_ context.Context, _, _ string) error {
+			return fmt.Errorf("delete error")
+		},
+	}
+	b := NewBroadcaster(apigw, &mockConnectionQuerier{}, deleter)
+	err := b.SendToOne(context.Background(), "default", "conn1", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

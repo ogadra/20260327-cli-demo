@@ -80,13 +80,17 @@ func (b *Broadcaster) Send(ctx context.Context, room string, payload []byte, exc
 	return nil
 }
 
-// SendToOne は単一の接続にメッセージを送信する。
-func (b *Broadcaster) SendToOne(ctx context.Context, connectionID string, payload []byte) error {
+// SendToOne は単一の接続にメッセージを送信する。GoneException 時は接続を自動削除する。
+func (b *Broadcaster) SendToOne(ctx context.Context, room, connectionID string, payload []byte) error {
 	_, err := b.apigw.PostToConnection(ctx, &apigatewaymanagementapi.PostToConnectionInput{
 		ConnectionId: &connectionID,
 		Data:         payload,
 	})
 	if err != nil {
+		if isGoneError(err) {
+			_ = b.deleter.Delete(ctx, room, connectionID)
+			return nil
+		}
 		return fmt.Errorf("post to connection %s: %w", connectionID, err)
 	}
 	return nil
