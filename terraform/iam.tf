@@ -117,6 +117,11 @@ resource "aws_iam_role_policy" "broker_dynamodb" {
   })
 }
 
+# Claude Sonnet foundation model for runner Bedrock access
+data "aws_bedrock_foundation_model" "claude_sonnet" {
+  model_id = "anthropic.claude-sonnet-4-20250514-v1:0"
+}
+
 # runner: Bedrock InvokeModel access
 resource "aws_iam_role_policy" "runner_bedrock" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
@@ -128,7 +133,7 @@ resource "aws_iam_role_policy" "runner_bedrock" {
     Statement = [{
       Effect   = "Allow"
       Action   = "bedrock:InvokeModel"
-      Resource = "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-*"
+      Resource = data.aws_bedrock_foundation_model.claude_sonnet.model_arn
     }]
   })
 }
