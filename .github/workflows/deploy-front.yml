@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: deploy-front
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
