@@ -135,6 +135,7 @@ data "aws_iam_policy_document" "deploy_presenter" {
     actions = [
       "lambda:UpdateFunctionCode",
       "lambda:GetFunction",
+      "lambda:GetFunctionConfiguration",
     ]
     resources = concat(
       [for k in keys(local.presenter_ws_handlers) : aws_lambda_function.presenter_ws[k].arn],
