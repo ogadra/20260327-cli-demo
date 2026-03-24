@@ -12,7 +12,8 @@ terraform {
 
 # AWS プロバイダ設定。ローカル開発時は local_override.tf で上書きする
 provider "aws" {
-  region = "ap-northeast-1"
+  region  = "ap-northeast-1"
+  profile = var.aws_profile
 }
 
 # Runner の状態管理テーブル。Session は独立エンティティとしては持たず、

@@ -194,7 +194,7 @@ resource "aws_ecs_service" "runner" {
   name            = "bunshin-runner"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.runner.arn
-  desired_count   = 300
+  desired_count   = var.runner_desired_count
   launch_type     = "FARGATE"
 
   network_configuration {
