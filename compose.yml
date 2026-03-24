@@ -7,8 +7,10 @@ services:
     ports:
       - "${NGINX_PORT}:8080"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf.template:ro
       - ./nginx/errors.conf:/etc/nginx/errors.conf:ro
+      - ./nginx/docker-entrypoint.sh:/docker-entrypoint.sh:ro
+    entrypoint: ["/docker-entrypoint.sh"]
 
   broker:
     build: broker/

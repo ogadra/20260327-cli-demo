@@ -38,6 +38,11 @@ resource "aws_ecs_task_definition" "nginx" {
       protocol      = "tcp"
     }]
 
+    environment = [
+      { name = "NGINX_RESOLVER", value = "169.254.169.253" },
+      { name = "BROKER_HOST", value = "${aws_service_discovery_service.broker.name}.${aws_service_discovery_private_dns_namespace.internal.name}" },
+    ]
+
     logConfiguration = {
       logDriver = "awslogs"
       options = {
