@@ -1,6 +1,10 @@
 services:
   nginx:
-    build: nginx/
+    build:
+      context: nginx/
+      args:
+        NGINX_RESOLVER: 127.0.0.11
+        BROKER_HOST: broker
     profiles:
       - nginx
       - integration

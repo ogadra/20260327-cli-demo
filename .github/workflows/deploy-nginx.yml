@@ -35,6 +35,8 @@ jobs:
           IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
         run: |
           docker build \
+            --build-arg NGINX_RESOLVER=169.254.169.253 \
+            --build-arg BROKER_HOST=broker.internal \
             -t "$ECR_REGISTRY/bunshin/nginx:${IMAGE_TAG}" \
             -t "$ECR_REGISTRY/bunshin/nginx:${IMAGE_TAG::7}" \
             -t "$ECR_REGISTRY/bunshin/nginx:latest" \
