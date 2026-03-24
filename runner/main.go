@@ -29,7 +29,7 @@ var resolveIdentityFn = resolveIdentity
 var registerFn = register
 
 // defaultModelID is the Bedrock model used when BEDROCK_MODEL_ID is not set.
-const defaultModelID = "us.anthropic.claude-sonnet-4-20250514"
+const defaultModelID = "us.anthropic.claude-sonnet-4-20250514-v1:0"
 
 // newValidatorFn creates a Validator for LLM command safety checks.
 // It defaults to newBedrockValidatorFromEnv and can be replaced in tests.
@@ -45,6 +45,9 @@ func newBedrockValidatorFromEnv(ctx context.Context) (Validator, error) {
 	cfg, err := loadAWSConfigFn(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load aws config: %w", err)
+	}
+	if cfg.Region == "" {
+		return nil, errors.New("aws region is required for bedrock runtime")
 	}
 	client := bedrockruntime.NewFromConfig(cfg)
 	modelID := os.Getenv("BEDROCK_MODEL_ID")
@@ -99,6 +102,14 @@ func start(addr string) error {
 		return fmt.Errorf("missing required environment variable: BROKER_URL")
 	}
 
+	valCtx, valCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer valCancel()
+	validator, err := newValidatorFn(valCtx)
+	if err != nil {
+		ln.Close()
+		return fmt.Errorf("create validator: %w", err)
+	}
+
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
 	defer signal.Stop(sig)
@@ -123,14 +134,6 @@ func start(addr string) error {
 	if err != nil {
 		ln.Close()
 		return fmt.Errorf("register with broker: %w", err)
-	}
-
-	valCtx, valCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer valCancel()
-	validator, err := newValidatorFn(valCtx)
-	if err != nil {
-		ln.Close()
-		return fmt.Errorf("create validator: %w", err)
 	}
 
 	cfg := serverConfig{

@@ -488,6 +488,7 @@ func TestStartMissingBrokerURL(t *testing.T) {
 // broker registration fails.
 func TestStartRegisterError(t *testing.T) {
 	t.Setenv("BROKER_URL", "http://broker:8080")
+	stubValidator(t)
 
 	orig := registerFn
 	defer func() { registerFn = orig }()
@@ -509,6 +510,7 @@ func TestStartRegisterError(t *testing.T) {
 // when a termination signal is received during the registration phase.
 func TestStartRegisterCanceledBySignal(t *testing.T) {
 	t.Setenv("BROKER_URL", "http://broker:8080")
+	stubValidator(t)
 
 	orig := registerFn
 	defer func() { registerFn = orig }()
@@ -564,6 +566,7 @@ func TestStartRegisterReceivesBrokerURL(t *testing.T) {
 // returns a non-nil Validator using the default model ID when BEDROCK_MODEL_ID is not set.
 func TestNewBedrockValidatorFromEnvDefault(t *testing.T) {
 	t.Setenv("BEDROCK_MODEL_ID", "")
+	t.Setenv("AWS_REGION", "us-east-1")
 	v, err := newBedrockValidatorFromEnv(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -595,10 +598,27 @@ func TestNewBedrockValidatorFromEnvConfigError(t *testing.T) {
 	}
 }
 
+// TestNewBedrockValidatorFromEnvMissingRegion verifies that newBedrockValidatorFromEnv
+// returns an error when the AWS region is not configured.
+func TestNewBedrockValidatorFromEnvMissingRegion(t *testing.T) {
+	t.Setenv("AWS_REGION", "")
+	t.Setenv("AWS_DEFAULT_REGION", "")
+	t.Setenv("AWS_CONFIG_FILE", "/dev/null")
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", "/dev/null")
+	_, err := newBedrockValidatorFromEnv(context.Background())
+	if err == nil {
+		t.Fatal("expected error when AWS region is missing")
+	}
+	if !strings.Contains(err.Error(), "aws region is required") {
+		t.Fatalf("error should mention aws region, got: %v", err)
+	}
+}
+
 // TestNewBedrockValidatorFromEnvCustomModel verifies that newBedrockValidatorFromEnv
 // uses the BEDROCK_MODEL_ID environment variable when set.
 func TestNewBedrockValidatorFromEnvCustomModel(t *testing.T) {
 	t.Setenv("BEDROCK_MODEL_ID", "custom-model-id")
+	t.Setenv("AWS_REGION", "us-east-1")
 	v, err := newBedrockValidatorFromEnv(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -616,12 +636,6 @@ func TestNewBedrockValidatorFromEnvCustomModel(t *testing.T) {
 // the validator factory function fails.
 func TestStartValidatorError(t *testing.T) {
 	t.Setenv("BROKER_URL", "http://broker:8080")
-
-	origReg := registerFn
-	defer func() { registerFn = origReg }()
-	registerFn = func(ctx context.Context, deps registerDeps) error {
-		return nil
-	}
 
 	orig := newValidatorFn
 	defer func() { newValidatorFn = orig }()
