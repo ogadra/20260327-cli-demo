@@ -6,3 +6,7 @@ misconfigurations:
     paths:
       - runner/Dockerfile
     statement: runner executes user commands and requires root
+  - id: DS-0002
+    paths:
+      - presenter/Dockerfile
+    statement: presenter Dockerfile has no runtime image as Lambda uses bootstrap binary directly
