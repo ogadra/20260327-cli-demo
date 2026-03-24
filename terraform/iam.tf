@@ -122,17 +122,28 @@ resource "aws_iam_role_policy" "broker_dynamodb" {
   policy = data.aws_iam_policy_document.broker_dynamodb.json
 }
 
-# Claude Sonnet foundation model for runner Bedrock access
-data "aws_bedrock_foundation_model" "claude_sonnet" {
-  model_id = "anthropic.claude-sonnet-4-20250514-v1:0"
-}
-
-# runner: Bedrock InvokeModel access
+# runner: Bedrock InvokeModel access via APAC inference profile
 data "aws_iam_policy_document" "runner_bedrock" {
   statement {
+    sid       = "AllowInferenceProfile"
     effect    = "Allow"
     actions   = ["bedrock:InvokeModel"]
-    resources = [data.aws_bedrock_foundation_model.claude_sonnet.model_arn]
+    resources = ["arn:aws:bedrock:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:inference-profile/apac.anthropic.claude-sonnet-4-20250514-v1:0"]
+  }
+
+  statement {
+    sid     = "AllowFoundationModel"
+    effect  = "Allow"
+    actions = ["bedrock:InvokeModel"]
+    resources = [
+      for region in local.apac_cris_destination_regions :
+      "arn:aws:bedrock:${region}::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0"
+    ]
+    condition {
+      test     = "StringEquals"
+      variable = "bedrock:InferenceProfileArn"
+      values   = ["arn:aws:bedrock:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:inference-profile/apac.anthropic.claude-sonnet-4-20250514-v1:0"]
+    }
   }
 }
 
