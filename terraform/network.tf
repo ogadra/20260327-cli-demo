@@ -114,15 +114,15 @@ resource "aws_vpc_endpoint" "dynamodb" {
   })
 }
 
-# VPC Interface Endpoints for ECR and CloudWatch Logs
-resource "aws_security_group" "ecr_endpoint" {
-  name_prefix = "bunshin-ecr-ep-"
-  description = "Security group for ECR and CloudWatch Logs VPC endpoints"
+# VPC Interface Endpoints for ECS tasks
+resource "aws_security_group" "vpc_endpoint_for_ecs" {
+  name_prefix = "bunshin-vpc-ep-ecs-"
+  description = "Security group for VPC endpoints used by ECS tasks"
   vpc_id      = aws_vpc.main.id
 
   tags = merge(local.common_tags, {
-    Name    = "bunshin-ecr-endpoint"
-    Service = "ecr"
+    Name    = "bunshin-vpc-endpoint-for-ecs"
+    Service = "vpc-endpoint"
   })
 
   lifecycle {
@@ -130,7 +130,7 @@ resource "aws_security_group" "ecr_endpoint" {
   }
 }
 
-resource "aws_security_group_rule" "ecr_endpoint_ingress" {
+resource "aws_security_group_rule" "vpc_endpoint_for_ecs_ingress" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
   for_each = {
     nginx  = aws_security_group.nginx.id
@@ -143,7 +143,7 @@ resource "aws_security_group_rule" "ecr_endpoint_ingress" {
   to_port                  = 443
   protocol                 = "tcp"
   source_security_group_id = each.value
-  security_group_id        = aws_security_group.ecr_endpoint.id
+  security_group_id        = aws_security_group.vpc_endpoint_for_ecs.id
   description              = "HTTPS from ${each.key}"
 }
 
@@ -153,7 +153,7 @@ resource "aws_vpc_endpoint" "ecr_api" {
   vpc_endpoint_type = "Interface"
 
   subnet_ids         = [aws_subnet.private[0].id]
-  security_group_ids = [aws_security_group.ecr_endpoint.id]
+  security_group_ids = [aws_security_group.vpc_endpoint_for_ecs.id]
 
   private_dns_enabled = true
 
@@ -168,7 +168,7 @@ resource "aws_vpc_endpoint" "ecr_dkr" {
   vpc_endpoint_type = "Interface"
 
   subnet_ids         = [aws_subnet.private[0].id]
-  security_group_ids = [aws_security_group.ecr_endpoint.id]
+  security_group_ids = [aws_security_group.vpc_endpoint_for_ecs.id]
 
   private_dns_enabled = true
 
@@ -183,7 +183,7 @@ resource "aws_vpc_endpoint" "logs" {
   vpc_endpoint_type = "Interface"
 
   subnet_ids         = slice(aws_subnet.private[*].id, 1, 3)
-  security_group_ids = [aws_security_group.ecr_endpoint.id]
+  security_group_ids = [aws_security_group.vpc_endpoint_for_ecs.id]
 
   private_dns_enabled = true
 
