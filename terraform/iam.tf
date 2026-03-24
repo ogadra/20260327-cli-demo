@@ -97,11 +97,20 @@ data "aws_iam_policy_document" "broker_dynamodb" {
       "dynamodb:PutItem",
       "dynamodb:UpdateItem",
       "dynamodb:DeleteItem",
-      "dynamodb:Query",
     ]
     resources = [
       aws_dynamodb_table.runners.arn,
-      "${aws_dynamodb_table.runners.arn}/index/*",
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "dynamodb:Query",
+    ]
+    resources = [
+      "${aws_dynamodb_table.runners.arn}/index/session-index",
+      "${aws_dynamodb_table.runners.arn}/index/idle-index",
     ]
   }
 }
