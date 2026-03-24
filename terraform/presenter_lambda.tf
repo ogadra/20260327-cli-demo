@@ -70,7 +70,7 @@ resource "aws_lambda_function" "presenter_ws" {
   depends_on = [aws_cloudwatch_log_group.presenter_ws]
 
   tags = merge(local.common_tags, {
-    Service = "presenter"
+    Service = "presenter-ws-${each.key}"
   })
 
   lifecycle {
@@ -118,7 +118,7 @@ resource "aws_lambda_function" "presenter_login" {
   depends_on = [aws_cloudwatch_log_group.presenter_login]
 
   tags = merge(local.common_tags, {
-    Service = "presenter"
+    Service = "presenter-login"
   })
 
   lifecycle {

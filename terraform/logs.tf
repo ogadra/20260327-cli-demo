@@ -22,7 +22,7 @@ resource "aws_cloudwatch_log_group" "presenter_ws" {
   retention_in_days = 30
 
   tags = merge(local.common_tags, {
-    Service = "presenter"
+    Service = "presenter-ws-${each.key}"
   })
 }
 
@@ -34,6 +34,6 @@ resource "aws_cloudwatch_log_group" "presenter_login" {
   retention_in_days = 30
 
   tags = merge(local.common_tags, {
-    Service = "presenter"
+    Service = "presenter-login"
   })
 }
