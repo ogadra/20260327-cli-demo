@@ -1,14 +1,15 @@
 services:
   nginx:
-    image: nginx:1.29.6-alpine
+    build:
+      context: nginx/
+      args:
+        NGINX_RESOLVER: 127.0.0.11
+        BROKER_HOST: broker
     profiles:
       - nginx
       - integration
     ports:
       - "${NGINX_PORT}:8080"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/errors.conf:/etc/nginx/errors.conf:ro
 
   broker:
     build: broker/
