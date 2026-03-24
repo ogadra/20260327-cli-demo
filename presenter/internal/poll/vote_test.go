@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
-	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
@@ -172,10 +170,3 @@ func TestVote_UpdateItemError(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
-
-// metaItem はテスト用の META アイテムを生成するヘルパー。vote_test 用の再定義を避けるため get_test.go に配置済み。
-// ここでは get_test.go の metaItem を使用する。
-
-// 以下は vote_test.go で未使用の import を回避するために attributevalue を参照する。
-var _ = attributevalue.MarshalMap
-var _ = time.Now
