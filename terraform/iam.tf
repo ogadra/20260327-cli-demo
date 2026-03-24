@@ -122,17 +122,12 @@ resource "aws_iam_role_policy" "broker_dynamodb" {
   policy = data.aws_iam_policy_document.broker_dynamodb.json
 }
 
-# Claude Sonnet foundation model for runner Bedrock access
-data "aws_bedrock_foundation_model" "claude_sonnet" {
-  model_id = "anthropic.claude-sonnet-4-20250514-v1:0"
-}
-
-# runner: Bedrock InvokeModel access
+# runner: Bedrock Converse access via inference profile
 data "aws_iam_policy_document" "runner_bedrock" {
   statement {
     effect    = "Allow"
-    actions   = ["bedrock:InvokeModel"]
-    resources = [data.aws_bedrock_foundation_model.claude_sonnet.model_arn]
+    actions   = ["bedrock:InvokeModel", "bedrock:Converse"]
+    resources = ["arn:aws:bedrock:ap-northeast-1:${data.aws_caller_identity.current.account_id}:inference-profile/apac.anthropic.claude-sonnet-4-20250514-v1:0"]
   }
 }
 
