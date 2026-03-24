@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 # S3 bucket for front static assets
 # trivy:ignore:AVD-AWS-0089 -- S3 bucket logging is optional for initial deployment
 # trivy:ignore:AVD-AWS-0132 -- S3 bucket encryption uses AWS managed key
@@ -9,7 +11,7 @@ resource "aws_s3_bucket" "front" {
   # checkov:skip=CKV2_AWS_62:Event notifications are not needed
   # checkov:skip=CKV2_AWS_61:Lifecycle configuration is not needed for static assets
   # checkov:skip=CKV_AWS_21:Versioning is not needed for build output
-  bucket           = "bunshin-front"
+  bucket           = format("bunshin-front-%s-%s", data.aws_caller_identity.current.account_id, data.aws_region.current.id)
   bucket_namespace = "account-regional"
 
   tags = merge(local.common_tags, {
