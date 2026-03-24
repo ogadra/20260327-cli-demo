@@ -1,0 +1,49 @@
+name: Deploy Nginx
+
+on:
+  workflow_run:
+    workflows: ["Nginx"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-nginx
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04-arm
+    if: github.event.workflow_run.conclusion == 'success'
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-1
+      - uses: aws-actions/amazon-ecr-login@c75a9a1d9c6f7cf1e4cfb2966839b590c3d46865 # v2.1.0
+        id: ecr-login
+      - name: Build and push image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            -t "$ECR_REGISTRY/bunshin/nginx:${IMAGE_TAG::7}" \
+            -t "$ECR_REGISTRY/bunshin/nginx:latest" \
+            nginx/
+          docker push "$ECR_REGISTRY/bunshin/nginx:${IMAGE_TAG::7}"
+          docker push "$ECR_REGISTRY/bunshin/nginx:latest"
+      - name: Deploy to ECS
+        run: |
+          aws ecs update-service \
+            --cluster bunshin \
+            --service bunshin-nginx \
+            --force-new-deployment
+          aws ecs wait services-stable \
+            --cluster bunshin \
+            --services bunshin-nginx
