@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -114,7 +115,6 @@ type incomingMessage struct {
 	Options    []string `json:"options"`
 	MaxChoices int      `json:"maxChoices"`
 	Choice     string   `json:"choice"`
-	VisitorID  string   `json:"visitorId"`
 	From       string   `json:"from"`
 	To         string   `json:"to"`
 }
@@ -204,7 +204,7 @@ func (h *messageHandler) handlePollGet(ctx context.Context, connectionID string,
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("poll_get: %w", err)
 	}
 
-	return h.broadcastPollState(ctx, state)
+	return h.sendPollState(ctx, connectionID, state)
 }
 
 // handlePollVote は投票メッセージを処理する。
@@ -275,9 +275,9 @@ func (h *messageHandler) handlePollError(ctx context.Context, connectionID, poll
 
 // isPollBusinessError はアンケート業務エラーかどうかを判定する。
 func isPollBusinessError(err error) bool {
-	return err == poll.ErrMaxChoicesExceeded ||
-		err == poll.ErrDuplicateVote ||
-		err == poll.ErrVoteNotFound
+	return errors.Is(err, poll.ErrMaxChoicesExceeded) ||
+		errors.Is(err, poll.ErrDuplicateVote) ||
+		errors.Is(err, poll.ErrVoteNotFound)
 }
 
 // refreshAndBroadcastPoll は最新のアンケート状態を取得してブロードキャストする。
@@ -287,6 +287,28 @@ func (h *messageHandler) refreshAndBroadcastPoll(ctx context.Context, pollID, vi
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("refresh poll state: %w", err)
 	}
 	return h.broadcastPollState(ctx, state)
+}
+
+// sendPollState はアンケート状態を要求元の接続にのみ送信する。
+func (h *messageHandler) sendPollState(ctx context.Context, connectionID string, state *poll.PollState) (events.APIGatewayProxyResponse, error) {
+	resp := pollStateResponse{
+		Type:       "poll_state",
+		PollID:     state.PollID,
+		Options:    state.Options,
+		MaxChoices: state.MaxChoices,
+		Votes:      state.Votes,
+		MyChoices:  state.MyChoices,
+	}
+	payload, err := jsonMarshal(resp)
+	if err != nil {
+		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("marshal poll_state: %w", err)
+	}
+
+	if err := h.singleSender.SendToOne(ctx, room, connectionID, payload); err != nil {
+		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("send poll_state: %w", err)
+	}
+
+	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 }
 
 // broadcastPollState はアンケート状態を全接続にブロードキャストする。

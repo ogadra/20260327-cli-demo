@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -229,7 +230,7 @@ func TestHandle_ViewerCountError(t *testing.T) {
 // TestHandle_PollGet はアンケート取得の正常処理を検証する。
 func TestHandle_PollGet(t *testing.T) {
 	t.Parallel()
-	var broadcastPayload []byte
+	var sentPayload []byte
 	h := &messageHandler{
 		connGetter: &mockConnectionGetter{
 			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
@@ -244,14 +245,14 @@ func TestHandle_PollGet(t *testing.T) {
 				return defaultPollState(), nil
 			},
 		},
-		broadcaster: &mockMessageBroadcaster{
-			sendFn: func(_ context.Context, _ string, payload []byte, _ string) error {
-				broadcastPayload = payload
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
+				sentPayload = payload
 				return nil
 			},
 		},
 	}
-	req := newRequest("conn1", `{"type":"poll_get","pollId":"q1","options":["A","B"],"maxChoices":1,"visitorId":"v1"}`)
+	req := newRequest("conn1", `{"type":"poll_get","pollId":"q1","options":["A","B"],"maxChoices":1}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -260,7 +261,7 @@ func TestHandle_PollGet(t *testing.T) {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 	var stateResp pollStateResponse
-	if unmarshalErr := json.Unmarshal(broadcastPayload, &stateResp); unmarshalErr != nil {
+	if unmarshalErr := json.Unmarshal(sentPayload, &stateResp); unmarshalErr != nil {
 		t.Fatalf("unmarshal poll state: %v", unmarshalErr)
 	}
 	if stateResp.Type != "poll_state" {
@@ -285,13 +286,13 @@ func TestHandle_PollGetViewer(t *testing.T) {
 				return defaultPollState(), nil
 			},
 		},
-		broadcaster: &mockMessageBroadcaster{
-			sendFn: func(_ context.Context, _ string, _ []byte, _ string) error {
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, _ []byte) error {
 				return nil
 			},
 		},
 	}
-	req := newRequest("conn1", `{"type":"poll_get","pollId":"q1","visitorId":"v1"}`)
+	req := newRequest("conn1", `{"type":"poll_get","pollId":"q1"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -802,6 +803,33 @@ func TestHandle_PollErrorMarshalError(t *testing.T) {
 	}
 }
 
+// TestHandle_PollGetMarshalError は poll_get の poll_state marshal 失敗を検証する。
+// jsonMarshal を差し替えるため非 parallel。
+func TestHandle_PollGetMarshalError(t *testing.T) {
+	orig := jsonMarshal
+	defer func() { jsonMarshal = orig }()
+	jsonMarshal = func(_ any) ([]byte, error) {
+		return nil, fmt.Errorf("marshal error")
+	}
+	h := &messageHandler{
+		connGetter: &mockConnectionGetter{
+			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
+				return &connection.Connection{Role: "viewer"}, nil
+			},
+		},
+		pollGet: &mockPollGetter{
+			getFn: func(_ context.Context, _, _ string, _ []string, _ int, _ bool) (*poll.PollState, error) {
+				return defaultPollState(), nil
+			},
+		},
+	}
+	req := newRequest("conn1", `{"type":"poll_get","pollId":"q1"}`)
+	_, err := h.handle(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 // TestHandle_PollStateMarshalError は poll_state の marshal 失敗を検証する。
 // jsonMarshal を差し替えるため非 parallel。
 func TestHandle_PollStateMarshalError(t *testing.T) {
@@ -851,8 +879,8 @@ func TestHandle_SendErrorSendToOneError(t *testing.T) {
 	}
 }
 
-// TestHandle_PollGetBroadcastError はアンケート取得後のブロードキャストエラーを検証する。
-func TestHandle_PollGetBroadcastError(t *testing.T) {
+// TestHandle_PollGetSendError はアンケート取得後の送信エラーを検証する。
+func TestHandle_PollGetSendError(t *testing.T) {
 	t.Parallel()
 	h := &messageHandler{
 		connGetter: &mockConnectionGetter{
@@ -865,13 +893,13 @@ func TestHandle_PollGetBroadcastError(t *testing.T) {
 				return defaultPollState(), nil
 			},
 		},
-		broadcaster: &mockMessageBroadcaster{
-			sendFn: func(_ context.Context, _ string, _ []byte, _ string) error {
-				return fmt.Errorf("broadcast error")
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, _ []byte) error {
+				return fmt.Errorf("send error")
 			},
 		},
 	}
-	req := newRequest("conn1", `{"type":"poll_get","pollId":"q1","visitorId":"v1"}`)
+	req := newRequest("conn1", `{"type":"poll_get","pollId":"q1"}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
 		t.Fatal("expected error")
@@ -1034,7 +1062,7 @@ func TestHandlePollGet_MissingPollID(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
-	if !contains(string(sentPayload), "pollId is required") {
+	if !strings.Contains(string(sentPayload), "pollId is required") {
 		t.Errorf("expected validation error, got %s", string(sentPayload))
 	}
 }
@@ -1059,7 +1087,7 @@ func TestHandlePollVote_MissingFields(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
-	if !contains(string(sentPayload), "required") {
+	if !strings.Contains(string(sentPayload), "required") {
 		t.Errorf("expected validation error, got %s", string(sentPayload))
 	}
 }
@@ -1084,7 +1112,7 @@ func TestHandlePollUnvote_MissingFields(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
-	if !contains(string(sentPayload), "required") {
+	if !strings.Contains(string(sentPayload), "required") {
 		t.Errorf("expected validation error, got %s", string(sentPayload))
 	}
 }
@@ -1109,24 +1137,9 @@ func TestHandlePollSwitch_MissingFields(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
-	if !contains(string(sentPayload), "required") {
+	if !strings.Contains(string(sentPayload), "required") {
 		t.Errorf("expected validation error, got %s", string(sentPayload))
 	}
-}
-
-// contains は文字列に部分文字列が含まれるかを判定するヘルパー。
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstr(s, substr))
-}
-
-// containsSubstr は strings.Contains の代替。strings パッケージを import せずに使う。
-func containsSubstr(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 // TestMain_Error は main 関数のエラー処理を検証する。
