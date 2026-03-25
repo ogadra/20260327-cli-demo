@@ -31,16 +31,46 @@ export type PresenterMessage =
 /** Display mode driven by the presenter. */
 export type PresenterMode = typeof MessageType.SlideSync | typeof MessageType.HandsOn;
 
+/** Check whether a value is a string. */
+const isString = (v: unknown): v is string => typeof v === "string";
+
+/** Check whether a value is a number. */
+const isNumber = (v: unknown): v is number => typeof v === "number";
+
 /** Check whether a value is an array of strings. */
-const isStringArray = (v: unknown): v is string[] =>
-  Array.isArray(v) && v.every((item) => typeof item === "string");
+const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every(isString);
 
 /** Check whether a value is a record with string keys and number values. */
 const isVotesRecord = (v: unknown): v is Record<string, number> =>
   typeof v === "object" &&
   v !== null &&
   !Array.isArray(v) &&
-  Object.values(v as Record<string, unknown>).every((val) => typeof val === "number");
+  Object.values(v as Record<string, unknown>).every(isNumber);
+
+/** Validate that msg has the shape of a SlideSync payload. */
+const isSlideSyncPayload = (msg: Record<string, unknown>): boolean => isNumber(msg.page);
+
+/** Validate that msg has the shape of a HandsOn payload. */
+const isHandsOnPayload = (msg: Record<string, unknown>): boolean =>
+  isString(msg.instruction) && isString(msg.placeholder);
+
+/** Validate that msg has the shape of a ViewerCount payload. */
+const isViewerCountPayload = (msg: Record<string, unknown>): boolean => isNumber(msg.count);
+
+/** Validate that msg has the shape of a PollState payload. */
+const isPollStatePayload = (msg: Record<string, unknown>): boolean =>
+  isString(msg.pollId) &&
+  isStringArray(msg.options) &&
+  isNumber(msg.maxChoices) &&
+  isVotesRecord(msg.votes) &&
+  isStringArray(msg.myChoices);
+
+/** Validate that msg has the shape of a PollError payload. */
+const isPollErrorPayload = (msg: Record<string, unknown>): boolean =>
+  isString(msg.pollId) &&
+  isString(msg.error) &&
+  isVotesRecord(msg.votes) &&
+  isStringArray(msg.myChoices);
 
 /**
  * Parse a raw JSON string into a known presenter message.
@@ -55,28 +85,26 @@ export const parsePresenterMessage = (raw: string): PresenterMessage | null => {
     const msg = data as Record<string, unknown>;
 
     if (msg.type === MessageType.SlideSync) {
-      return typeof msg.page === "number" ? { type: MessageType.SlideSync, page: msg.page } : null;
+      return isSlideSyncPayload(msg)
+        ? { type: MessageType.SlideSync, page: msg.page as number }
+        : null;
     }
     if (msg.type === MessageType.HandsOn) {
-      return typeof msg.instruction === "string" && typeof msg.placeholder === "string"
+      return isHandsOnPayload(msg)
         ? {
             type: MessageType.HandsOn,
-            instruction: msg.instruction,
-            placeholder: msg.placeholder,
+            instruction: msg.instruction as string,
+            placeholder: msg.placeholder as string,
           }
         : null;
     }
     if (msg.type === MessageType.ViewerCount) {
-      return typeof msg.count === "number"
-        ? { type: MessageType.ViewerCount, count: msg.count }
+      return isViewerCountPayload(msg)
+        ? { type: MessageType.ViewerCount, count: msg.count as number }
         : null;
     }
     if (msg.type === MessageType.PollState) {
-      return typeof msg.pollId === "string" &&
-        isStringArray(msg.options) &&
-        typeof msg.maxChoices === "number" &&
-        isVotesRecord(msg.votes) &&
-        isStringArray(msg.myChoices)
+      return isPollStatePayload(msg)
         ? {
             type: MessageType.PollState,
             pollId: msg.pollId as string,
@@ -88,10 +116,7 @@ export const parsePresenterMessage = (raw: string): PresenterMessage | null => {
         : null;
     }
     if (msg.type === MessageType.PollError) {
-      return typeof msg.pollId === "string" &&
-        typeof msg.error === "string" &&
-        isVotesRecord(msg.votes) &&
-        isStringArray(msg.myChoices)
+      return isPollErrorPayload(msg)
         ? {
             type: MessageType.PollError,
             pollId: msg.pollId as string,
