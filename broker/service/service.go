@@ -104,35 +104,26 @@ func defaultSessionFn() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// createSession は idle runner を確保しセッションを作成する。ResolveOrCreateSession から呼ばれる。
-func (s *BrokerService) createSession(ctx context.Context) (*CreateSessionResult, error) {
-	sessionID, err := s.sessionFn()
-	if err != nil {
-		return nil, err
-	}
-	runner, err := s.repo.AcquireIdle(ctx, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	return &CreateSessionResult{SessionID: sessionID, Runner: runner}, nil
-}
-
-// acquireHealthy は idle runner を確保しヘルスチェックを行う。
+// createSession は idle runner を確保しヘルスチェックを行いセッションを作成する。
 // 不健全な runner は削除して最大 maxAcquireRetries 回リトライする。
-func (s *BrokerService) acquireHealthy(ctx context.Context) (*CreateSessionResult, error) {
+func (s *BrokerService) createSession(ctx context.Context) (*CreateSessionResult, error) {
 	for range maxAcquireRetries {
-		result, err := s.createSession(ctx)
+		sessionID, err := s.sessionFn()
+		if err != nil {
+			return nil, err
+		}
+		runner, err := s.repo.AcquireIdle(ctx, sessionID)
 		if err != nil {
 			return nil, err
 		}
 		if s.checker == nil {
-			return result, nil
+			return &CreateSessionResult{SessionID: sessionID, Runner: runner}, nil
 		}
-		if err := s.checker.Check(ctx, result.Runner.PrivateURL); err == nil {
-			return result, nil
+		if err := s.checker.Check(ctx, runner.PrivateURL); err == nil {
+			return &CreateSessionResult{SessionID: sessionID, Runner: runner}, nil
 		}
-		logPrintf("healthcheck failed for runner %s, deleting stale record", result.Runner.RunnerID)
-		_ = s.repo.Delete(ctx, result.Runner.RunnerID)
+		logPrintf("healthcheck failed for runner %s, deleting stale record", runner.RunnerID)
+		_ = s.repo.Delete(ctx, runner.RunnerID)
 	}
 	return nil, store.ErrNoIdleRunner
 }
@@ -167,7 +158,7 @@ func (s *BrokerService) ResolveSession(ctx context.Context, sessionID string) (*
 			return nil, err
 		}
 	}
-	result, err := s.acquireHealthy(ctx)
+	result, err := s.createSession(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -578,8 +578,8 @@ func TestResolveSession_ExistingUnhealthy_Reassigned(t *testing.T) {
 	}
 }
 
-// TestResolveSession_AcquireHealthy_RetryOnUnhealthy はヘルスチェック失敗時にリトライして健全な runner を返すことを検証する。
-func TestResolveSession_AcquireHealthy_RetryOnUnhealthy(t *testing.T) {
+// TestResolveSession_RetryOnUnhealthy はヘルスチェック失敗時にリトライして健全な runner を返すことを検証する。
+func TestResolveSession_RetryOnUnhealthy(t *testing.T) {
 	suppressLog(t)
 	acquireCount := 0
 	deleteCount := 0
@@ -634,8 +634,8 @@ func TestResolveSession_AcquireHealthy_RetryOnUnhealthy(t *testing.T) {
 	}
 }
 
-// TestResolveSession_AcquireHealthy_AllUnhealthy は全ての runner が不健全な場合に ErrNoIdleRunner を返すことを検証する。
-func TestResolveSession_AcquireHealthy_AllUnhealthy(t *testing.T) {
+// TestResolveSession_AllUnhealthy は全ての runner が不健全な場合に ErrNoIdleRunner を返すことを検証する。
+func TestResolveSession_AllUnhealthy(t *testing.T) {
 	suppressLog(t)
 	repo := &mockRepository{
 		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
@@ -682,8 +682,8 @@ func TestResolveSession_NilChecker_SkipsHealthcheck(t *testing.T) {
 	}
 }
 
-// TestAcquireHealthy_NilChecker は checker が nil の場合にヘルスチェックなしで返すことを検証する。
-func TestAcquireHealthy_NilChecker(t *testing.T) {
+// TestCreateSession_NilChecker は checker が nil の場合にヘルスチェックなしで返すことを検証する。
+func TestCreateSession_NilChecker(t *testing.T) {
 	t.Parallel()
 	repo := &mockRepository{
 		acquireIdleFn: func(_ context.Context, sessionID string) (*model.Runner, error) {
@@ -698,7 +698,7 @@ func TestAcquireHealthy_NilChecker(t *testing.T) {
 		return "sess-1", nil
 	}))
 
-	result, err := svc.acquireHealthy(context.Background())
+	result, err := svc.createSession(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -707,14 +707,14 @@ func TestAcquireHealthy_NilChecker(t *testing.T) {
 	}
 }
 
-// TestAcquireHealthy_SessionFnError はセッション ID 生成エラーが伝搬されることを検証する。
-func TestAcquireHealthy_SessionFnError(t *testing.T) {
+// TestCreateSession_SessionFnError_WithChecker はチェッカー付きでセッション ID 生成エラーが伝搬されることを検証する。
+func TestCreateSession_SessionFnError_WithChecker(t *testing.T) {
 	t.Parallel()
 	svc := NewBrokerService(&mockRepository{}, WithSessionFn(func() (string, error) {
 		return "", errors.New("rand error")
 	}), WithChecker(&mockChecker{checkFn: func(_ context.Context, _ string) error { return nil }}))
 
-	_, err := svc.acquireHealthy(context.Background())
+	_, err := svc.createSession(context.Background())
 	if err == nil {
 		t.Fatal("expected error")
 	}
