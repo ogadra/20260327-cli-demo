@@ -95,4 +95,21 @@ describe("CommandInput", () => {
     rerender(<CommandInput onSubmit={vi.fn()} disabled={false} />);
     expect(focusSpy).toHaveBeenCalledOnce();
   });
+
+  it("sets input value when placeholder changes", () => {
+    const { rerender } = render(
+      <CommandInput onSubmit={vi.fn()} disabled={false} placeholder="$ echo hi" />,
+    );
+    const input = screen.getByPlaceholderText("$ echo hi");
+    expect(input).toHaveValue("$ echo hi");
+
+    rerender(<CommandInput onSubmit={vi.fn()} disabled={false} placeholder="$ echo bye" />);
+    expect(input).toHaveValue("$ echo bye");
+  });
+
+  it("does not set input value when placeholder is undefined", () => {
+    render(<CommandInput onSubmit={vi.fn()} disabled={false} />);
+    const input = screen.getByPlaceholderText("Enter command...");
+    expect(input).toHaveValue("");
+  });
 });
