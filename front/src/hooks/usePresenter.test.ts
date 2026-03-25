@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { usePresenter } from "./usePresenter";
-import { MessageType } from "../api/presenter";
+import { ClientMessageType, MessageType } from "../api/presenter";
 
 /** Minimal mock WebSocket instances tracker. */
 const instances: MockWebSocket[] = [];
@@ -417,7 +417,7 @@ describe("usePresenter", () => {
     expect(latest().sent).toEqual([
       JSON.stringify({
         action: "message",
-        type: "poll_get",
+        type: ClientMessageType.PollGet,
         pollId: "q1",
         options: ["A", "B"],
         maxChoices: 1,
@@ -432,7 +432,12 @@ describe("usePresenter", () => {
       result.current.sendPollVote("q1", "A");
     });
     expect(latest().sent).toEqual([
-      JSON.stringify({ action: "message", type: "poll_vote", pollId: "q1", choice: "A" }),
+      JSON.stringify({
+        action: "message",
+        type: ClientMessageType.PollVote,
+        pollId: "q1",
+        choice: "A",
+      }),
     ]);
   });
 
@@ -443,7 +448,12 @@ describe("usePresenter", () => {
       result.current.sendPollUnvote("q1", "A");
     });
     expect(latest().sent).toEqual([
-      JSON.stringify({ action: "message", type: "poll_unvote", pollId: "q1", choice: "A" }),
+      JSON.stringify({
+        action: "message",
+        type: ClientMessageType.PollUnvote,
+        pollId: "q1",
+        choice: "A",
+      }),
     ]);
   });
 
@@ -456,7 +466,7 @@ describe("usePresenter", () => {
     expect(latest().sent).toEqual([
       JSON.stringify({
         action: "message",
-        type: "poll_switch",
+        type: ClientMessageType.PollSwitch,
         pollId: "q1",
         from: "A",
         to: "B",

@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessageType, parsePresenterMessage, type PresenterMode } from "../api/presenter";
+import {
+  ClientMessageType,
+  MessageType,
+  parsePresenterMessage,
+  type PresenterMode,
+} from "../api/presenter";
 
 /** Maximum reconnection delay in milliseconds. */
 const MAX_DELAY = 8000;
@@ -143,7 +148,7 @@ export const usePresenter = (
     wsRef.current?.send(
       JSON.stringify({
         action: "message",
-        type: "poll_get",
+        type: ClientMessageType.PollGet,
         pollId,
         options,
         maxChoices,
@@ -153,18 +158,22 @@ export const usePresenter = (
 
   /** Send a poll_vote message to cast a vote. */
   const sendPollVote = useCallback((pollId: string, choice: string): void => {
-    wsRef.current?.send(JSON.stringify({ action: "message", type: "poll_vote", pollId, choice }));
+    wsRef.current?.send(
+      JSON.stringify({ action: "message", type: ClientMessageType.PollVote, pollId, choice }),
+    );
   }, []);
 
   /** Send a poll_unvote message to withdraw a vote. */
   const sendPollUnvote = useCallback((pollId: string, choice: string): void => {
-    wsRef.current?.send(JSON.stringify({ action: "message", type: "poll_unvote", pollId, choice }));
+    wsRef.current?.send(
+      JSON.stringify({ action: "message", type: ClientMessageType.PollUnvote, pollId, choice }),
+    );
   }, []);
 
   /** Send a poll_switch message to change a vote from one option to another. */
   const sendPollSwitch = useCallback((pollId: string, from: string, to: string): void => {
     wsRef.current?.send(
-      JSON.stringify({ action: "message", type: "poll_switch", pollId, from, to }),
+      JSON.stringify({ action: "message", type: ClientMessageType.PollSwitch, pollId, from, to }),
     );
   }, []);
 
