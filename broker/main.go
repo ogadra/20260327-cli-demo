@@ -94,7 +94,7 @@ func defaultInitHandler() (*handler.Handler, error) {
 		})
 	}
 	client := dynamodb.NewFromConfig(cfg, ddbOpts...)
-	repo := store.NewDynamoRepository(client, "Runners")
+	repo := store.NewDynamoRepository(client, "bunshin-runners")
 	svc := service.NewBrokerService(repo)
 	return handler.NewHandler(svc), nil
 }
