@@ -28,7 +28,7 @@ const PollView = ({
   onUnvote,
   onSwitch,
 }: PollViewProps): ReactNode => {
-  const totalVotes = Object.values(votes).reduce((sum, v) => sum + v, 0);
+  const totalVotes = options.reduce((sum, option) => sum + (votes[option] ?? 0), 0);
 
   /** Handle a click on a poll option. */
   const handleClick = (option: string): void => {

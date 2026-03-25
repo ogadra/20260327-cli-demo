@@ -32,7 +32,7 @@ describe("PollView", () => {
     render(<PollView {...defaultProps} />);
     const barA = screen.getByTestId("poll-bar-0");
     const barC = screen.getByTestId("poll-bar-2");
-    expect(barA.style.width).toBe("66.66666666666666%");
+    expect(parseFloat(barA.style.width)).toBeCloseTo(66.6667, 3);
     expect(barC.style.width).toBe("0%");
   });
 
@@ -86,6 +86,12 @@ describe("PollView", () => {
     render(<PollView {...defaultProps} options={[]} />);
     expect(screen.getByTestId("poll-view")).toBeInTheDocument();
     expect(screen.queryByTestId("poll-option-0")).toBeNull();
+  });
+
+  it("ignores votes for keys not in options when computing bar width", () => {
+    render(<PollView {...defaultProps} options={["A", "B"]} votes={{ A: 10, B: 10, Z: 80 }} />);
+    const barA = screen.getByTestId("poll-bar-0");
+    expect(parseFloat(barA.style.width)).toBeCloseTo(50, 0);
   });
 
   it("highlights selected options visually", () => {
