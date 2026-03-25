@@ -12,16 +12,22 @@ import (
 // TestUnvote_Success は正常な投票取消を検証する。
 func TestUnvote_Success(t *testing.T) {
 	t.Parallel()
-	var deletedSK string
-	var updateCalled bool
+	var transactCalled bool
 	client := &mockDynamoDBAPI{
-		deleteItemFn: func(_ context.Context, params *dynamodb.DeleteItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
-			deletedSK = params.Key["connectionId"].(*types.AttributeValueMemberS).Value
-			return &dynamodb.DeleteItemOutput{}, nil
-		},
-		updateItemFn: func(_ context.Context, _ *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
-			updateCalled = true
-			return &dynamodb.UpdateItemOutput{}, nil
+		transactWriteItemsFn: func(_ context.Context, params *dynamodb.TransactWriteItemsInput, _ ...func(*dynamodb.Options)) (*dynamodb.TransactWriteItemsOutput, error) {
+			transactCalled = true
+			if len(params.TransactItems) != 2 {
+				t.Errorf("expected 2 transact items, got %d", len(params.TransactItems))
+			}
+			deleteItem := params.TransactItems[0].Delete
+			if deleteItem == nil {
+				t.Fatal("expected Delete in first transact item")
+			}
+			sk := deleteItem.Key["connectionId"].(*types.AttributeValueMemberS).Value
+			if sk != "visitor1#A" {
+				t.Errorf("expected visitor1#A, got %s", sk)
+			}
+			return &dynamodb.TransactWriteItemsOutput{}, nil
 		},
 	}
 	s := NewStore(client, "table")
@@ -29,11 +35,8 @@ func TestUnvote_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if deletedSK != "visitor1#A" {
-		t.Errorf("expected visitor1#A, got %s", deletedSK)
-	}
-	if !updateCalled {
-		t.Error("expected UpdateItem to be called")
+	if !transactCalled {
+		t.Error("expected TransactWriteItems to be called")
 	}
 }
 
@@ -41,8 +44,13 @@ func TestUnvote_Success(t *testing.T) {
 func TestUnvote_VoteNotFound(t *testing.T) {
 	t.Parallel()
 	client := &mockDynamoDBAPI{
-		deleteItemFn: func(_ context.Context, _ *dynamodb.DeleteItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
-			return nil, &types.ConditionalCheckFailedException{Message: stringPtr("not found")}
+		transactWriteItemsFn: func(_ context.Context, _ *dynamodb.TransactWriteItemsInput, _ ...func(*dynamodb.Options)) (*dynamodb.TransactWriteItemsOutput, error) {
+			return nil, &types.TransactionCanceledException{
+				CancellationReasons: []types.CancellationReason{
+					{Code: stringPtr("ConditionalCheckFailed")},
+					{Code: stringPtr("None")},
+				},
+			}
 		},
 	}
 	s := NewStore(client, "table")
@@ -52,30 +60,12 @@ func TestUnvote_VoteNotFound(t *testing.T) {
 	}
 }
 
-// TestUnvote_DeleteError は DeleteItem の非条件エラーを検証する。
-func TestUnvote_DeleteError(t *testing.T) {
+// TestUnvote_TransactError は TransactWriteItems の非キャンセルエラーを検証する。
+func TestUnvote_TransactError(t *testing.T) {
 	t.Parallel()
 	client := &mockDynamoDBAPI{
-		deleteItemFn: func(_ context.Context, _ *dynamodb.DeleteItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
-			return nil, fmt.Errorf("delete error")
-		},
-	}
-	s := NewStore(client, "table")
-	err := s.Unvote(context.Background(), "q1", "visitor1", "A")
-	if err == nil {
-		t.Fatal("expected error")
-	}
-}
-
-// TestUnvote_UpdateError は UpdateItem エラーを検証する。
-func TestUnvote_UpdateError(t *testing.T) {
-	t.Parallel()
-	client := &mockDynamoDBAPI{
-		deleteItemFn: func(_ context.Context, _ *dynamodb.DeleteItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
-			return &dynamodb.DeleteItemOutput{}, nil
-		},
-		updateItemFn: func(_ context.Context, _ *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
-			return nil, fmt.Errorf("update error")
+		transactWriteItemsFn: func(_ context.Context, _ *dynamodb.TransactWriteItemsInput, _ ...func(*dynamodb.Options)) (*dynamodb.TransactWriteItemsOutput, error) {
+			return nil, fmt.Errorf("transact error")
 		},
 	}
 	s := NewStore(client, "table")

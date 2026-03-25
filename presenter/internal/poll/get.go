@@ -133,3 +133,19 @@ func isConditionalCheckFailed(err error) bool {
 	var cfe *types.ConditionalCheckFailedException
 	return errors.As(err, &cfe)
 }
+
+// transactionCanceledReasons は TransactionCanceledException のキャンセル理由コードを返す。
+// TransactionCanceledException でない場合は nil を返す。
+func transactionCanceledReasons(err error) []string {
+	var tce *types.TransactionCanceledException
+	if !errors.As(err, &tce) {
+		return nil
+	}
+	reasons := make([]string, len(tce.CancellationReasons))
+	for i, r := range tce.CancellationReasons {
+		if r.Code != nil {
+			reasons[i] = *r.Code
+		}
+	}
+	return reasons
+}

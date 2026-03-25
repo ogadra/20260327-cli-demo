@@ -13,8 +13,7 @@ import (
 func TestVote_Success(t *testing.T) {
 	t.Parallel()
 	meta := metaItem("q1", []string{"A", "B"}, 2, map[string]int{"A": 0, "B": 0})
-	var putSK string
-	var updateCalled bool
+	var transactCalled bool
 	client := &mockDynamoDBAPI{
 		getItemFn: func(_ context.Context, _ *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
 			return &dynamodb.GetItemOutput{Item: meta}, nil
@@ -22,14 +21,20 @@ func TestVote_Success(t *testing.T) {
 		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
 			return &dynamodb.QueryOutput{Items: []map[string]types.AttributeValue{}}, nil
 		},
-		putItemFn: func(_ context.Context, params *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
-			sk := params.Item["connectionId"].(*types.AttributeValueMemberS).Value
-			putSK = sk
-			return &dynamodb.PutItemOutput{}, nil
-		},
-		updateItemFn: func(_ context.Context, _ *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
-			updateCalled = true
-			return &dynamodb.UpdateItemOutput{}, nil
+		transactWriteItemsFn: func(_ context.Context, params *dynamodb.TransactWriteItemsInput, _ ...func(*dynamodb.Options)) (*dynamodb.TransactWriteItemsOutput, error) {
+			transactCalled = true
+			if len(params.TransactItems) != 2 {
+				t.Errorf("expected 2 transact items, got %d", len(params.TransactItems))
+			}
+			putItem := params.TransactItems[0].Put
+			if putItem == nil {
+				t.Fatal("expected Put in first transact item")
+			}
+			sk := putItem.Item["connectionId"].(*types.AttributeValueMemberS).Value
+			if sk != "visitor1#A" {
+				t.Errorf("expected visitor1#A, got %s", sk)
+			}
+			return &dynamodb.TransactWriteItemsOutput{}, nil
 		},
 	}
 	s := NewStore(client, "table")
@@ -37,11 +42,8 @@ func TestVote_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if putSK != "visitor1#A" {
-		t.Errorf("expected visitor1#A, got %s", putSK)
-	}
-	if !updateCalled {
-		t.Error("expected UpdateItem to be called")
+	if !transactCalled {
+		t.Error("expected TransactWriteItems to be called")
 	}
 }
 
@@ -79,8 +81,13 @@ func TestVote_DuplicateVote(t *testing.T) {
 		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
 			return &dynamodb.QueryOutput{Items: []map[string]types.AttributeValue{}}, nil
 		},
-		putItemFn: func(_ context.Context, _ *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
-			return nil, &types.ConditionalCheckFailedException{Message: stringPtr("exists")}
+		transactWriteItemsFn: func(_ context.Context, _ *dynamodb.TransactWriteItemsInput, _ ...func(*dynamodb.Options)) (*dynamodb.TransactWriteItemsOutput, error) {
+			return nil, &types.TransactionCanceledException{
+				CancellationReasons: []types.CancellationReason{
+					{Code: stringPtr("ConditionalCheckFailed")},
+					{Code: stringPtr("None")},
+				},
+			}
 		},
 	}
 	s := NewStore(client, "table")
@@ -124,8 +131,8 @@ func TestVote_QueryMyChoicesError(t *testing.T) {
 	}
 }
 
-// TestVote_PutItemError は PutItem の非条件エラーを検証する。
-func TestVote_PutItemError(t *testing.T) {
+// TestVote_TransactError は TransactWriteItems の非キャンセルエラーを検証する。
+func TestVote_TransactError(t *testing.T) {
 	t.Parallel()
 	meta := metaItem("q1", []string{"A"}, 1, map[string]int{"A": 0})
 	client := &mockDynamoDBAPI{
@@ -135,33 +142,8 @@ func TestVote_PutItemError(t *testing.T) {
 		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
 			return &dynamodb.QueryOutput{Items: []map[string]types.AttributeValue{}}, nil
 		},
-		putItemFn: func(_ context.Context, _ *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
-			return nil, fmt.Errorf("put error")
-		},
-	}
-	s := NewStore(client, "table")
-	err := s.Vote(context.Background(), "q1", "visitor1", "A")
-	if err == nil {
-		t.Fatal("expected error")
-	}
-}
-
-// TestVote_UpdateItemError は UpdateItem エラーを検証する。
-func TestVote_UpdateItemError(t *testing.T) {
-	t.Parallel()
-	meta := metaItem("q1", []string{"A"}, 1, map[string]int{"A": 0})
-	client := &mockDynamoDBAPI{
-		getItemFn: func(_ context.Context, _ *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
-			return &dynamodb.GetItemOutput{Item: meta}, nil
-		},
-		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
-			return &dynamodb.QueryOutput{Items: []map[string]types.AttributeValue{}}, nil
-		},
-		putItemFn: func(_ context.Context, _ *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
-			return &dynamodb.PutItemOutput{}, nil
-		},
-		updateItemFn: func(_ context.Context, _ *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
-			return nil, fmt.Errorf("update error")
+		transactWriteItemsFn: func(_ context.Context, _ *dynamodb.TransactWriteItemsInput, _ ...func(*dynamodb.Options)) (*dynamodb.TransactWriteItemsOutput, error) {
+			return nil, fmt.Errorf("transact error")
 		},
 	}
 	s := NewStore(client, "table")

@@ -12,20 +12,22 @@ import (
 // TestSwitch_Success は正常な投票変更を検証する。
 func TestSwitch_Success(t *testing.T) {
 	t.Parallel()
-	var deletedSK, putSK string
-	var updateCallCount int
+	var transactCalled bool
 	client := &mockDynamoDBAPI{
-		deleteItemFn: func(_ context.Context, params *dynamodb.DeleteItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
-			deletedSK = params.Key["connectionId"].(*types.AttributeValueMemberS).Value
-			return &dynamodb.DeleteItemOutput{}, nil
-		},
-		putItemFn: func(_ context.Context, params *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
-			putSK = params.Item["connectionId"].(*types.AttributeValueMemberS).Value
-			return &dynamodb.PutItemOutput{}, nil
-		},
-		updateItemFn: func(_ context.Context, _ *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
-			updateCallCount++
-			return &dynamodb.UpdateItemOutput{}, nil
+		transactWriteItemsFn: func(_ context.Context, params *dynamodb.TransactWriteItemsInput, _ ...func(*dynamodb.Options)) (*dynamodb.TransactWriteItemsOutput, error) {
+			transactCalled = true
+			if len(params.TransactItems) != 3 {
+				t.Errorf("expected 3 transact items, got %d", len(params.TransactItems))
+			}
+			deleteSK := params.TransactItems[0].Delete.Key["connectionId"].(*types.AttributeValueMemberS).Value
+			if deleteSK != "visitor1#A" {
+				t.Errorf("expected visitor1#A deleted, got %s", deleteSK)
+			}
+			putSK := params.TransactItems[1].Put.Item["connectionId"].(*types.AttributeValueMemberS).Value
+			if putSK != "visitor1#B" {
+				t.Errorf("expected visitor1#B put, got %s", putSK)
+			}
+			return &dynamodb.TransactWriteItemsOutput{}, nil
 		},
 	}
 	s := NewStore(client, "table")
@@ -33,14 +35,8 @@ func TestSwitch_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if deletedSK != "visitor1#A" {
-		t.Errorf("expected visitor1#A deleted, got %s", deletedSK)
-	}
-	if putSK != "visitor1#B" {
-		t.Errorf("expected visitor1#B put, got %s", putSK)
-	}
-	if updateCallCount != 1 {
-		t.Errorf("expected UpdateItem to be called once, got %d", updateCallCount)
+	if !transactCalled {
+		t.Error("expected TransactWriteItems to be called")
 	}
 }
 
@@ -48,8 +44,14 @@ func TestSwitch_Success(t *testing.T) {
 func TestSwitch_FromNotFound(t *testing.T) {
 	t.Parallel()
 	client := &mockDynamoDBAPI{
-		deleteItemFn: func(_ context.Context, _ *dynamodb.DeleteItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
-			return nil, &types.ConditionalCheckFailedException{Message: stringPtr("not found")}
+		transactWriteItemsFn: func(_ context.Context, _ *dynamodb.TransactWriteItemsInput, _ ...func(*dynamodb.Options)) (*dynamodb.TransactWriteItemsOutput, error) {
+			return nil, &types.TransactionCanceledException{
+				CancellationReasons: []types.CancellationReason{
+					{Code: stringPtr("ConditionalCheckFailed")},
+					{Code: stringPtr("None")},
+					{Code: stringPtr("None")},
+				},
+			}
 		},
 	}
 	s := NewStore(client, "table")
@@ -59,37 +61,18 @@ func TestSwitch_FromNotFound(t *testing.T) {
 	}
 }
 
-// TestSwitch_DeleteError は旧選択肢削除の非条件エラーを検証する。
-func TestSwitch_DeleteError(t *testing.T) {
+// TestSwitch_DuplicateTo は新選択肢が重複している場合のエラーを検証する。
+func TestSwitch_DuplicateTo(t *testing.T) {
 	t.Parallel()
 	client := &mockDynamoDBAPI{
-		deleteItemFn: func(_ context.Context, _ *dynamodb.DeleteItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
-			return nil, fmt.Errorf("delete error")
-		},
-	}
-	s := NewStore(client, "table")
-	err := s.Switch(context.Background(), "q1", "visitor1", "A", "B")
-	if err == nil {
-		t.Fatal("expected error")
-	}
-}
-
-// TestSwitch_DuplicateToWithRollback は新選択肢の重複で旧選択肢が復元されることを検証する。
-func TestSwitch_DuplicateToWithRollback(t *testing.T) {
-	t.Parallel()
-	var rollbackSK string
-	putCount := 0
-	client := &mockDynamoDBAPI{
-		deleteItemFn: func(_ context.Context, _ *dynamodb.DeleteItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
-			return &dynamodb.DeleteItemOutput{}, nil
-		},
-		putItemFn: func(_ context.Context, params *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
-			putCount++
-			if putCount == 1 {
-				return nil, &types.ConditionalCheckFailedException{Message: stringPtr("duplicate")}
+		transactWriteItemsFn: func(_ context.Context, _ *dynamodb.TransactWriteItemsInput, _ ...func(*dynamodb.Options)) (*dynamodb.TransactWriteItemsOutput, error) {
+			return nil, &types.TransactionCanceledException{
+				CancellationReasons: []types.CancellationReason{
+					{Code: stringPtr("None")},
+					{Code: stringPtr("ConditionalCheckFailed")},
+					{Code: stringPtr("None")},
+				},
 			}
-			rollbackSK = params.Item["connectionId"].(*types.AttributeValueMemberS).Value
-			return &dynamodb.PutItemOutput{}, nil
 		},
 	}
 	s := NewStore(client, "table")
@@ -97,67 +80,14 @@ func TestSwitch_DuplicateToWithRollback(t *testing.T) {
 	if err != ErrDuplicateVote {
 		t.Errorf("expected ErrDuplicateVote, got %v", err)
 	}
-	if rollbackSK != "visitor1#A" {
-		t.Errorf("expected rollback to restore visitor1#A, got %s", rollbackSK)
-	}
 }
 
-// TestSwitch_DuplicateToWithRollbackFailure は重複検出後のロールバック失敗を検証する。
-func TestSwitch_DuplicateToWithRollbackFailure(t *testing.T) {
-	t.Parallel()
-	putCount := 0
-	client := &mockDynamoDBAPI{
-		deleteItemFn: func(_ context.Context, _ *dynamodb.DeleteItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
-			return &dynamodb.DeleteItemOutput{}, nil
-		},
-		putItemFn: func(_ context.Context, _ *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
-			putCount++
-			if putCount == 1 {
-				return nil, &types.ConditionalCheckFailedException{Message: stringPtr("duplicate")}
-			}
-			return nil, fmt.Errorf("rollback error")
-		},
-	}
-	s := NewStore(client, "table")
-	err := s.Switch(context.Background(), "q1", "visitor1", "A", "B")
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if err == ErrDuplicateVote {
-		t.Error("should not return ErrDuplicateVote when rollback fails")
-	}
-}
-
-// TestSwitch_PutError は新選択肢追加の非条件エラーを検証する。
-func TestSwitch_PutError(t *testing.T) {
+// TestSwitch_TransactError は TransactWriteItems の非キャンセルエラーを検証する。
+func TestSwitch_TransactError(t *testing.T) {
 	t.Parallel()
 	client := &mockDynamoDBAPI{
-		deleteItemFn: func(_ context.Context, _ *dynamodb.DeleteItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
-			return &dynamodb.DeleteItemOutput{}, nil
-		},
-		putItemFn: func(_ context.Context, _ *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
-			return nil, fmt.Errorf("put error")
-		},
-	}
-	s := NewStore(client, "table")
-	err := s.Switch(context.Background(), "q1", "visitor1", "A", "B")
-	if err == nil {
-		t.Fatal("expected error")
-	}
-}
-
-// TestSwitch_UpdateError は votes 更新エラーを検証する。
-func TestSwitch_UpdateError(t *testing.T) {
-	t.Parallel()
-	client := &mockDynamoDBAPI{
-		deleteItemFn: func(_ context.Context, _ *dynamodb.DeleteItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
-			return &dynamodb.DeleteItemOutput{}, nil
-		},
-		putItemFn: func(_ context.Context, _ *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
-			return &dynamodb.PutItemOutput{}, nil
-		},
-		updateItemFn: func(_ context.Context, _ *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
-			return nil, fmt.Errorf("update error")
+		transactWriteItemsFn: func(_ context.Context, _ *dynamodb.TransactWriteItemsInput, _ ...func(*dynamodb.Options)) (*dynamodb.TransactWriteItemsOutput, error) {
+			return nil, fmt.Errorf("transact error")
 		},
 	}
 	s := NewStore(client, "table")

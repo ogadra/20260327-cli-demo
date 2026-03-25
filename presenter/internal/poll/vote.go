@@ -10,6 +10,7 @@ import (
 )
 
 // Vote は投票を記録する。maxChoices 超過と重複投票を防止する。
+// 投票レコードの追加とカウンター更新を TransactWriteItems でアトミックに実行する。
 func (s *Store) Vote(ctx context.Context, pollID, visitorID, choice string) error {
 	meta, err := s.getMeta(ctx, pollID)
 	if err != nil {
@@ -25,38 +26,43 @@ func (s *Store) Vote(ctx context.Context, pollID, visitorID, choice string) erro
 	}
 
 	sk := visitorID + "#" + choice
-	_, err = s.client.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName: &s.tableName,
-		Item: map[string]types.AttributeValue{
-			"pollId":       &types.AttributeValueMemberS{Value: pollID},
-			"connectionId": &types.AttributeValueMemberS{Value: sk},
-			"ttl":          &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", s.nowFn().Add(ttlDuration).Unix())},
+	_, err = s.client.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{
+		TransactItems: []types.TransactWriteItem{
+			{
+				Put: &types.Put{
+					TableName: &s.tableName,
+					Item: map[string]types.AttributeValue{
+						"pollId":       &types.AttributeValueMemberS{Value: pollID},
+						"connectionId": &types.AttributeValueMemberS{Value: sk},
+						"ttl":          &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", s.nowFn().Add(ttlDuration).Unix())},
+					},
+					ConditionExpression: aws.String("attribute_not_exists(connectionId)"),
+				},
+			},
+			{
+				Update: &types.Update{
+					TableName: &s.tableName,
+					Key: map[string]types.AttributeValue{
+						"pollId":       &types.AttributeValueMemberS{Value: pollID},
+						"connectionId": &types.AttributeValueMemberS{Value: metaSK},
+					},
+					UpdateExpression: aws.String("ADD votes.#choice :one"),
+					ExpressionAttributeNames: map[string]string{
+						"#choice": choice,
+					},
+					ExpressionAttributeValues: map[string]types.AttributeValue{
+						":one": &types.AttributeValueMemberN{Value: "1"},
+					},
+				},
+			},
 		},
-		ConditionExpression: aws.String("attribute_not_exists(connectionId)"),
 	})
 	if err != nil {
-		if isConditionalCheckFailed(err) {
+		reasons := transactionCanceledReasons(err)
+		if len(reasons) > 0 && reasons[0] == "ConditionalCheckFailed" {
 			return ErrDuplicateVote
 		}
-		return fmt.Errorf("put vote: %w", err)
-	}
-
-	_, err = s.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
-		TableName: &s.tableName,
-		Key: map[string]types.AttributeValue{
-			"pollId":       &types.AttributeValueMemberS{Value: pollID},
-			"connectionId": &types.AttributeValueMemberS{Value: metaSK},
-		},
-		UpdateExpression: aws.String("ADD votes.#choice :one"),
-		ExpressionAttributeNames: map[string]string{
-			"#choice": choice,
-		},
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":one": &types.AttributeValueMemberN{Value: "1"},
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("update votes: %w", err)
+		return fmt.Errorf("transact vote: %w", err)
 	}
 
 	return nil

@@ -10,39 +10,45 @@ import (
 )
 
 // Unvote は投票を取り消す。投票が存在しない場合は ErrVoteNotFound を返す。
+// 投票レコードの削除とカウンター更新を TransactWriteItems でアトミックに実行する。
 func (s *Store) Unvote(ctx context.Context, pollID, visitorID, choice string) error {
 	sk := visitorID + "#" + choice
-	_, err := s.client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
-		TableName: &s.tableName,
-		Key: map[string]types.AttributeValue{
-			"pollId":       &types.AttributeValueMemberS{Value: pollID},
-			"connectionId": &types.AttributeValueMemberS{Value: sk},
+	_, err := s.client.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{
+		TransactItems: []types.TransactWriteItem{
+			{
+				Delete: &types.Delete{
+					TableName: &s.tableName,
+					Key: map[string]types.AttributeValue{
+						"pollId":       &types.AttributeValueMemberS{Value: pollID},
+						"connectionId": &types.AttributeValueMemberS{Value: sk},
+					},
+					ConditionExpression: aws.String("attribute_exists(connectionId)"),
+				},
+			},
+			{
+				Update: &types.Update{
+					TableName: &s.tableName,
+					Key: map[string]types.AttributeValue{
+						"pollId":       &types.AttributeValueMemberS{Value: pollID},
+						"connectionId": &types.AttributeValueMemberS{Value: metaSK},
+					},
+					UpdateExpression: aws.String("ADD votes.#choice :negone"),
+					ExpressionAttributeNames: map[string]string{
+						"#choice": choice,
+					},
+					ExpressionAttributeValues: map[string]types.AttributeValue{
+						":negone": &types.AttributeValueMemberN{Value: "-1"},
+					},
+				},
+			},
 		},
-		ConditionExpression: aws.String("attribute_exists(connectionId)"),
 	})
 	if err != nil {
-		if isConditionalCheckFailed(err) {
+		reasons := transactionCanceledReasons(err)
+		if len(reasons) > 0 && reasons[0] == "ConditionalCheckFailed" {
 			return ErrVoteNotFound
 		}
-		return fmt.Errorf("delete vote: %w", err)
-	}
-
-	_, err = s.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
-		TableName: &s.tableName,
-		Key: map[string]types.AttributeValue{
-			"pollId":       &types.AttributeValueMemberS{Value: pollID},
-			"connectionId": &types.AttributeValueMemberS{Value: metaSK},
-		},
-		UpdateExpression: aws.String("ADD votes.#choice :negone"),
-		ExpressionAttributeNames: map[string]string{
-			"#choice": choice,
-		},
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":negone": &types.AttributeValueMemberN{Value: "-1"},
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("update votes: %w", err)
+		return fmt.Errorf("transact unvote: %w", err)
 	}
 
 	return nil
