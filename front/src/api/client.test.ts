@@ -87,6 +87,7 @@ describe("execute", () => {
 
     mockFetch.mockResolvedValue({
       ok: true,
+      headers: new Headers(),
       body: readable,
     });
 
@@ -126,7 +127,7 @@ describe("execute", () => {
       },
     });
 
-    mockFetch.mockResolvedValue({ ok: true, body: readable });
+    mockFetch.mockResolvedValue({ ok: true, headers: new Headers(), body: readable });
 
     const events = [];
     for await (const event of execute("echo hello")) {
@@ -146,7 +147,7 @@ describe("execute", () => {
   });
 
   it("throws when body is null", async () => {
-    mockFetch.mockResolvedValue({ ok: true, body: null });
+    mockFetch.mockResolvedValue({ ok: true, headers: new Headers(), body: null });
     const gen = execute("cmd");
     await expect(gen.next()).rejects.toThrow("No response body");
   });
@@ -166,7 +167,7 @@ describe("execute", () => {
       cancel: cancelFn,
     });
 
-    mockFetch.mockResolvedValue({ ok: true, body: readable });
+    mockFetch.mockResolvedValue({ ok: true, headers: new Headers(), body: readable });
 
     const events = [];
     for await (const event of execute("cmd")) {
@@ -176,5 +177,60 @@ describe("execute", () => {
 
     expect(events).toHaveLength(1);
     expect(cancelFn).toHaveBeenCalled();
+  });
+
+  it("calls onReassigned when X-Session-Reassigned header is true", async () => {
+    const chunks = ['data: {"type":"complete","exitCode":0}\n\n'];
+    const encoder = new TextEncoder();
+    const iterator = chunks[Symbol.iterator]();
+
+    const readable = new ReadableStream({
+      pull(controller) {
+        const { done, value } = iterator.next();
+        if (done) {
+          controller.close();
+        } else {
+          controller.enqueue(encoder.encode(value));
+        }
+      },
+    });
+
+    const headers = new Headers({ "X-Session-Reassigned": "true" });
+    mockFetch.mockResolvedValue({ ok: true, headers, body: readable });
+
+    const onReassigned = vi.fn();
+    const events = [];
+    for await (const event of execute("ls", onReassigned)) {
+      events.push(event);
+    }
+
+    expect(onReassigned).toHaveBeenCalledOnce();
+    expect(events).toHaveLength(1);
+  });
+
+  it("does not call onReassigned when header is absent", async () => {
+    const chunks = ['data: {"type":"complete","exitCode":0}\n\n'];
+    const encoder = new TextEncoder();
+    const iterator = chunks[Symbol.iterator]();
+
+    const readable = new ReadableStream({
+      pull(controller) {
+        const { done, value } = iterator.next();
+        if (done) {
+          controller.close();
+        } else {
+          controller.enqueue(encoder.encode(value));
+        }
+      },
+    });
+
+    mockFetch.mockResolvedValue({ ok: true, headers: new Headers(), body: readable });
+
+    const onReassigned = vi.fn();
+    for await (const _ of execute("ls", onReassigned)) {
+      /* drain */
+    }
+
+    expect(onReassigned).not.toHaveBeenCalled();
   });
 });
