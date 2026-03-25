@@ -1,0 +1,316 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, renderHook } from "@testing-library/react";
+import { usePresenter } from "./usePresenter";
+import { MessageType } from "../api/presenter";
+
+/** Minimal mock WebSocket instances tracker. */
+const instances: MockWebSocket[] = [];
+
+/** Minimal mock of the WebSocket interface for testing. */
+function MockWebSocket(this: MockWebSocket, url: string): void {
+  this.url = url;
+  this.sent = [];
+  this.closeCalled = false;
+  this.onopen = null;
+  this.onmessage = null;
+  this.onclose = null;
+  instances.push(this);
+}
+
+MockWebSocket.prototype.send = function (data: string): void {
+  (this as MockWebSocket).sent.push(data);
+};
+
+MockWebSocket.prototype.close = function (): void {
+  (this as MockWebSocket).closeCalled = true;
+};
+
+interface MockWebSocket {
+  url: string;
+  sent: string[];
+  closeCalled: boolean;
+  onopen: (() => void) | null;
+  onmessage: ((event: { data: string }) => void) | null;
+  onclose: (() => void) | null;
+}
+
+/** Return the latest MockWebSocket instance. */
+const latest = (): MockWebSocket => {
+  const inst = instances.at(-1);
+  if (!inst) throw new Error("No MockWebSocket instance found");
+  return inst;
+};
+
+/** Simulate the open event on the latest instance. */
+const simulateOpen = (): void => {
+  latest().onopen?.();
+};
+
+/** Simulate a message event with the given data string on the latest instance. */
+const simulateMessage = (data: string): void => {
+  latest().onmessage?.({ data });
+};
+
+/** Simulate the close event on the latest instance. */
+const simulateClose = (): void => {
+  latest().onclose?.();
+};
+
+/** Render the hook with mock WebSocket injected. */
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+const renderPresenter = () =>
+  renderHook(() =>
+    usePresenter("ws://test", { WebSocket: MockWebSocket as unknown as typeof WebSocket }),
+  );
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  instances.length = 0;
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe("usePresenter", () => {
+  it("connects to the given URL", () => {
+    renderPresenter();
+    expect(latest().url).toBe("ws://test");
+  });
+
+  it("returns initial state", () => {
+    const { result } = renderPresenter();
+    expect(result.current.page).toBe(0);
+    expect(result.current.mode).toBe(MessageType.SlideSync);
+    expect(result.current.instruction).toBe("");
+    expect(result.current.placeholder).toBe("");
+    expect(result.current.viewerCount).toBe(0);
+  });
+
+  it("updates page and sets mode to slide_sync on slide_sync message", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      simulateMessage(JSON.stringify({ type: MessageType.SlideSync, page: 5 }));
+    });
+    expect(result.current.page).toBe(5);
+    expect(result.current.mode).toBe(MessageType.SlideSync);
+  });
+
+  it("updates instruction, placeholder, and sets mode to hands_on on hands_on message", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      simulateMessage(
+        JSON.stringify({
+          type: MessageType.HandsOn,
+          instruction: "run echo",
+          placeholder: "$ echo hi",
+        }),
+      );
+    });
+    expect(result.current.mode).toBe(MessageType.HandsOn);
+    expect(result.current.instruction).toBe("run echo");
+    expect(result.current.placeholder).toBe("$ echo hi");
+  });
+
+  it("updates viewerCount on viewer_count message", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      simulateMessage(JSON.stringify({ type: MessageType.ViewerCount, count: 42 }));
+    });
+    expect(result.current.viewerCount).toBe(42);
+  });
+
+  it("switches from hands_on back to slide_sync on slide_sync", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      simulateMessage(
+        JSON.stringify({
+          type: MessageType.HandsOn,
+          instruction: "do something",
+          placeholder: "$ ...",
+        }),
+      );
+    });
+    expect(result.current.mode).toBe(MessageType.HandsOn);
+
+    act(() => {
+      simulateMessage(JSON.stringify({ type: MessageType.SlideSync, page: 3 }));
+    });
+    expect(result.current.mode).toBe(MessageType.SlideSync);
+    expect(result.current.page).toBe(3);
+  });
+
+  it("ignores unknown message types", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      simulateMessage(JSON.stringify({ type: "unknown" }));
+    });
+    expect(result.current.page).toBe(0);
+    expect(result.current.mode).toBe(MessageType.SlideSync);
+  });
+
+  it("ignores malformed JSON messages", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      simulateMessage("not json");
+    });
+    expect(result.current.page).toBe(0);
+  });
+
+  it("sends slide_sync message via sendSlideSync", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      result.current.sendSlideSync(7);
+    });
+    expect(latest().sent).toEqual([
+      JSON.stringify({ action: "message", type: MessageType.SlideSync, page: 7 }),
+    ]);
+  });
+
+  it("sends hands_on message via sendHandsOn", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      result.current.sendHandsOn("try this", "$ try");
+    });
+    expect(latest().sent).toEqual([
+      JSON.stringify({
+        action: "message",
+        type: MessageType.HandsOn,
+        instruction: "try this",
+        placeholder: "$ try",
+      }),
+    ]);
+  });
+
+  it("does not throw sendSlideSync after unmount", () => {
+    const { result, unmount } = renderPresenter();
+    unmount();
+    expect(() => result.current.sendSlideSync(1)).not.toThrow();
+  });
+
+  it("does not throw sendHandsOn after unmount", () => {
+    const { result, unmount } = renderPresenter();
+    unmount();
+    expect(() => result.current.sendHandsOn("test", "ph")).not.toThrow();
+  });
+
+  it("closes WebSocket on unmount", () => {
+    const { unmount } = renderPresenter();
+    simulateOpen();
+    unmount();
+    expect(latest().closeCalled).toBe(true);
+  });
+
+  it("reconnects with exponential backoff after close", () => {
+    renderPresenter();
+    simulateOpen();
+    act(() => {
+      simulateClose();
+    });
+
+    expect(instances).toHaveLength(1);
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(instances).toHaveLength(2);
+
+    act(() => {
+      simulateClose();
+    });
+    act(() => {
+      vi.advanceTimersByTime(1999);
+    });
+    expect(instances).toHaveLength(2);
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(instances).toHaveLength(3);
+  });
+
+  it("caps reconnection delay at 8 seconds", () => {
+    renderPresenter();
+
+    for (let i = 0; i < 5; i++) {
+      act(() => {
+        simulateClose();
+      });
+      act(() => {
+        vi.advanceTimersByTime(8000);
+      });
+    }
+
+    const countBefore = instances.length;
+    act(() => {
+      simulateClose();
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(7999);
+    });
+    expect(instances).toHaveLength(countBefore);
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(instances).toHaveLength(countBefore + 1);
+  });
+
+  it("resets delay after successful open", () => {
+    renderPresenter();
+    simulateOpen();
+    act(() => {
+      simulateClose();
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(instances).toHaveLength(2);
+
+    simulateOpen();
+    act(() => {
+      simulateClose();
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(instances).toHaveLength(3);
+  });
+
+  it("does not reconnect after unmount", () => {
+    const { unmount } = renderPresenter();
+    simulateOpen();
+    unmount();
+    act(() => {
+      simulateClose();
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(10000);
+    });
+    expect(instances).toHaveLength(1);
+  });
+
+  it("clears pending reconnect timer on unmount", () => {
+    const { unmount } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      simulateClose();
+    });
+
+    unmount();
+    act(() => {
+      vi.advanceTimersByTime(10000);
+    });
+    expect(instances).toHaveLength(1);
+  });
+});
