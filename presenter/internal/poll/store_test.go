@@ -2,6 +2,7 @@ package poll
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -42,8 +43,11 @@ func (m *mockDynamoDBAPI) Query(ctx context.Context, params *dynamodb.QueryInput
 	return m.queryFn(ctx, params, optFns...)
 }
 
-// TransactWriteItems はモックの TransactWriteItems を呼び出す。
+// TransactWriteItems はモックの TransactWriteItems を呼び出す。未設定時は明示エラーを返す。
 func (m *mockDynamoDBAPI) TransactWriteItems(ctx context.Context, params *dynamodb.TransactWriteItemsInput, optFns ...func(*dynamodb.Options)) (*dynamodb.TransactWriteItemsOutput, error) {
+	if m.transactWriteItemsFn == nil {
+		return nil, fmt.Errorf("unexpected TransactWriteItems call: mock not configured")
+	}
 	return m.transactWriteItemsFn(ctx, params, optFns...)
 }
 
