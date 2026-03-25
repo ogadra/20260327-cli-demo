@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
+import type { SlideProps } from "../components/SlideView";
 
 /** Title slide displayed as the first page of the presentation. */
-const Slide0 = (): ReactNode => (
+const Slide0 = (_props: SlideProps): ReactNode => (
   <div
     style={{
       display: "flex",

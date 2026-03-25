@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import Terminal, { type TerminalHandle } from "./components/Terminal";
 import CommandInput from "./components/CommandInput";
 import SlideView from "./components/SlideView";
@@ -16,7 +16,43 @@ const App = (): ReactNode => {
   const ready = useSession();
   const terminalRef = useRef<TerminalHandle>(null);
   const { run, running } = useExecute(ready, terminalRef);
-  const { page, mode, instruction, placeholder, viewerCount } = usePresenter(wsUrl());
+  const {
+    page,
+    mode,
+    instruction,
+    placeholder,
+    viewerCount,
+    pollState,
+    sendPollVote,
+    sendPollUnvote,
+    sendPollSwitch,
+  } = usePresenter(wsUrl());
+
+  const pollId = pollState?.pollId ?? "";
+
+  /** Wrap sendPollVote by binding the current pollId. */
+  const handlePollVote = useCallback(
+    (choice: string): void => {
+      if (pollId) sendPollVote(pollId, choice);
+    },
+    [pollId, sendPollVote],
+  );
+
+  /** Wrap sendPollUnvote by binding the current pollId. */
+  const handlePollUnvote = useCallback(
+    (choice: string): void => {
+      if (pollId) sendPollUnvote(pollId, choice);
+    },
+    [pollId, sendPollUnvote],
+  );
+
+  /** Wrap sendPollSwitch by binding the current pollId. */
+  const handlePollSwitch = useCallback(
+    (from: string, to: string): void => {
+      if (pollId) sendPollSwitch(pollId, from, to);
+    },
+    [pollId, sendPollSwitch],
+  );
 
   useEffect(() => {
     if (ready) {
@@ -50,7 +86,13 @@ const App = (): ReactNode => {
         }}
       >
         <div style={{ flexGrow: 1, overflow: "hidden" }}>
-          <SlideView page={page} />
+          <SlideView
+            page={page}
+            pollState={pollState}
+            onPollVote={handlePollVote}
+            onPollUnvote={handlePollUnvote}
+            onPollSwitch={handlePollSwitch}
+          />
         </div>
         {instruction && (
           <div
