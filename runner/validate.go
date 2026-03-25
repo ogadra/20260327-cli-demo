@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // whitelistedCommands is the set of commands that are allowed without LLM validation.
 // Only bare commands with no arguments are whitelisted, because arguments can be
@@ -15,12 +18,19 @@ var whitelistedCommands = map[string]bool{
 	"uname":  true,
 }
 
+// shellMetaChars matches shell operators that could be used to chain commands.
+var shellMetaChars = regexp.MustCompile(`[;|&` + "`" + `]|\$\(`)
+
 // classifyCommand returns the classification of a command for audit logging.
-// It returns "whitelisted" only if the entire command after trimming whitespace
-// exactly matches a whitelisted command name with no arguments.
-// Otherwise it returns "validated".
+// It returns "whitelisted" if the trimmed command exactly matches a bare
+// whitelisted command, or if it is a "nix run nixpkgs#..." invocation
+// without shell metacharacters. Otherwise it returns "validated".
 func classifyCommand(cmd string) string {
-	if whitelistedCommands[strings.TrimSpace(cmd)] {
+	trimmed := strings.TrimSpace(cmd)
+	if whitelistedCommands[trimmed] {
+		return "whitelisted"
+	}
+	if strings.HasPrefix(trimmed, "nix run nixpkgs#") && !shellMetaChars.MatchString(trimmed) {
 		return "whitelisted"
 	}
 	return "validated"
