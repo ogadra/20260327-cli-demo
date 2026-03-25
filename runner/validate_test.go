@@ -131,6 +131,11 @@ func TestClassifyNixRunRejected(t *testing.T) {
 		{"nix run nixpkgs#hello | cat", "pipe operator"},
 		{"nix run nixpkgs#$(echo evil)", "command substitution dollar"},
 		{"nix run nixpkgs#`echo evil`", "command substitution backtick"},
+		{"nix run nixpkgs#hello\nrm -rf /", "newline injection"},
+		{"nix run nixpkgs#hello\recho pwned", "carriage return injection"},
+		{"nix run nixpkgs#hello > /tmp/output", "redirect output"},
+		{"nix run nixpkgs#hello < /etc/passwd", "redirect input"},
+		{"nix run nixpkgs#hello >> /tmp/output", "redirect append"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
