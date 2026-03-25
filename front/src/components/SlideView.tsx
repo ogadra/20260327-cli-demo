@@ -2,21 +2,17 @@ import type { ReactNode } from "react";
 import slides from "../slides/index";
 import type { PollStateData } from "../hooks/usePresenter";
 
-/** Props for the SlideView component. */
-interface SlideViewProps {
-  page: number;
-  pollState: PollStateData | null;
-  onPollVote: (choice: string) => void;
-  onPollUnvote: (choice: string) => void;
-  onPollSwitch: (from: string, to: string) => void;
-}
-
 /** Props passed to each slide component. */
 export interface SlideProps {
   pollState: PollStateData | null;
   onPollVote: (choice: string) => void;
   onPollUnvote: (choice: string) => void;
   onPollSwitch: (from: string, to: string) => void;
+}
+
+/** Props for the SlideView component. */
+interface SlideViewProps extends SlideProps {
+  page: number;
 }
 
 /** Renders the slide component corresponding to the given page number. */
