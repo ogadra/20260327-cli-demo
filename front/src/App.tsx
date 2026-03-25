@@ -77,11 +77,13 @@ const App = (): ReactNode => {
           height: "100%",
         }}
       >
-        <CommandInput
-          onSubmit={run}
-          disabled={!ready || running}
-          placeholder={placeholder || undefined}
-        />
+        {mode === MessageType.HandsOn && (
+          <CommandInput
+            onSubmit={run}
+            disabled={!ready || running}
+            placeholder={placeholder || undefined}
+          />
+        )}
         <Terminal ref={terminalRef} />
       </div>
     </div>

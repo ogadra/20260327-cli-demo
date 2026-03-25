@@ -112,4 +112,15 @@ describe("CommandInput", () => {
     const input = screen.getByPlaceholderText("Enter command...");
     expect(input).toHaveValue("");
   });
+
+  it("clears input value when placeholder changes from string to undefined", () => {
+    const { rerender } = render(
+      <CommandInput onSubmit={vi.fn()} disabled={false} placeholder="$ echo hi" />,
+    );
+    const input = screen.getByPlaceholderText("$ echo hi");
+    expect(input).toHaveValue("$ echo hi");
+
+    rerender(<CommandInput onSubmit={vi.fn()} disabled={false} />);
+    expect(input).toHaveValue("");
+  });
 });

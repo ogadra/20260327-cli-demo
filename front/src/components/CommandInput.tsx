@@ -25,9 +25,7 @@ const CommandInput = ({ onSubmit, disabled, placeholder }: Props): ReactNode => 
   }, [disabled]);
 
   useEffect(() => {
-    if (placeholder !== undefined) {
-      setValue(placeholder);
-    }
+    setValue(placeholder ?? "");
   }, [placeholder]);
 
   const handleKeyDown = useCallback(

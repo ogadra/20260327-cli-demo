@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import App from "./App";
 import { MessageType, type PresenterMode } from "./api/presenter";
@@ -11,6 +11,15 @@ vi.mock("./hooks/useExecute", () => ({
   useExecute: () => ({ run: vi.fn(), running: false }),
 }));
 
+/** Default presenter state restored before each test. */
+const defaultPresenter = {
+  page: 0,
+  mode: MessageType.SlideSync as PresenterMode,
+  instruction: "",
+  placeholder: "",
+  viewerCount: 0,
+};
+
 const mockPresenter: {
   page: number;
   mode: PresenterMode;
@@ -20,11 +29,7 @@ const mockPresenter: {
   sendSlideSync: ReturnType<typeof vi.fn>;
   sendHandsOn: ReturnType<typeof vi.fn>;
 } = {
-  page: 0,
-  mode: MessageType.SlideSync,
-  instruction: "",
-  placeholder: "",
-  viewerCount: 0,
+  ...defaultPresenter,
   sendSlideSync: vi.fn(),
   sendHandsOn: vi.fn(),
 };
@@ -61,14 +66,24 @@ vi.mock("./slides/index", () => ({
   default: [() => <div>Test Slide</div>],
 }));
 
+beforeEach(() => {
+  Object.assign(mockPresenter, defaultPresenter);
+  mockWrite.mockClear();
+});
+
 describe("App", () => {
-  it("renders command input", () => {
+  it("renders command input in hands-on mode", () => {
+    mockPresenter.mode = MessageType.HandsOn;
     render(<App />);
     expect(screen.getByPlaceholderText("Enter command...")).toBeInTheDocument();
   });
 
+  it("does not render command input in slide mode", () => {
+    render(<App />);
+    expect(screen.queryByPlaceholderText("Enter command...")).toBeNull();
+  });
+
   it("writes initial prompt when session is ready", () => {
-    mockWrite.mockClear();
     render(<App />);
     expect(mockWrite).toHaveBeenCalledWith("$ ");
   });
@@ -90,7 +105,6 @@ describe("App", () => {
     mockPresenter.instruction = "echo hello を実行してみよう";
     render(<App />);
     expect(screen.getByTestId("instruction").textContent).toBe("echo hello を実行してみよう");
-    mockPresenter.instruction = "";
   });
 
   it("passes placeholder to command input", () => {
@@ -98,8 +112,6 @@ describe("App", () => {
     mockPresenter.mode = MessageType.HandsOn;
     render(<App />);
     expect(screen.getByPlaceholderText("$ echo hello")).toBeInTheDocument();
-    mockPresenter.placeholder = "";
-    mockPresenter.mode = MessageType.SlideSync;
   });
 
   it("shows hands-on mode when mode is hands_on", () => {
@@ -109,14 +121,12 @@ describe("App", () => {
     expect(slideMode.style.display).toBe("none");
     const handsOnMode = screen.getByTestId("hands-on-mode");
     expect(handsOnMode.style.display).toBe("flex");
-    mockPresenter.mode = MessageType.SlideSync;
   });
 
   it("displays viewer count", () => {
     mockPresenter.viewerCount = 42;
     render(<App />);
     expect(screen.getByTestId("viewer-count").textContent).toBe("42 viewers");
-    mockPresenter.viewerCount = 0;
   });
 
   it("places input as first child in hands-on mode", () => {
@@ -126,7 +136,6 @@ describe("App", () => {
     const firstChild = handsOnMode.children[0] as HTMLElement;
     expect(firstChild.tagName).toBe("INPUT");
     expect(firstChild.getAttribute("placeholder")).toBe("Enter command...");
-    mockPresenter.mode = MessageType.SlideSync;
   });
 
   it("disables input when session is not ready", async () => {
@@ -137,6 +146,7 @@ describe("App", () => {
     vi.doMock("./hooks/useExecute", () => ({
       useExecute: () => ({ run: vi.fn(), running: false }),
     }));
+    mockPresenter.mode = MessageType.HandsOn;
     vi.doMock("./hooks/usePresenter", () => ({
       usePresenter: () => mockPresenter,
     }));
@@ -153,6 +163,7 @@ describe("App", () => {
     vi.doMock("./hooks/useExecute", () => ({
       useExecute: () => ({ run: vi.fn(), running: true }),
     }));
+    mockPresenter.mode = MessageType.HandsOn;
     vi.doMock("./hooks/usePresenter", () => ({
       usePresenter: () => mockPresenter,
     }));
