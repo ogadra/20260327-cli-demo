@@ -24,6 +24,10 @@ export default defineConfig({
         target: process.env.VITE_API_TARGET ?? "http://localhost:3000",
         changeOrigin: true,
       },
+      "/ws": {
+        target: process.env.VITE_WS_TARGET ?? "ws://localhost:3001",
+        ws: true,
+      },
     },
   },
 });
