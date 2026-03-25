@@ -28,12 +28,23 @@ async function waitForTerminalChange(page: Page, previousText: string): Promise<
   return (await rows.textContent()) ?? "";
 }
 
+/** Mock the presenter WebSocket to immediately send a hands_on message so CommandInput renders. */
+async function mockPresenterWs(page: Page): Promise<void> {
+  await page.routeWebSocket(/\/ws$/, (ws) => {
+    ws.onMessage(() => {
+      /* ignore outgoing messages */
+    });
+    ws.send(JSON.stringify({ type: "hands_on", instruction: "", placeholder: "" }));
+  });
+}
+
 test.describe.serial("integration", () => {
   let sharedPage: Page;
 
   test.beforeAll(async ({ browser }) => {
     const context = await browser.newContext();
     sharedPage = await context.newPage();
+    await mockPresenterWs(sharedPage);
     await sharedPage.goto("/");
     await waitForReady(sharedPage);
   });
