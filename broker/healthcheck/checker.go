@@ -20,7 +20,11 @@ type HTTPChecker struct {
 }
 
 // NewHTTPChecker は指定された http.Client を使用する HTTPChecker を生成する。
+// client が nil の場合は http.DefaultClient を使用する。
 func NewHTTPChecker(client *http.Client) *HTTPChecker {
+	if client == nil {
+		client = http.DefaultClient
+	}
 	return &HTTPChecker{client: client}
 }
 

@@ -3,6 +3,7 @@ package healthcheck
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -70,14 +71,36 @@ func TestHTTPChecker_Check_Unhealthy(t *testing.T) {
 // TestHTTPChecker_Check_Unreachable は runner に接続できない場合にエラーを返すことを検証する。
 func TestHTTPChecker_Check_Unreachable(t *testing.T) {
 	t.Parallel()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen failed: %v", err)
+	}
+	addr := ln.Addr().String()
+	_ = ln.Close()
+
 	client := &http.Client{Timeout: 1 * time.Second}
 	checker := NewHTTPChecker(client)
-	err := checker.Check(context.Background(), "http://192.0.2.1:1")
+	err = checker.Check(context.Background(), "http://"+addr)
 	if err == nil {
 		t.Fatal("expected error for unreachable runner")
 	}
 	if !strings.Contains(err.Error(), "request failed") {
 		t.Errorf("error = %q, want to contain %q", err.Error(), "request failed")
+	}
+}
+
+// TestNewHTTPChecker_NilClient は nil を渡した場合に http.DefaultClient にフォールバックすることを検証する。
+func TestNewHTTPChecker_NilClient(t *testing.T) {
+	t.Parallel()
+	c := NewHTTPChecker(nil)
+	if c == nil {
+		t.Fatal("expected non-nil checker")
+	}
+	if c.client == nil {
+		t.Fatal("expected non-nil client, got nil")
+	}
+	if c.client != http.DefaultClient {
+		t.Error("expected http.DefaultClient as fallback")
 	}
 }
 
