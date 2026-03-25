@@ -459,3 +459,56 @@ func TestGetResolve_CookieSecure(t *testing.T) {
 	}
 	t.Error("runner_id cookie not found")
 }
+
+// TestGetResolve_Reassigned はセッション再割当て時に X-Session-Reassigned ヘッダーが設定されることを検証する。
+func TestGetResolve_Reassigned(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		resolveSessionFn: func(_ context.Context, _ string) (*service.ResolveResult, error) {
+			return &service.ResolveResult{
+				SessionID:  "new-sess",
+				RunnerURL:  "http://10.0.0.2:8080",
+				Created:    true,
+				Reassigned: true,
+			}, nil
+		},
+	})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/resolve", nil)
+	req.AddCookie(&http.Cookie{Name: "runner_id", Value: "old-sess"})
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("X-Session-Reassigned"); got != "true" {
+		t.Errorf("X-Session-Reassigned = %q, want %q", got, "true")
+	}
+}
+
+// TestGetResolve_NotReassigned はセッション再割当てなしの場合に X-Session-Reassigned ヘッダーが設定されないことを検証する。
+func TestGetResolve_NotReassigned(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&mockService{
+		resolveSessionFn: func(_ context.Context, _ string) (*service.ResolveResult, error) {
+			return &service.ResolveResult{
+				SessionID:  "sess-1",
+				RunnerURL:  "http://10.0.0.1:8080",
+				Created:    false,
+				Reassigned: false,
+			}, nil
+		},
+	})
+	r := newTestRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/resolve", nil)
+	req.AddCookie(&http.Cookie{Name: "runner_id", Value: "sess-1"})
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("X-Session-Reassigned"); got != "" {
+		t.Errorf("X-Session-Reassigned = %q, want empty", got)
+	}
+}
