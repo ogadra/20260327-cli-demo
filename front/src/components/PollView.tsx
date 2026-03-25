@@ -34,6 +34,7 @@ const PollView = ({
   const handleClick = (option: string): void => {
     const isSelected = myChoices.includes(option);
     if (isSelected) {
+      if (maxChoices === 1) return;
       onUnvote(option);
       return;
     }

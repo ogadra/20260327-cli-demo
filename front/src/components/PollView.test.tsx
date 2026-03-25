@@ -43,9 +43,16 @@ describe("PollView", () => {
     expect(onVote).toHaveBeenCalledWith("B");
   });
 
-  it("calls onUnvote when clicking already-selected option", () => {
+  it("does nothing when clicking already-selected option with maxChoices=1", () => {
     const onUnvote = vi.fn();
     render(<PollView {...defaultProps} myChoices={["A"]} onUnvote={onUnvote} />);
+    fireEvent.click(screen.getByTestId("poll-option-0"));
+    expect(onUnvote).not.toHaveBeenCalled();
+  });
+
+  it("calls onUnvote when clicking already-selected option with maxChoices > 1", () => {
+    const onUnvote = vi.fn();
+    render(<PollView {...defaultProps} maxChoices={2} myChoices={["A"]} onUnvote={onUnvote} />);
     fireEvent.click(screen.getByTestId("poll-option-0"));
     expect(onUnvote).toHaveBeenCalledWith("A");
   });
