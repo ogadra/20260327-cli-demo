@@ -313,4 +313,163 @@ describe("usePresenter", () => {
     });
     expect(instances).toHaveLength(1);
   });
+
+  it("returns initial pollState as null", () => {
+    const { result } = renderPresenter();
+    expect(result.current.pollState).toBeNull();
+  });
+
+  it("updates pollState on poll_state message", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      simulateMessage(
+        JSON.stringify({
+          type: MessageType.PollState,
+          pollId: "q1",
+          options: ["A", "B"],
+          maxChoices: 1,
+          votes: { A: 10, B: 5 },
+          myChoices: ["A"],
+        }),
+      );
+    });
+    expect(result.current.pollState).toEqual({
+      pollId: "q1",
+      options: ["A", "B"],
+      maxChoices: 1,
+      votes: { A: 10, B: 5 },
+      myChoices: ["A"],
+    });
+  });
+
+  it("does not change mode on poll_state message", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      simulateMessage(
+        JSON.stringify({
+          type: MessageType.PollState,
+          pollId: "q1",
+          options: ["A"],
+          maxChoices: 1,
+          votes: {},
+          myChoices: [],
+        }),
+      );
+    });
+    expect(result.current.mode).toBe(MessageType.SlideSync);
+  });
+
+  it("updates pollState votes and myChoices on poll_error message", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      simulateMessage(
+        JSON.stringify({
+          type: MessageType.PollState,
+          pollId: "q1",
+          options: ["A", "B"],
+          maxChoices: 1,
+          votes: { A: 5 },
+          myChoices: [],
+        }),
+      );
+    });
+    act(() => {
+      simulateMessage(
+        JSON.stringify({
+          type: MessageType.PollError,
+          pollId: "q1",
+          error: "duplicate vote",
+          votes: { A: 6 },
+          myChoices: ["A"],
+        }),
+      );
+    });
+    expect(result.current.pollState?.votes).toEqual({ A: 6 });
+    expect(result.current.pollState?.myChoices).toEqual(["A"]);
+  });
+
+  it("ignores poll_error when no prior pollState exists", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      simulateMessage(
+        JSON.stringify({
+          type: MessageType.PollError,
+          pollId: "q1",
+          error: "not found",
+          votes: {},
+          myChoices: [],
+        }),
+      );
+    });
+    expect(result.current.pollState).toBeNull();
+  });
+
+  it("sends poll_get message via sendPollGet", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      result.current.sendPollGet("q1", ["A", "B"], 1);
+    });
+    expect(latest().sent).toEqual([
+      JSON.stringify({
+        action: "message",
+        type: "poll_get",
+        pollId: "q1",
+        options: ["A", "B"],
+        maxChoices: 1,
+      }),
+    ]);
+  });
+
+  it("sends poll_vote message via sendPollVote", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      result.current.sendPollVote("q1", "A");
+    });
+    expect(latest().sent).toEqual([
+      JSON.stringify({ action: "message", type: "poll_vote", pollId: "q1", choice: "A" }),
+    ]);
+  });
+
+  it("sends poll_unvote message via sendPollUnvote", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      result.current.sendPollUnvote("q1", "A");
+    });
+    expect(latest().sent).toEqual([
+      JSON.stringify({ action: "message", type: "poll_unvote", pollId: "q1", choice: "A" }),
+    ]);
+  });
+
+  it("sends poll_switch message via sendPollSwitch", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      result.current.sendPollSwitch("q1", "A", "B");
+    });
+    expect(latest().sent).toEqual([
+      JSON.stringify({
+        action: "message",
+        type: "poll_switch",
+        pollId: "q1",
+        from: "A",
+        to: "B",
+      }),
+    ]);
+  });
+
+  it("does not throw poll send functions after unmount", () => {
+    const { result, unmount } = renderPresenter();
+    unmount();
+    expect(() => result.current.sendPollGet("q1", ["A"], 1)).not.toThrow();
+    expect(() => result.current.sendPollVote("q1", "A")).not.toThrow();
+    expect(() => result.current.sendPollUnvote("q1", "A")).not.toThrow();
+    expect(() => result.current.sendPollSwitch("q1", "A", "B")).not.toThrow();
+  });
 });

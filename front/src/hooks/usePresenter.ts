@@ -4,6 +4,15 @@ import { MessageType, parsePresenterMessage, type PresenterMode } from "../api/p
 /** Maximum reconnection delay in milliseconds. */
 const MAX_DELAY = 8000;
 
+/** Snapshot of the current poll state received from the server. */
+export interface PollStateData {
+  pollId: string;
+  options: string[];
+  maxChoices: number;
+  votes: Record<string, number>;
+  myChoices: string[];
+}
+
 /** Return value of the usePresenter hook. */
 export interface UsePresenterResult {
   page: number;
@@ -11,8 +20,13 @@ export interface UsePresenterResult {
   instruction: string;
   placeholder: string;
   viewerCount: number;
+  pollState: PollStateData | null;
   sendSlideSync: (page: number) => void;
   sendHandsOn: (instruction: string, placeholder: string) => void;
+  sendPollGet: (pollId: string, options: string[], maxChoices: number) => void;
+  sendPollVote: (pollId: string, choice: string) => void;
+  sendPollUnvote: (pollId: string, choice: string) => void;
+  sendPollSwitch: (pollId: string, from: string, to: string) => void;
 }
 
 /** Dependencies injectable for testing. */
@@ -21,7 +35,7 @@ export interface UsePresenterDeps {
 }
 
 /**
- * Hook that manages a presenter WebSocket connection including page, mode, and viewer count.
+ * Hook that manages a presenter WebSocket connection including page, mode, viewer count, and poll state.
  * Connects on mount with auto-reconnect and disconnects on unmount.
  * @param wsUrl - WebSocket URL to connect to.
  * @param deps - Optional dependency overrides for testing.
@@ -36,6 +50,7 @@ export const usePresenter = (
   const [instruction, setInstruction] = useState("");
   const [placeholder, setPlaceholder] = useState("");
   const [viewerCount, setViewerCount] = useState(0);
+  const [pollState, setPollState] = useState<PollStateData | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -67,6 +82,20 @@ export const usePresenter = (
             break;
           case MessageType.ViewerCount:
             setViewerCount(msg.count);
+            break;
+          case MessageType.PollState:
+            setPollState({
+              pollId: msg.pollId,
+              options: msg.options,
+              maxChoices: msg.maxChoices,
+              votes: msg.votes,
+              myChoices: msg.myChoices,
+            });
+            break;
+          case MessageType.PollError:
+            setPollState((prev) =>
+              prev ? { ...prev, votes: msg.votes, myChoices: msg.myChoices } : prev,
+            );
             break;
         }
       };
@@ -109,5 +138,48 @@ export const usePresenter = (
     );
   }, []);
 
-  return { page, mode, instruction, placeholder, viewerCount, sendSlideSync, sendHandsOn };
+  /** Send a poll_get message to initialize or retrieve a poll. */
+  const sendPollGet = useCallback((pollId: string, options: string[], maxChoices: number): void => {
+    wsRef.current?.send(
+      JSON.stringify({
+        action: "message",
+        type: "poll_get",
+        pollId,
+        options,
+        maxChoices,
+      }),
+    );
+  }, []);
+
+  /** Send a poll_vote message to cast a vote. */
+  const sendPollVote = useCallback((pollId: string, choice: string): void => {
+    wsRef.current?.send(JSON.stringify({ action: "message", type: "poll_vote", pollId, choice }));
+  }, []);
+
+  /** Send a poll_unvote message to withdraw a vote. */
+  const sendPollUnvote = useCallback((pollId: string, choice: string): void => {
+    wsRef.current?.send(JSON.stringify({ action: "message", type: "poll_unvote", pollId, choice }));
+  }, []);
+
+  /** Send a poll_switch message to change a vote from one option to another. */
+  const sendPollSwitch = useCallback((pollId: string, from: string, to: string): void => {
+    wsRef.current?.send(
+      JSON.stringify({ action: "message", type: "poll_switch", pollId, from, to }),
+    );
+  }, []);
+
+  return {
+    page,
+    mode,
+    instruction,
+    placeholder,
+    viewerCount,
+    pollState,
+    sendSlideSync,
+    sendHandsOn,
+    sendPollGet,
+    sendPollVote,
+    sendPollUnvote,
+    sendPollSwitch,
+  };
 };
