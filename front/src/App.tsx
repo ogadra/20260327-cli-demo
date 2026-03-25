@@ -22,13 +22,15 @@ const App = (): ReactNode => {
     instruction,
     placeholder,
     viewerCount,
-    pollState,
+    pollStates,
     sendPollVote,
     sendPollUnvote,
     sendPollSwitch,
   } = usePresenter(wsUrl());
 
-  const pollId = pollState?.pollId ?? "";
+  const pollEntries = Object.entries(pollStates);
+  const pollId = pollEntries.length > 0 ? pollEntries[0][0] : "";
+  const pollState = pollId ? (pollStates[pollId] ?? null) : null;
 
   /** Wrap sendPollVote by binding the current pollId. */
   const handlePollVote = useCallback(
