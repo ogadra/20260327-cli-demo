@@ -10,18 +10,11 @@ import (
 	"github.com/ogadra/20260327-cli-demo/broker/store"
 )
 
-// errorReader は常にエラーを返す io.Reader。
-type errorReader struct{}
-
-// Read は常にエラーを返す。
-func (e *errorReader) Read(_ []byte) (int, error) {
-	return 0, errors.New("rand read error")
-}
-
 // mockRepository は store.Repository のモック実装。
 type mockRepository struct {
 	registerFn        func(ctx context.Context, runnerID, privateURL string) error
-	acquireIdleFn     func(ctx context.Context, sessionID string) (*model.Runner, error)
+	acquireIdleFn     func(ctx context.Context, sessionID string, bucket int) (*model.Runner, error)
+	bucketCountFn     func() int
 	findBySessionIDFn func(ctx context.Context, sessionID string) (*model.Runner, error)
 	findByIDFn        func(ctx context.Context, runnerID string) (*model.Runner, error)
 	deleteFn          func(ctx context.Context, runnerID string) error
@@ -33,8 +26,16 @@ func (m *mockRepository) Register(ctx context.Context, runnerID, privateURL stri
 }
 
 // AcquireIdle はモック AcquireIdle を呼び出す。
-func (m *mockRepository) AcquireIdle(ctx context.Context, sessionID string) (*model.Runner, error) {
-	return m.acquireIdleFn(ctx, sessionID)
+func (m *mockRepository) AcquireIdle(ctx context.Context, sessionID string, bucket int) (*model.Runner, error) {
+	return m.acquireIdleFn(ctx, sessionID, bucket)
+}
+
+// BucketCount はモック BucketCount を呼び出す。
+func (m *mockRepository) BucketCount() int {
+	if m.bucketCountFn != nil {
+		return m.bucketCountFn()
+	}
+	return 4
 }
 
 // FindBySessionID はモック FindBySessionID を呼び出す。
@@ -173,23 +174,11 @@ func TestDefaultSessionFn_Unique(t *testing.T) {
 	}
 }
 
-// TestDefaultSessionFn_RandReadError は rand.Reader がエラーを返す場合に defaultSessionFn がエラーを返すことを検証する。
-func TestDefaultSessionFn_RandReadError(t *testing.T) {
-	orig := randReader
-	t.Cleanup(func() { randReader = orig })
-	randReader = &errorReader{}
-
-	_, err := defaultSessionFn()
-	if err == nil {
-		t.Fatal("expected error")
-	}
-}
-
 // TestCreateSession_Success はセッション作成の成功ケースを検証する。
 func TestCreateSession_Success(t *testing.T) {
 	t.Parallel()
 	repo := &mockRepository{
-		acquireIdleFn: func(_ context.Context, sessionID string) (*model.Runner, error) {
+		acquireIdleFn: func(_ context.Context, sessionID string, _ int) (*model.Runner, error) {
 			if sessionID != "fixed-session" {
 				t.Errorf("sessionID = %q, want %q", sessionID, "fixed-session")
 			}
@@ -233,7 +222,7 @@ func TestCreateSession_SessionFnError(t *testing.T) {
 func TestCreateSession_AcquireIdleError(t *testing.T) {
 	t.Parallel()
 	repo := &mockRepository{
-		acquireIdleFn: func(_ context.Context, _ string) (*model.Runner, error) {
+		acquireIdleFn: func(_ context.Context, _ string, _ int) (*model.Runner, error) {
 			return nil, store.ErrNoIdleRunner
 		},
 	}
@@ -244,6 +233,27 @@ func TestCreateSession_AcquireIdleError(t *testing.T) {
 	_, err := svc.createSession(context.Background())
 	if !errors.Is(err, store.ErrNoIdleRunner) {
 		t.Fatalf("expected ErrNoIdleRunner, got: %v", err)
+	}
+}
+
+// TestCreateSession_AcquireIdleInternalError は AcquireIdle の内部エラーが即座に伝搬されることを検証する。
+func TestCreateSession_AcquireIdleInternalError(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepository{
+		acquireIdleFn: func(_ context.Context, _ string, _ int) (*model.Runner, error) {
+			return nil, errors.New("db error")
+		},
+	}
+	svc := NewBrokerService(repo, WithSessionFn(func() (string, error) {
+		return "sess-1", nil
+	}))
+
+	_, err := svc.createSession(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if err.Error() != "db error" {
+		t.Errorf("error = %q, want %q", err.Error(), "db error")
 	}
 }
 
@@ -414,7 +424,7 @@ func TestResolveSession_NotFound_CreatesNew(t *testing.T) {
 		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
 			return nil, store.ErrNotFound
 		},
-		acquireIdleFn: func(_ context.Context, sessionID string) (*model.Runner, error) {
+		acquireIdleFn: func(_ context.Context, sessionID string, _ int) (*model.Runner, error) {
 			return &model.Runner{
 				RunnerID:         "r2",
 				CurrentSessionID: sessionID,
@@ -464,7 +474,7 @@ func TestResolveSession_CreateError(t *testing.T) {
 		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
 			return nil, store.ErrNotFound
 		},
-		acquireIdleFn: func(_ context.Context, _ string) (*model.Runner, error) {
+		acquireIdleFn: func(_ context.Context, _ string, _ int) (*model.Runner, error) {
 			return nil, store.ErrNoIdleRunner
 		},
 	}
@@ -486,7 +496,7 @@ func TestResolveSession_EmptySessionID(t *testing.T) {
 			t.Fatal("FindBySessionID should not be called for empty session ID")
 			return nil, store.ErrNotFound
 		},
-		acquireIdleFn: func(_ context.Context, sessionID string) (*model.Runner, error) {
+		acquireIdleFn: func(_ context.Context, sessionID string, _ int) (*model.Runner, error) {
 			return &model.Runner{
 				RunnerID:         "r1",
 				CurrentSessionID: sessionID,
@@ -538,7 +548,7 @@ func TestResolveSession_ExistingUnhealthy_Reassigned(t *testing.T) {
 		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
 			return &model.Runner{RunnerID: "r-dead", PrivateURL: "http://10.0.0.1:8080"}, nil
 		},
-		acquireIdleFn: func(_ context.Context, sessionID string) (*model.Runner, error) {
+		acquireIdleFn: func(_ context.Context, sessionID string, _ int) (*model.Runner, error) {
 			return &model.Runner{
 				RunnerID:         "r-new",
 				CurrentSessionID: sessionID,
@@ -578,28 +588,29 @@ func TestResolveSession_ExistingUnhealthy_Reassigned(t *testing.T) {
 	}
 }
 
-// TestResolveSession_RetryOnUnhealthy はヘルスチェック失敗時にリトライして健全な runner を返すことを検証する。
+// TestResolveSession_RetryOnUnhealthy はヘルスチェック失敗時に次のバケットへ移り健全な runner を返すことを検証する。
 func TestResolveSession_RetryOnUnhealthy(t *testing.T) {
 	suppressLog(t)
 	acquireCount := 0
 	deleteCount := 0
 	repo := &mockRepository{
+		bucketCountFn: func() int { return 3 },
 		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
 			return nil, store.ErrNotFound
 		},
-		acquireIdleFn: func(_ context.Context, sessionID string) (*model.Runner, error) {
+		acquireIdleFn: func(_ context.Context, sessionID string, _ int) (*model.Runner, error) {
 			acquireCount++
-			if acquireCount <= 2 {
+			if acquireCount == 3 {
 				return &model.Runner{
-					RunnerID:         "r-dead-" + string(rune('0'+acquireCount)),
+					RunnerID:         "r-healthy",
 					CurrentSessionID: sessionID,
-					PrivateURL:       "http://10.0.0.1:8080",
+					PrivateURL:       "http://10.0.0.3:8080",
 				}, nil
 			}
 			return &model.Runner{
-				RunnerID:         "r-healthy",
+				RunnerID:         "r-dead-" + string(rune('0'+acquireCount)),
 				CurrentSessionID: sessionID,
-				PrivateURL:       "http://10.0.0.3:8080",
+				PrivateURL:       "http://10.0.0.1:8080",
 			}, nil
 		},
 		deleteFn: func(_ context.Context, _ string) error {
@@ -607,10 +618,8 @@ func TestResolveSession_RetryOnUnhealthy(t *testing.T) {
 			return nil
 		},
 	}
-	checkCount := 0
-	checker := &mockChecker{checkFn: func(_ context.Context, _ string) error {
-		checkCount++
-		if checkCount <= 2 {
+	checker := &mockChecker{checkFn: func(_ context.Context, url string) error {
+		if url == "http://10.0.0.1:8080" {
 			return errors.New("unreachable")
 		}
 		return nil
@@ -634,14 +643,15 @@ func TestResolveSession_RetryOnUnhealthy(t *testing.T) {
 	}
 }
 
-// TestResolveSession_AllUnhealthy は全ての runner が不健全な場合に ErrNoIdleRunner を返すことを検証する。
+// TestResolveSession_AllUnhealthy は全バケットの runner が不健全な場合に ErrNoIdleRunner を返すことを検証する。
 func TestResolveSession_AllUnhealthy(t *testing.T) {
 	suppressLog(t)
 	repo := &mockRepository{
+		bucketCountFn: func() int { return 2 },
 		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
 			return nil, store.ErrNotFound
 		},
-		acquireIdleFn: func(_ context.Context, sessionID string) (*model.Runner, error) {
+		acquireIdleFn: func(_ context.Context, sessionID string, _ int) (*model.Runner, error) {
 			return &model.Runner{
 				RunnerID:         "r-dead",
 				CurrentSessionID: sessionID,
@@ -686,7 +696,7 @@ func TestResolveSession_NilChecker_SkipsHealthcheck(t *testing.T) {
 func TestCreateSession_NilChecker(t *testing.T) {
 	t.Parallel()
 	repo := &mockRepository{
-		acquireIdleFn: func(_ context.Context, sessionID string) (*model.Runner, error) {
+		acquireIdleFn: func(_ context.Context, sessionID string, _ int) (*model.Runner, error) {
 			return &model.Runner{
 				RunnerID:         "r1",
 				CurrentSessionID: sessionID,

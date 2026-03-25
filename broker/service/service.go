@@ -3,23 +3,15 @@ package service
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"fmt"
-	"io"
 	"log"
+	"math/rand/v2"
 
 	"github.com/ogadra/20260327-cli-demo/broker/healthcheck"
 	"github.com/ogadra/20260327-cli-demo/broker/model"
 	"github.com/ogadra/20260327-cli-demo/broker/store"
 )
-
-// maxAcquireRetries はヘルスチェック失敗時の AcquireIdle リトライ回数上限。
-const maxAcquireRetries = 3
-
-// randReader はランダムバイト生成に使う io.Reader。テスト時に差し替える。
-var randReader io.Reader = rand.Reader
 
 // logPrintf はログ出力関数。テスト時に差し替える。
 var logPrintf = log.Printf
@@ -95,31 +87,36 @@ func NewBrokerService(repo store.Repository, opts ...Option) *BrokerService {
 	return s
 }
 
-// defaultSessionFn は crypto/rand で 16 バイトのランダム値を生成し hex 32 文字の文字列を返す。
+// defaultSessionFn は 16 バイトのランダム値を生成し hex 32 文字の文字列を返す。
 func defaultSessionFn() (string, error) {
 	b := make([]byte, 16)
-	if _, err := io.ReadFull(randReader, b); err != nil {
-		return "", fmt.Errorf("generate session id: %w", err)
+	for i := range b {
+		b[i] = byte(rand.IntN(256))
 	}
 	return hex.EncodeToString(b), nil
 }
 
-// createSession は idle runner を確保しヘルスチェックを行いセッションを作成する。
-// 不健全な runner は削除して最大 maxAcquireRetries 回リトライする。
+// createSession はセッション ID を生成し、全バケットを走査して健全な idle runner を確保しセッションを作成する。
+// checker が nil の場合はヘルスチェックをスキップし最初に見つかった runner を返す。
+// 不健全な runner は削除して次のバケットへ移る。
 func (s *BrokerService) createSession(ctx context.Context) (*CreateSessionResult, error) {
-	for range maxAcquireRetries {
-		sessionID, err := s.sessionFn()
+	sessionID, err := s.sessionFn()
+	if err != nil {
+		return nil, err
+	}
+	bc := s.repo.BucketCount()
+	start := rand.IntN(bc)
+	check := s.checker != nil
+	for i := range bc {
+		bucket := (start + i) % bc
+		runner, err := s.repo.AcquireIdle(ctx, sessionID, bucket)
+		if errors.Is(err, store.ErrNoIdleRunner) {
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
-		runner, err := s.repo.AcquireIdle(ctx, sessionID)
-		if err != nil {
-			return nil, err
-		}
-		if s.checker == nil {
-			return &CreateSessionResult{SessionID: sessionID, Runner: runner}, nil
-		}
-		if err := s.checker.Check(ctx, runner.PrivateURL); err == nil {
+		if !check || s.checker.Check(ctx, runner.PrivateURL) == nil {
 			return &CreateSessionResult{SessionID: sessionID, Runner: runner}, nil
 		}
 		logPrintf("healthcheck failed for runner %s, deleting stale record", runner.RunnerID)

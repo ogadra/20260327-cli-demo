@@ -25,9 +25,12 @@ var ErrConflict = errors.New("runner already exists with different attributes")
 type Repository interface {
 	// Register は runner を idle として登録する。privateURL は runner のプライベート URL。
 	Register(ctx context.Context, runnerID, privateURL string) error
-	// AcquireIdle は idle runner を1台確保し session を紐づける。
-	// バケット内で競合した場合は同じバケットで再試行し、空なら次のバケットへ移る。
-	AcquireIdle(ctx context.Context, sessionID string) (*model.Runner, error)
+	// AcquireIdle は指定バケットから idle runner を1台確保し session を紐づける。
+	// バケット内で競合した場合は同じバケット内で再試行する。
+	// バケットが空の場合は ErrNoIdleRunner を返す。
+	AcquireIdle(ctx context.Context, sessionID string, bucket int) (*model.Runner, error)
+	// BucketCount は idle runner のバケット数を返す。
+	BucketCount() int
 	// FindBySessionID は session ID から runner を検索する。
 	FindBySessionID(ctx context.Context, sessionID string) (*model.Runner, error)
 	// FindByID は runner ID から runner を検索する。
