@@ -7,11 +7,13 @@ interface Props {
   onSubmit: (command: string) => void;
   /** Whether the input is disabled. */
   disabled: boolean;
+  /** Placeholder text shown in the input field. */
+  placeholder?: string;
 }
 
 /** Text input with command history navigable via arrow keys. */
-const CommandInput = ({ onSubmit, disabled }: Props): ReactNode => {
-  const [value, setValue] = useState("");
+const CommandInput = ({ onSubmit, disabled, placeholder }: Props): ReactNode => {
+  const [value, setValue] = useState(placeholder ?? "");
   const inputRef = useRef<HTMLInputElement>(null);
   const historyRef = useRef<string[]>([]);
   const historyIndexRef = useRef(-1);
@@ -21,6 +23,10 @@ const CommandInput = ({ onSubmit, disabled }: Props): ReactNode => {
       inputRef.current?.focus();
     }
   }, [disabled]);
+
+  useEffect(() => {
+    setValue(placeholder ?? "");
+  }, [placeholder]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
@@ -60,7 +66,7 @@ const CommandInput = ({ onSubmit, disabled }: Props): ReactNode => {
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={handleKeyDown}
       disabled={disabled}
-      placeholder="Enter command..."
+      placeholder={placeholder ?? "Enter command..."}
       style={{
         width: "100%",
         padding: "8px",
