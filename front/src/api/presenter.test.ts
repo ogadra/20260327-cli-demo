@@ -203,7 +203,7 @@ describe("parsePresenterMessage", () => {
     ).toBeNull();
   });
 
-  it("returns null for poll_error with non-string votes values", () => {
+  it("returns null for poll_error with string votes values", () => {
     expect(
       parsePresenterMessage(
         JSON.stringify({
