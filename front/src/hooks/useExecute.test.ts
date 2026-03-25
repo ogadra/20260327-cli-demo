@@ -121,6 +121,27 @@ describe("useExecute", () => {
     expect(mockExecute).toHaveBeenCalledTimes(1);
   });
 
+  it("displays reassignment notification when onReassigned is called", async () => {
+    const { ref, writeln } = makeTerminalRef();
+
+    mockExecute.mockImplementation((_command: string, onReassigned?: () => void) => {
+      if (onReassigned) onReassigned();
+      return (async function* () {
+        yield { type: "complete" as const, exitCode: 0 };
+      })();
+    });
+
+    const { result } = renderHook(() => useExecute(true, ref));
+
+    await act(async () => {
+      await result.current.run("ls");
+    });
+
+    expect(writeln).toHaveBeenCalledWith(
+      "\x1b[33mSession was reassigned. Shell state has been reset.\x1b[0m",
+    );
+  });
+
   it("displays error message in terminal on execute failure", async () => {
     const { ref, write, writeln } = makeTerminalRef();
 

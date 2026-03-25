@@ -40,8 +40,12 @@ export const deleteSession = (): void => {
  * The session is identified by the session_id cookie sent automatically by the browser.
  * The reader is automatically cancelled if the consumer exits early.
  * @param command - The shell command to execute.
+ * @param onReassigned - Optional callback invoked when the session was reassigned due to a dead runner.
  */
-export async function* execute(command: string): AsyncGenerator<SseEvent> {
+export async function* execute(
+  command: string,
+  onReassigned?: () => void,
+): AsyncGenerator<SseEvent> {
   const res = await fetch("/api/execute", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -50,6 +54,10 @@ export async function* execute(command: string): AsyncGenerator<SseEvent> {
   });
   if (!res.ok) throw new Error(`Failed to execute: ${res.status}`);
   if (!res.body) throw new Error("No response body");
+
+  if (res.headers.get("X-Session-Reassigned") === "true" && onReassigned) {
+    onReassigned();
+  }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();

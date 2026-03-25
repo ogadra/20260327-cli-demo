@@ -32,7 +32,12 @@ export const useExecute = (
       terminalRef.current?.writeln(command);
 
       try {
-        for await (const event of execute(command)) {
+        const onReassigned = (): void => {
+          terminalRef.current?.writeln(
+            "\x1b[33mSession was reassigned. Shell state has been reset.\x1b[0m",
+          );
+        };
+        for await (const event of execute(command, onReassigned)) {
           handleEvent(event, terminalRef);
         }
       } catch (error) {
