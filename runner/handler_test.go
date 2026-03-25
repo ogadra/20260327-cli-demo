@@ -605,6 +605,23 @@ func TestExecuteWhitelistedSkipsValidator(t *testing.T) {
 	}
 }
 
+// TestHealth verifies that GET /health returns 200 OK with body "ok\n".
+func TestHealth(t *testing.T) {
+	sm := NewSessionManager()
+	handler := newHandler(sm, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if got := w.Body.String(); got != "ok\n" {
+		t.Fatalf("body = %q, want %q", got, "ok\n")
+	}
+}
+
 // parseSSEEvents parses a raw SSE response body into a slice of sseEvent.
 // It expects each event to be a "data: " line followed by a blank line.
 func parseSSEEvents(t *testing.T, body string) []sseEvent {
