@@ -201,6 +201,9 @@ func (h *messageHandler) handlePollGet(ctx context.Context, connectionID string,
 
 	state, err := h.pollGet.Get(ctx, msg.PollID, connectionID, msg.Options, msg.MaxChoices, isPresenter)
 	if err != nil {
+		if isPollBusinessError(err) {
+			return h.sendError(ctx, connectionID, err.Error())
+		}
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("poll_get: %w", err)
 	}
 
@@ -247,9 +250,14 @@ func (h *messageHandler) handlePollSwitch(ctx context.Context, connectionID stri
 }
 
 // handlePollError はアンケート操作エラーを処理する。業務エラーは poll_error を送信元に返す。
+// ErrPollNotFound の場合は状態再取得をスキップしてエラーメッセージのみ返す。
 func (h *messageHandler) handlePollError(ctx context.Context, connectionID, pollID, visitorID string, err error) (events.APIGatewayProxyResponse, error) {
 	if !isPollBusinessError(err) {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("poll operation: %w", err)
+	}
+
+	if errors.Is(err, poll.ErrPollNotFound) {
+		return h.sendError(ctx, connectionID, err.Error())
 	}
 
 	state, getErr := h.pollGet.Get(ctx, pollID, visitorID, nil, 0, false)
@@ -280,7 +288,9 @@ func (h *messageHandler) handlePollError(ctx context.Context, connectionID, poll
 func isPollBusinessError(err error) bool {
 	return errors.Is(err, poll.ErrMaxChoicesExceeded) ||
 		errors.Is(err, poll.ErrDuplicateVote) ||
-		errors.Is(err, poll.ErrVoteNotFound)
+		errors.Is(err, poll.ErrVoteNotFound) ||
+		errors.Is(err, poll.ErrInvalidChoice) ||
+		errors.Is(err, poll.ErrPollNotFound)
 }
 
 // refreshAndBroadcastPoll は最新のアンケート状態を取得してブロードキャストする。

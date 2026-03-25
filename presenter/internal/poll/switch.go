@@ -3,6 +3,7 @@ package poll
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -11,11 +12,20 @@ import (
 
 // Switch は投票を変更する。旧選択肢の削除、新選択肢の追加、カウンター更新を
 // TransactWriteItems でアトミックに実行する。
+// from または to が meta.Options に含まれない場合は ErrInvalidChoice を返す。
 func (s *Store) Switch(ctx context.Context, pollID, visitorID, from, to string) error {
+	meta, err := s.getMeta(ctx, pollID)
+	if err != nil {
+		return err
+	}
+	if !slices.Contains(meta.Options, from) || !slices.Contains(meta.Options, to) {
+		return ErrInvalidChoice
+	}
+
 	fromSK := visitorID + "#" + from
 	toSK := visitorID + "#" + to
 
-	_, err := s.client.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{
+	_, err = s.client.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{
 		TransactItems: []types.TransactWriteItem{
 			{
 				Delete: &types.Delete{

@@ -319,7 +319,7 @@ func TestHandle_PollGetConnError(t *testing.T) {
 	}
 }
 
-// TestHandle_PollGetError はアンケート取得エラーを検証する。
+// TestHandle_PollGetError はアンケート取得の内部エラーを検証する。
 func TestHandle_PollGetError(t *testing.T) {
 	t.Parallel()
 	h := &messageHandler{
@@ -338,6 +338,163 @@ func TestHandle_PollGetError(t *testing.T) {
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+// TestHandle_PollGetNotFound はアンケートが存在しない場合にエラーレスポンスを返すことを検証する。
+func TestHandle_PollGetNotFound(t *testing.T) {
+	t.Parallel()
+	var sentPayload []byte
+	h := &messageHandler{
+		connGetter: &mockConnectionGetter{
+			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
+				return &connection.Connection{Role: "viewer"}, nil
+			},
+		},
+		pollGet: &mockPollGetter{
+			getFn: func(_ context.Context, _, _ string, _ []string, _ int, _ bool) (*poll.PollState, error) {
+				return nil, poll.ErrPollNotFound
+			},
+		},
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
+				sentPayload = payload
+				return nil
+			},
+		},
+	}
+	req := newRequest("conn1", `{"type":"poll_get","pollId":"q1"}`)
+	resp, err := h.handle(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	var errResp errorResponse
+	if unmarshalErr := json.Unmarshal(sentPayload, &errResp); unmarshalErr != nil {
+		t.Fatalf("unmarshal error response: %v", unmarshalErr)
+	}
+	if errResp.Type != "error" {
+		t.Errorf("expected type error, got %s", errResp.Type)
+	}
+	if !strings.Contains(errResp.Error, "poll not found") {
+		t.Errorf("expected poll not found error, got %s", errResp.Error)
+	}
+}
+
+// TestHandle_PollVoteInvalidChoice は無効な選択肢での投票時の poll_error レスポンスを検証する。
+func TestHandle_PollVoteInvalidChoice(t *testing.T) {
+	t.Parallel()
+	var sentPayload []byte
+	h := &messageHandler{
+		pollVote: &mockPollVoter{
+			voteFn: func(_ context.Context, _, _, _ string) error {
+				return poll.ErrInvalidChoice
+			},
+		},
+		pollGet: &mockPollGetter{
+			getFn: func(_ context.Context, _, _ string, _ []string, _ int, _ bool) (*poll.PollState, error) {
+				return defaultPollState(), nil
+			},
+		},
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
+				sentPayload = payload
+				return nil
+			},
+		},
+	}
+	req := newRequest("conn1", `{"type":"poll_vote","pollId":"q1","choice":"C"}`)
+	resp, err := h.handle(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	var errResp pollErrorResponse
+	if unmarshalErr := json.Unmarshal(sentPayload, &errResp); unmarshalErr != nil {
+		t.Fatalf("unmarshal: %v", unmarshalErr)
+	}
+	if errResp.Type != "poll_error" {
+		t.Errorf("expected type poll_error, got %s", errResp.Type)
+	}
+}
+
+// TestHandle_PollVotePollNotFound は投票時にアンケートが存在しない場合のエラーレスポンスを検証する。
+func TestHandle_PollVotePollNotFound(t *testing.T) {
+	t.Parallel()
+	var sentPayload []byte
+	h := &messageHandler{
+		pollVote: &mockPollVoter{
+			voteFn: func(_ context.Context, _, _, _ string) error {
+				return poll.ErrPollNotFound
+			},
+		},
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
+				sentPayload = payload
+				return nil
+			},
+		},
+	}
+	req := newRequest("conn1", `{"type":"poll_vote","pollId":"q1","choice":"A"}`)
+	resp, err := h.handle(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	var errResp errorResponse
+	if unmarshalErr := json.Unmarshal(sentPayload, &errResp); unmarshalErr != nil {
+		t.Fatalf("unmarshal: %v", unmarshalErr)
+	}
+	if errResp.Type != "error" {
+		t.Errorf("expected type error, got %s", errResp.Type)
+	}
+	if !strings.Contains(errResp.Error, "poll not found") {
+		t.Errorf("expected poll not found error, got %s", errResp.Error)
+	}
+}
+
+// TestHandle_PollSwitchInvalidChoice は投票変更時に無効な選択肢の場合の poll_error レスポンスを検証する。
+func TestHandle_PollSwitchInvalidChoice(t *testing.T) {
+	t.Parallel()
+	var sentPayload []byte
+	h := &messageHandler{
+		pollSwitch: &mockPollSwitcher{
+			switchFn: func(_ context.Context, _, _, _, _ string) error {
+				return poll.ErrInvalidChoice
+			},
+		},
+		pollGet: &mockPollGetter{
+			getFn: func(_ context.Context, _, _ string, _ []string, _ int, _ bool) (*poll.PollState, error) {
+				return defaultPollState(), nil
+			},
+		},
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
+				sentPayload = payload
+				return nil
+			},
+		},
+	}
+	req := newRequest("conn1", `{"type":"poll_switch","pollId":"q1","from":"A","to":"C"}`)
+	resp, err := h.handle(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	var errResp pollErrorResponse
+	if unmarshalErr := json.Unmarshal(sentPayload, &errResp); unmarshalErr != nil {
+		t.Fatalf("unmarshal: %v", unmarshalErr)
+	}
+	if errResp.Type != "poll_error" {
+		t.Errorf("expected type poll_error, got %s", errResp.Type)
 	}
 }
 
@@ -917,6 +1074,8 @@ func TestIsPollBusinessError(t *testing.T) {
 		{"ErrMaxChoicesExceeded", poll.ErrMaxChoicesExceeded, true},
 		{"ErrDuplicateVote", poll.ErrDuplicateVote, true},
 		{"ErrVoteNotFound", poll.ErrVoteNotFound, true},
+		{"ErrInvalidChoice", poll.ErrInvalidChoice, true},
+		{"ErrPollNotFound", poll.ErrPollNotFound, true},
 		{"generic error", fmt.Errorf("other"), false},
 	}
 	for _, tt := range tests {
