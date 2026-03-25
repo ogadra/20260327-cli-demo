@@ -97,6 +97,57 @@ func TestClassifyValidated(t *testing.T) {
 	}
 }
 
+// TestClassifyNixRunWhitelisted verifies that nix run nixpkgs# commands
+// are classified as "whitelisted" when they contain no shell metacharacters.
+func TestClassifyNixRunWhitelisted(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		name string
+	}{
+		{"nix run nixpkgs#hello", "bare nix run nixpkgs"},
+		{"nix run nixpkgs#jq -- --help", "nix run with trailing args"},
+		{"  nix run nixpkgs#hello  ", "nix run with surrounding spaces"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := classifyCommand(tc.cmd)
+			if got != "whitelisted" {
+				t.Errorf("classifyCommand(%q) = %q, want %q", tc.cmd, got, "whitelisted")
+			}
+		})
+	}
+}
+
+// TestClassifyNixRunValidated verifies that nix run commands targeting non-nixpkgs
+// flake refs or containing shell metacharacters are classified as "validated".
+func TestClassifyNixRunValidated(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		name string
+	}{
+		{"nix run github:user/repo#pkg", "non-nixpkgs flake ref"},
+		{"nix run nixpkgs#hello; rm -rf /", "semicolon chaining"},
+		{"nix run nixpkgs#hello && echo pwned", "ampersand chaining"},
+		{"nix run nixpkgs#hello | cat", "pipe operator"},
+		{"nix run nixpkgs#$(echo evil)", "command substitution dollar"},
+		{"nix run nixpkgs#`echo evil`", "command substitution backtick"},
+		{"nix run nixpkgs#hello\nrm -rf /", "newline injection"},
+		{"nix run nixpkgs#hello\recho pwned", "carriage return injection"},
+		{"nix run nixpkgs#hello > /tmp/output", "redirect output"},
+		{"nix run nixpkgs#hello < /etc/passwd", "redirect input"},
+		{"nix run nixpkgs#hello >> /tmp/output", "redirect append"},
+		{"nix run nixpkgs#hello\techo pwned", "tab injection"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := classifyCommand(tc.cmd)
+			if got != "validated" {
+				t.Errorf("classifyCommand(%q) = %q, want %q", tc.cmd, got, "validated")
+			}
+		})
+	}
+}
+
 // TestClassifyChainedCommands verifies that chained commands using shell operators
 // are classified as "validated" because the full string does not match a bare command.
 func TestClassifyChainedCommands(t *testing.T) {
