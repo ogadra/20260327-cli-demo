@@ -81,18 +81,25 @@ describe("App", () => {
     expect(handsOnMode.style.display).toBe("none");
   });
 
-  it("shows hands-on placeholder with default text", () => {
+  it("hides instruction block when instruction is empty", () => {
     render(<App />);
-    expect(screen.getByTestId("hands-on-placeholder").textContent).toBe(
-      "まもなくハンズオンが始まります",
-    );
+    expect(screen.queryByTestId("instruction")).toBeNull();
   });
 
-  it("shows placeholder text when provided", () => {
-    mockPresenter.placeholder = "$ echo hello";
+  it("shows instruction block when instruction is provided", () => {
+    mockPresenter.instruction = "echo hello を実行してみよう";
     render(<App />);
-    expect(screen.getByTestId("hands-on-placeholder").textContent).toBe("$ echo hello");
+    expect(screen.getByTestId("instruction").textContent).toBe("echo hello を実行してみよう");
+    mockPresenter.instruction = "";
+  });
+
+  it("passes placeholder to command input", () => {
+    mockPresenter.placeholder = "$ echo hello";
+    mockPresenter.mode = MessageType.HandsOn;
+    render(<App />);
+    expect(screen.getByPlaceholderText("$ echo hello")).toBeInTheDocument();
     mockPresenter.placeholder = "";
+    mockPresenter.mode = MessageType.SlideSync;
   });
 
   it("shows hands-on mode when mode is hands_on", () => {

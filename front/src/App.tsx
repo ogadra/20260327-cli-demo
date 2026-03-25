@@ -16,7 +16,7 @@ const App = (): ReactNode => {
   const ready = useSession();
   const terminalRef = useRef<TerminalHandle>(null);
   const { run, running } = useExecute(ready, terminalRef);
-  const { page, mode, placeholder, viewerCount } = usePresenter(wsUrl());
+  const { page, mode, instruction, placeholder, viewerCount } = usePresenter(wsUrl());
 
   useEffect(() => {
     if (ready) {
@@ -52,19 +52,21 @@ const App = (): ReactNode => {
         <div style={{ flexGrow: 1, overflow: "hidden" }}>
           <SlideView page={page} />
         </div>
-        <div
-          data-testid="hands-on-placeholder"
-          style={{
-            padding: "16px",
-            textAlign: "center",
-            color: "#888",
-            fontSize: "14px",
-            fontFamily: "sans-serif",
-            borderTop: "1px solid #333",
-          }}
-        >
-          {placeholder || "まもなくハンズオンが始まります"}
-        </div>
+        {instruction && (
+          <div
+            data-testid="instruction"
+            style={{
+              padding: "16px",
+              textAlign: "center",
+              color: "#888",
+              fontSize: "14px",
+              fontFamily: "sans-serif",
+              borderTop: "1px solid #333",
+            }}
+          >
+            {instruction}
+          </div>
+        )}
       </div>
 
       <div
@@ -75,7 +77,11 @@ const App = (): ReactNode => {
           height: "100%",
         }}
       >
-        <CommandInput onSubmit={run} disabled={!ready || running} />
+        <CommandInput
+          onSubmit={run}
+          disabled={!ready || running}
+          placeholder={placeholder || undefined}
+        />
         <Terminal ref={terminalRef} />
       </div>
     </div>
