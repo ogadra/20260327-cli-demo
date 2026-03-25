@@ -17,6 +17,7 @@ import (
 
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/broadcast"
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/connection"
+	"github.com/ogadra/20260327-cli-demo/presenter/internal/viewercount"
 )
 
 // fatalf はエラー時の終了処理。テスト時に差し替える。
@@ -64,12 +65,6 @@ type messageBroadcaster interface {
 	Send(ctx context.Context, room string, payload []byte, excludeConnectionID string) error
 }
 
-// viewerCountMessage は接続数通知メッセージ。
-type viewerCountMessage struct {
-	Type  string `json:"type"`
-	Count int    `json:"count"`
-}
-
 // extractCookie は cookie ヘッダーから指定した名前の値を取得する。
 func extractCookie(cookieHeader, name string) string {
 	header := http.Header{}
@@ -114,7 +109,7 @@ func (h *connectHandler) handle(ctx context.Context, req events.APIGatewayWebsoc
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("count connections: %w", err)
 	}
 
-	msg := viewerCountMessage{Type: "viewer_count", Count: count}
+	msg := viewercount.ViewerCountMessage{Type: "viewer_count", Count: count}
 	payload, err := jsonMarshal(msg)
 	if err != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("marshal viewer_count: %w", err)
