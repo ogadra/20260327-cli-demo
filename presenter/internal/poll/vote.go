@@ -3,18 +3,23 @@ package poll
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
-// Vote は投票を記録する。maxChoices 超過と重複投票を防止する。
+// Vote は投票を記録する。maxChoices 超過、重複投票、無効な選択肢を防止する。
 // 投票レコードの追加とカウンター更新を TransactWriteItems でアトミックに実行する。
 func (s *Store) Vote(ctx context.Context, pollID, visitorID, choice string) error {
 	meta, err := s.getMeta(ctx, pollID)
 	if err != nil {
 		return err
+	}
+
+	if !slices.Contains(meta.Options, choice) {
+		return ErrInvalidChoice
 	}
 
 	myChoices, err := s.getMyChoices(ctx, pollID, visitorID)
@@ -46,12 +51,13 @@ func (s *Store) Vote(ctx context.Context, pollID, visitorID, choice string) erro
 						"pollId":       &types.AttributeValueMemberS{Value: pollID},
 						"connectionId": &types.AttributeValueMemberS{Value: metaSK},
 					},
-					UpdateExpression: aws.String("ADD votes.#choice :one"),
+					UpdateExpression: aws.String("SET votes.#choice = if_not_exists(votes.#choice, :zero) + :one"),
 					ExpressionAttributeNames: map[string]string{
 						"#choice": choice,
 					},
 					ExpressionAttributeValues: map[string]types.AttributeValue{
-						":one": &types.AttributeValueMemberN{Value: "1"},
+						":zero": &types.AttributeValueMemberN{Value: "0"},
+						":one":  &types.AttributeValueMemberN{Value: "1"},
 					},
 				},
 			},

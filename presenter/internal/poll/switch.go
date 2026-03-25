@@ -45,14 +45,14 @@ func (s *Store) Switch(ctx context.Context, pollID, visitorID, from, to string) 
 						"pollId":       &types.AttributeValueMemberS{Value: pollID},
 						"connectionId": &types.AttributeValueMemberS{Value: metaSK},
 					},
-					UpdateExpression: aws.String("ADD votes.#from :negone, votes.#to :one"),
+					UpdateExpression: aws.String("SET votes.#from = if_not_exists(votes.#from, :zero) - :one, votes.#to = if_not_exists(votes.#to, :zero) + :one"),
 					ExpressionAttributeNames: map[string]string{
 						"#from": from,
 						"#to":   to,
 					},
 					ExpressionAttributeValues: map[string]types.AttributeValue{
-						":negone": &types.AttributeValueMemberN{Value: "-1"},
-						":one":    &types.AttributeValueMemberN{Value: "1"},
+						":zero": &types.AttributeValueMemberN{Value: "0"},
+						":one":  &types.AttributeValueMemberN{Value: "1"},
 					},
 				},
 			},

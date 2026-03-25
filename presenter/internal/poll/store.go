@@ -74,6 +74,9 @@ var ErrVoteNotFound = errors.New("vote not found")
 // ErrPollNotFound はアンケートが存在しない場合のエラー。
 var ErrPollNotFound = errors.New("poll not found")
 
+// ErrInvalidChoice は無効な選択肢の場合のエラー。
+var ErrInvalidChoice = errors.New("invalid choice")
+
 // metaSK は META レコードのソートキー。
 const metaSK = "META"
 

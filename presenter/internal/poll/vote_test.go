@@ -97,6 +97,22 @@ func TestVote_DuplicateVote(t *testing.T) {
 	}
 }
 
+// TestVote_InvalidChoice は無効な選択肢を検証する。
+func TestVote_InvalidChoice(t *testing.T) {
+	t.Parallel()
+	meta := metaItem("q1", []string{"A", "B"}, 2, map[string]int{"A": 0, "B": 0})
+	client := &mockDynamoDBAPI{
+		getItemFn: func(_ context.Context, _ *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+			return &dynamodb.GetItemOutput{Item: meta}, nil
+		},
+	}
+	s := NewStore(client, "table")
+	err := s.Vote(context.Background(), "q1", "visitor1", "C")
+	if err != ErrInvalidChoice {
+		t.Errorf("expected ErrInvalidChoice, got %v", err)
+	}
+}
+
 // TestVote_GetMetaError は getMeta エラーを検証する。
 func TestVote_GetMetaError(t *testing.T) {
 	t.Parallel()

@@ -32,12 +32,13 @@ func (s *Store) Unvote(ctx context.Context, pollID, visitorID, choice string) er
 						"pollId":       &types.AttributeValueMemberS{Value: pollID},
 						"connectionId": &types.AttributeValueMemberS{Value: metaSK},
 					},
-					UpdateExpression: aws.String("ADD votes.#choice :negone"),
+					UpdateExpression: aws.String("SET votes.#choice = if_not_exists(votes.#choice, :zero) - :one"),
 					ExpressionAttributeNames: map[string]string{
 						"#choice": choice,
 					},
 					ExpressionAttributeValues: map[string]types.AttributeValue{
-						":negone": &types.AttributeValueMemberN{Value: "-1"},
+						":zero": &types.AttributeValueMemberN{Value: "0"},
+						":one":  &types.AttributeValueMemberN{Value: "1"},
 					},
 				},
 			},
