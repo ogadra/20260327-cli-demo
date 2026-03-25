@@ -309,13 +309,23 @@ func TestAcquireIdle_QueryError(t *testing.T) {
 	}
 }
 
+// assertBucket は QueryInput のバケットバインディングを検証するヘルパー。
+func assertBucket(t *testing.T, params *dynamodb.QueryInput, want string) {
+	t.Helper()
+	got, ok := params.ExpressionAttributeValues[":b"].(*types.AttributeValueMemberS)
+	if !ok || got.Value != want {
+		t.Fatalf("bucket binding = %v, want %q", params.ExpressionAttributeValues[":b"], want)
+	}
+}
+
 // TestAcquireIdle_RetryWithinBucket は同一バケット内で競合時にリトライすることを検証する。
 func TestAcquireIdle_RetryWithinBucket(t *testing.T) {
 	t.Parallel()
 	queryCount := 0
 	updateCount := 0
 	mock := &mockDynamoDBAPI{
-		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+		queryFn: func(_ context.Context, params *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			assertBucket(t, params, "bucket-0")
 			queryCount++
 			if queryCount <= 2 {
 				return &dynamodb.QueryOutput{
@@ -359,7 +369,8 @@ func TestAcquireIdle_ConflictThenBucketEmpty(t *testing.T) {
 	t.Parallel()
 	queryCount := 0
 	mock := &mockDynamoDBAPI{
-		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+		queryFn: func(_ context.Context, params *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			assertBucket(t, params, "bucket-0")
 			queryCount++
 			if queryCount == 1 {
 				return &dynamodb.QueryOutput{
@@ -393,7 +404,8 @@ func TestAcquireIdle_StaleGSI(t *testing.T) {
 	t.Parallel()
 	queryCount := 0
 	mock := &mockDynamoDBAPI{
-		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+		queryFn: func(_ context.Context, params *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			assertBucket(t, params, "bucket-0")
 			queryCount++
 			return &dynamodb.QueryOutput{
 				Items: []map[string]types.AttributeValue{

@@ -3,15 +3,21 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"io"
 	"log"
-	"math/rand/v2"
+	mrand "math/rand/v2"
 
 	"github.com/ogadra/20260327-cli-demo/broker/healthcheck"
 	"github.com/ogadra/20260327-cli-demo/broker/model"
 	"github.com/ogadra/20260327-cli-demo/broker/store"
 )
+
+// randReader はセッション ID 生成に使う暗号学的乱数ソース。テスト時に差し替える。
+var randReader io.Reader = rand.Reader
 
 // logPrintf はログ出力関数。テスト時に差し替える。
 var logPrintf = log.Printf
@@ -87,40 +93,49 @@ func NewBrokerService(repo store.Repository, opts ...Option) *BrokerService {
 	return s
 }
 
-// defaultSessionFn は 16 バイトのランダム値を生成し hex 32 文字の文字列を返す。
+// defaultSessionFn は crypto/rand で 16 バイトの暗号学的ランダム値を生成し hex 32 文字の文字列を返す。
 func defaultSessionFn() (string, error) {
 	b := make([]byte, 16)
-	for i := range b {
-		b[i] = byte(rand.IntN(256))
+	if _, err := io.ReadFull(randReader, b); err != nil {
+		return "", fmt.Errorf("generate session id: %w", err)
 	}
 	return hex.EncodeToString(b), nil
 }
 
 // createSession はセッション ID を生成し、全バケットを走査して健全な idle runner を確保しセッションを作成する。
 // checker が nil の場合はヘルスチェックをスキップし最初に見つかった runner を返す。
-// 不健全な runner は削除して次のバケットへ移る。
+// 不健全な runner は削除して同じバケット内で再試行し、バケットが空になったら次のバケットへ移る。
 func (s *BrokerService) createSession(ctx context.Context) (*CreateSessionResult, error) {
 	sessionID, err := s.sessionFn()
 	if err != nil {
 		return nil, err
 	}
 	bc := s.repo.BucketCount()
-	start := rand.IntN(bc)
+	start := mrand.IntN(bc)
 	check := s.checker != nil
 	for i := range bc {
 		bucket := (start + i) % bc
-		runner, err := s.repo.AcquireIdle(ctx, sessionID, bucket)
-		if errors.Is(err, store.ErrNoIdleRunner) {
-			continue
+		for {
+			runner, err := s.repo.AcquireIdle(ctx, sessionID, bucket)
+			if errors.Is(err, store.ErrNoIdleRunner) {
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
+			if !check {
+				return &CreateSessionResult{SessionID: sessionID, Runner: runner}, nil
+			}
+			if checkErr := s.checker.Check(ctx, runner.PrivateURL); checkErr == nil {
+				return &CreateSessionResult{SessionID: sessionID, Runner: runner}, nil
+			} else if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			logPrintf("healthcheck failed for runner %s, deleting stale record", runner.RunnerID)
+			if err := s.repo.Delete(ctx, runner.RunnerID); err != nil {
+				return nil, fmt.Errorf("delete unhealthy runner %s: %w", runner.RunnerID, err)
+			}
 		}
-		if err != nil {
-			return nil, err
-		}
-		if !check || s.checker.Check(ctx, runner.PrivateURL) == nil {
-			return &CreateSessionResult{SessionID: sessionID, Runner: runner}, nil
-		}
-		logPrintf("healthcheck failed for runner %s, deleting stale record", runner.RunnerID)
-		_ = s.repo.Delete(ctx, runner.RunnerID)
 	}
 	return nil, store.ErrNoIdleRunner
 }
@@ -147,9 +162,13 @@ func (s *BrokerService) ResolveSession(ctx context.Context, sessionID string) (*
 			}
 			if checkErr := s.checker.Check(ctx, runner.PrivateURL); checkErr == nil {
 				return &ResolveResult{SessionID: sessionID, RunnerURL: runner.PrivateURL, Created: false}, nil
+			} else if ctx.Err() != nil {
+				return nil, ctx.Err()
 			}
 			logPrintf("healthcheck failed for runner %s, deleting stale record", runner.RunnerID)
-			_ = s.repo.Delete(ctx, runner.RunnerID)
+			if err := s.repo.Delete(ctx, runner.RunnerID); err != nil {
+				return nil, fmt.Errorf("delete unhealthy runner %s: %w", runner.RunnerID, err)
+			}
 			reassigned = true
 		} else if !errors.Is(err, store.ErrNotFound) {
 			return nil, err
