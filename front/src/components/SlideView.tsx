@@ -1,13 +1,32 @@
 import type { ReactNode } from "react";
 import slides from "../slides/index";
+import type { PollStateData } from "../hooks/usePresenter";
 
 /** Props for the SlideView component. */
 interface SlideViewProps {
   page: number;
+  pollState: PollStateData | null;
+  onPollVote: (choice: string) => void;
+  onPollUnvote: (choice: string) => void;
+  onPollSwitch: (from: string, to: string) => void;
+}
+
+/** Props passed to each slide component. */
+export interface SlideProps {
+  pollState: PollStateData | null;
+  onPollVote: (choice: string) => void;
+  onPollUnvote: (choice: string) => void;
+  onPollSwitch: (from: string, to: string) => void;
 }
 
 /** Renders the slide component corresponding to the given page number. */
-const SlideView = ({ page }: SlideViewProps): ReactNode => {
+const SlideView = ({
+  page,
+  pollState,
+  onPollVote,
+  onPollUnvote,
+  onPollSwitch,
+}: SlideViewProps): ReactNode => {
   const Slide = slides[page];
   if (!Slide) {
     return (
@@ -30,7 +49,12 @@ const SlideView = ({ page }: SlideViewProps): ReactNode => {
   }
   return (
     <div data-testid="slide-content" style={{ width: "100%", height: "100%" }}>
-      <Slide />
+      <Slide
+        pollState={pollState}
+        onPollVote={onPollVote}
+        onPollUnvote={onPollUnvote}
+        onPollSwitch={onPollSwitch}
+      />
     </div>
   );
 };
