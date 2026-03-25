@@ -118,9 +118,9 @@ func TestClassifyNixRunWhitelisted(t *testing.T) {
 	}
 }
 
-// TestClassifyNixRunRejected verifies that nix run commands targeting non-nixpkgs
+// TestClassifyNixRunValidated verifies that nix run commands targeting non-nixpkgs
 // flake refs or containing shell metacharacters are classified as "validated".
-func TestClassifyNixRunRejected(t *testing.T) {
+func TestClassifyNixRunValidated(t *testing.T) {
 	cases := []struct {
 		cmd  string
 		name string
@@ -136,6 +136,7 @@ func TestClassifyNixRunRejected(t *testing.T) {
 		{"nix run nixpkgs#hello > /tmp/output", "redirect output"},
 		{"nix run nixpkgs#hello < /etc/passwd", "redirect input"},
 		{"nix run nixpkgs#hello >> /tmp/output", "redirect append"},
+		{"nix run nixpkgs#hello\techo pwned", "tab injection"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

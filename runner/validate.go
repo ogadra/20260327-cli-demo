@@ -19,7 +19,7 @@ var whitelistedCommands = map[string]bool{
 }
 
 // shellMetaChars matches shell operators that could be used to chain commands.
-var shellMetaChars = regexp.MustCompile(`[;|&<>\n\r` + "`" + `]|\$\(`)
+var shellMetaChars = regexp.MustCompile(`[;|&<>\t\n\r` + "`" + `]|\$\(`)
 
 // classifyCommand returns the classification of a command for audit logging.
 // It returns "whitelisted" if the trimmed command exactly matches a bare
