@@ -189,13 +189,17 @@ func (h *messageHandler) handleViewerCount(ctx context.Context, connectionID str
 
 // handlePollGet はアンケート状態取得メッセージを処理する。
 func (h *messageHandler) handlePollGet(ctx context.Context, connectionID string, msg incomingMessage) (events.APIGatewayProxyResponse, error) {
+	if msg.PollID == "" {
+		return h.sendError(ctx, connectionID, "pollId is required")
+	}
+
 	conn, err := h.connGetter.Get(ctx, room, connectionID)
 	if err != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("get connection: %w", err)
 	}
 	isPresenter := conn.Role == "presenter"
 
-	state, err := h.pollGet.Get(ctx, msg.PollID, msg.VisitorID, msg.Options, msg.MaxChoices, isPresenter)
+	state, err := h.pollGet.Get(ctx, msg.PollID, connectionID, msg.Options, msg.MaxChoices, isPresenter)
 	if err != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("poll_get: %w", err)
 	}
@@ -205,29 +209,38 @@ func (h *messageHandler) handlePollGet(ctx context.Context, connectionID string,
 
 // handlePollVote は投票メッセージを処理する。
 func (h *messageHandler) handlePollVote(ctx context.Context, connectionID string, msg incomingMessage) (events.APIGatewayProxyResponse, error) {
-	err := h.pollVote.Vote(ctx, msg.PollID, msg.VisitorID, msg.Choice)
-	if err != nil {
-		return h.handlePollError(ctx, connectionID, msg.PollID, msg.VisitorID, err)
+	if msg.PollID == "" || msg.Choice == "" {
+		return h.sendError(ctx, connectionID, "pollId and choice are required")
 	}
-	return h.refreshAndBroadcastPoll(ctx, msg.PollID, msg.VisitorID)
+	err := h.pollVote.Vote(ctx, msg.PollID, connectionID, msg.Choice)
+	if err != nil {
+		return h.handlePollError(ctx, connectionID, msg.PollID, connectionID, err)
+	}
+	return h.refreshAndBroadcastPoll(ctx, msg.PollID, connectionID)
 }
 
 // handlePollUnvote は投票取消メッセージを処理する。
 func (h *messageHandler) handlePollUnvote(ctx context.Context, connectionID string, msg incomingMessage) (events.APIGatewayProxyResponse, error) {
-	err := h.pollUnvote.Unvote(ctx, msg.PollID, msg.VisitorID, msg.Choice)
-	if err != nil {
-		return h.handlePollError(ctx, connectionID, msg.PollID, msg.VisitorID, err)
+	if msg.PollID == "" || msg.Choice == "" {
+		return h.sendError(ctx, connectionID, "pollId and choice are required")
 	}
-	return h.refreshAndBroadcastPoll(ctx, msg.PollID, msg.VisitorID)
+	err := h.pollUnvote.Unvote(ctx, msg.PollID, connectionID, msg.Choice)
+	if err != nil {
+		return h.handlePollError(ctx, connectionID, msg.PollID, connectionID, err)
+	}
+	return h.refreshAndBroadcastPoll(ctx, msg.PollID, connectionID)
 }
 
 // handlePollSwitch は投票変更メッセージを処理する。
 func (h *messageHandler) handlePollSwitch(ctx context.Context, connectionID string, msg incomingMessage) (events.APIGatewayProxyResponse, error) {
-	err := h.pollSwitch.Switch(ctx, msg.PollID, msg.VisitorID, msg.From, msg.To)
-	if err != nil {
-		return h.handlePollError(ctx, connectionID, msg.PollID, msg.VisitorID, err)
+	if msg.PollID == "" || msg.From == "" || msg.To == "" {
+		return h.sendError(ctx, connectionID, "pollId, from, and to are required")
 	}
-	return h.refreshAndBroadcastPoll(ctx, msg.PollID, msg.VisitorID)
+	err := h.pollSwitch.Switch(ctx, msg.PollID, connectionID, msg.From, msg.To)
+	if err != nil {
+		return h.handlePollError(ctx, connectionID, msg.PollID, connectionID, err)
+	}
+	return h.refreshAndBroadcastPoll(ctx, msg.PollID, connectionID)
 }
 
 // handlePollError はアンケート操作エラーを処理する。業務エラーは poll_error を送信元に返す。

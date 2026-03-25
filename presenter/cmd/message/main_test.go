@@ -1014,6 +1014,121 @@ func TestViewerCountAdapter_SendToOneError(t *testing.T) {
 	}
 }
 
+// TestHandlePollGet_MissingPollID は pollId 未指定時のエラーを検証する。
+func TestHandlePollGet_MissingPollID(t *testing.T) {
+	t.Parallel()
+	var sentPayload []byte
+	h := &messageHandler{
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
+				sentPayload = payload
+				return nil
+			},
+		},
+	}
+	req := newRequest("conn1", `{"type":"poll_get"}`)
+	resp, err := h.handle(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if !contains(string(sentPayload), "pollId is required") {
+		t.Errorf("expected validation error, got %s", string(sentPayload))
+	}
+}
+
+// TestHandlePollVote_MissingFields は pollId/choice 未指定時のエラーを検証する。
+func TestHandlePollVote_MissingFields(t *testing.T) {
+	t.Parallel()
+	var sentPayload []byte
+	h := &messageHandler{
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
+				sentPayload = payload
+				return nil
+			},
+		},
+	}
+	req := newRequest("conn1", `{"type":"poll_vote","pollId":"q1"}`)
+	resp, err := h.handle(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if !contains(string(sentPayload), "required") {
+		t.Errorf("expected validation error, got %s", string(sentPayload))
+	}
+}
+
+// TestHandlePollUnvote_MissingFields は pollId/choice 未指定時のエラーを検証する。
+func TestHandlePollUnvote_MissingFields(t *testing.T) {
+	t.Parallel()
+	var sentPayload []byte
+	h := &messageHandler{
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
+				sentPayload = payload
+				return nil
+			},
+		},
+	}
+	req := newRequest("conn1", `{"type":"poll_unvote","pollId":"q1"}`)
+	resp, err := h.handle(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if !contains(string(sentPayload), "required") {
+		t.Errorf("expected validation error, got %s", string(sentPayload))
+	}
+}
+
+// TestHandlePollSwitch_MissingFields は pollId/from/to 未指定時のエラーを検証する。
+func TestHandlePollSwitch_MissingFields(t *testing.T) {
+	t.Parallel()
+	var sentPayload []byte
+	h := &messageHandler{
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
+				sentPayload = payload
+				return nil
+			},
+		},
+	}
+	req := newRequest("conn1", `{"type":"poll_switch","pollId":"q1","from":"A"}`)
+	resp, err := h.handle(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if !contains(string(sentPayload), "required") {
+		t.Errorf("expected validation error, got %s", string(sentPayload))
+	}
+}
+
+// contains は文字列に部分文字列が含まれるかを判定するヘルパー。
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstr(s, substr))
+}
+
+// containsSubstr は strings.Contains の代替。strings パッケージを import せずに使う。
+func containsSubstr(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 // TestMain_Error は main 関数のエラー処理を検証する。
 func TestMain_Error(t *testing.T) {
 	origRunFn := runFn
