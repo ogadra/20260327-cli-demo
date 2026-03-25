@@ -56,4 +56,118 @@ describe("parsePresenterMessage", () => {
       ),
     ).toBeNull();
   });
+
+  it("parses poll_state message", () => {
+    const msg = {
+      type: MessageType.PollState,
+      pollId: "q1",
+      options: ["A", "B"],
+      maxChoices: 1,
+      votes: { A: 10, B: 5 },
+      myChoices: ["A"],
+    };
+    expect(parsePresenterMessage(JSON.stringify(msg))).toEqual(msg);
+  });
+
+  it("parses poll_error message", () => {
+    const msg = {
+      type: MessageType.PollError,
+      pollId: "q1",
+      error: "duplicate vote",
+      votes: { A: 10 },
+      myChoices: ["A"],
+    };
+    expect(parsePresenterMessage(JSON.stringify(msg))).toEqual(msg);
+  });
+
+  it("returns null for poll_state with missing fields", () => {
+    expect(
+      parsePresenterMessage(JSON.stringify({ type: MessageType.PollState, pollId: "q1" })),
+    ).toBeNull();
+  });
+
+  it("returns null for poll_state with wrong field types", () => {
+    expect(
+      parsePresenterMessage(
+        JSON.stringify({
+          type: MessageType.PollState,
+          pollId: 123,
+          options: ["A"],
+          maxChoices: 1,
+          votes: {},
+          myChoices: [],
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null for poll_state with non-string options", () => {
+    expect(
+      parsePresenterMessage(
+        JSON.stringify({
+          type: MessageType.PollState,
+          pollId: "q1",
+          options: [1, 2],
+          maxChoices: 1,
+          votes: {},
+          myChoices: [],
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null for poll_state with non-number votes values", () => {
+    expect(
+      parsePresenterMessage(
+        JSON.stringify({
+          type: MessageType.PollState,
+          pollId: "q1",
+          options: ["A"],
+          maxChoices: 1,
+          votes: { A: "ten" },
+          myChoices: [],
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null for poll_state with non-string myChoices", () => {
+    expect(
+      parsePresenterMessage(
+        JSON.stringify({
+          type: MessageType.PollState,
+          pollId: "q1",
+          options: ["A"],
+          maxChoices: 1,
+          votes: {},
+          myChoices: [1],
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null for poll_error with missing error field", () => {
+    expect(
+      parsePresenterMessage(
+        JSON.stringify({
+          type: MessageType.PollError,
+          pollId: "q1",
+          votes: {},
+          myChoices: [],
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("parses poll_state with empty collections", () => {
+    const msg = {
+      type: MessageType.PollState,
+      pollId: "q1",
+      options: [],
+      maxChoices: 0,
+      votes: {},
+      myChoices: [],
+    };
+    expect(parsePresenterMessage(JSON.stringify(msg))).toEqual(msg);
+  });
 });
