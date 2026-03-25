@@ -146,12 +146,97 @@ describe("parsePresenterMessage", () => {
     ).toBeNull();
   });
 
+  it("returns null for poll_state with non-integer maxChoices", () => {
+    expect(
+      parsePresenterMessage(
+        JSON.stringify({
+          type: MessageType.PollState,
+          pollId: "q1",
+          options: ["A"],
+          maxChoices: 1.5,
+          votes: {},
+          myChoices: [],
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null for poll_state with non-integer votes values", () => {
+    expect(
+      parsePresenterMessage(
+        JSON.stringify({
+          type: MessageType.PollState,
+          pollId: "q1",
+          options: ["A"],
+          maxChoices: 1,
+          votes: { A: 0.5 },
+          myChoices: [],
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null for poll_error with non-integer votes values", () => {
+    expect(
+      parsePresenterMessage(
+        JSON.stringify({
+          type: MessageType.PollError,
+          pollId: "q1",
+          error: "err",
+          votes: { A: 0.5 },
+          myChoices: [],
+        }),
+      ),
+    ).toBeNull();
+  });
+
   it("returns null for poll_error with missing error field", () => {
     expect(
       parsePresenterMessage(
         JSON.stringify({
           type: MessageType.PollError,
           pollId: "q1",
+          votes: {},
+          myChoices: [],
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null for poll_error with non-string votes values", () => {
+    expect(
+      parsePresenterMessage(
+        JSON.stringify({
+          type: MessageType.PollError,
+          pollId: "q1",
+          error: "err",
+          votes: { A: "1" },
+          myChoices: [],
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null for poll_error with non-string myChoices", () => {
+    expect(
+      parsePresenterMessage(
+        JSON.stringify({
+          type: MessageType.PollError,
+          pollId: "q1",
+          error: "err",
+          votes: {},
+          myChoices: [1],
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null for poll_error with missing pollId", () => {
+    expect(
+      parsePresenterMessage(
+        JSON.stringify({
+          type: MessageType.PollError,
+          error: "err",
           votes: {},
           myChoices: [],
         }),

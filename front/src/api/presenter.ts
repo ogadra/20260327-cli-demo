@@ -37,15 +37,18 @@ const isString = (v: unknown): v is string => typeof v === "string";
 /** Check whether a value is a number. */
 const isNumber = (v: unknown): v is number => typeof v === "number";
 
+/** Check whether a value is a safe integer. */
+const isInteger = (v: unknown): v is number => Number.isSafeInteger(v);
+
 /** Check whether a value is an array of strings. */
 const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every(isString);
 
-/** Check whether a value is a record with string keys and number values. */
+/** Check whether a value is a record with string keys and integer values. */
 const isVotesRecord = (v: unknown): v is Record<string, number> =>
   typeof v === "object" &&
   v !== null &&
   !Array.isArray(v) &&
-  Object.values(v as Record<string, unknown>).every(isNumber);
+  Object.values(v as Record<string, unknown>).every(isInteger);
 
 /** Validate that msg has the shape of a SlideSync payload. */
 const isSlideSyncPayload = (msg: Record<string, unknown>): boolean => isNumber(msg.page);
@@ -61,7 +64,7 @@ const isViewerCountPayload = (msg: Record<string, unknown>): boolean => isNumber
 const isPollStatePayload = (msg: Record<string, unknown>): boolean =>
   isString(msg.pollId) &&
   isStringArray(msg.options) &&
-  isNumber(msg.maxChoices) &&
+  isInteger(msg.maxChoices) &&
   isVotesRecord(msg.votes) &&
   isStringArray(msg.myChoices);
 
