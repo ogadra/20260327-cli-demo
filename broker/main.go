@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/gin-gonic/gin"
 	"github.com/ogadra/20260327-cli-demo/broker/handler"
+	"github.com/ogadra/20260327-cli-demo/broker/healthcheck"
 	"github.com/ogadra/20260327-cli-demo/broker/service"
 	"github.com/ogadra/20260327-cli-demo/broker/store"
 )
@@ -95,7 +96,8 @@ func defaultInitHandler() (*handler.Handler, error) {
 	}
 	client := dynamodb.NewFromConfig(cfg, ddbOpts...)
 	repo := store.NewDynamoRepository(client, "bunshin-runners")
-	svc := service.NewBrokerService(repo)
+	checker := healthcheck.NewHTTPChecker(&http.Client{Timeout: 3 * time.Second})
+	svc := service.NewBrokerService(repo, service.WithChecker(checker))
 	return handler.NewHandler(svc), nil
 }
 

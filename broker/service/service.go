@@ -8,13 +8,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
+	mrand "math/rand/v2"
 
+	"github.com/ogadra/20260327-cli-demo/broker/healthcheck"
 	"github.com/ogadra/20260327-cli-demo/broker/model"
 	"github.com/ogadra/20260327-cli-demo/broker/store"
 )
 
-// randReader はランダムバイト生成に使う io.Reader。テスト時に差し替える。
+// randReader はセッション ID 生成に使う暗号学的乱数ソース。テスト時に差し替える。
 var randReader io.Reader = rand.Reader
+
+// logPrintf はログ出力関数。テスト時に差し替える。
+var logPrintf = log.Printf
 
 // Service はブローカーのビジネスロジックを定義するインターフェース。
 type Service interface {
@@ -36,6 +42,9 @@ type ResolveResult struct {
 	RunnerURL string
 	// Created は新規作成されたかどうかを示す。
 	Created bool
+	// Reassigned はセッションが再割当てされたかどうかを示す。
+	// dead runner 検出により既存セッションが新しい runner に再割当てされた場合に true。
+	Reassigned bool
 }
 
 // CreateSessionResult はセッション作成の結果を表す。
@@ -49,6 +58,7 @@ type CreateSessionResult struct {
 // BrokerService は Service の実装。
 type BrokerService struct {
 	repo      store.Repository
+	checker   healthcheck.Checker
 	sessionFn func() (string, error)
 }
 
@@ -64,6 +74,13 @@ func WithSessionFn(fn func() (string, error)) Option {
 	}
 }
 
+// WithChecker はヘルスチェッカーを差し替えるオプション。
+func WithChecker(c healthcheck.Checker) Option {
+	return func(s *BrokerService) {
+		s.checker = c
+	}
+}
+
 // NewBrokerService は BrokerService を生成する。
 func NewBrokerService(repo store.Repository, opts ...Option) *BrokerService {
 	s := &BrokerService{
@@ -76,7 +93,7 @@ func NewBrokerService(repo store.Repository, opts ...Option) *BrokerService {
 	return s
 }
 
-// defaultSessionFn は crypto/rand で 16 バイトのランダム値を生成し hex 32 文字の文字列を返す。
+// defaultSessionFn は crypto/rand で 16 バイトの暗号学的ランダム値を生成し hex 32 文字の文字列を返す。
 func defaultSessionFn() (string, error) {
 	b := make([]byte, 16)
 	if _, err := io.ReadFull(randReader, b); err != nil {
@@ -85,17 +102,42 @@ func defaultSessionFn() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// createSession は idle runner を確保しセッションを作成する。ResolveOrCreateSession から呼ばれる。
+// createSession はセッション ID を生成し、全バケットを走査して健全な idle runner を確保しセッションを作成する。
+// checker が nil の場合はヘルスチェックをスキップし最初に見つかった runner を返す。
+// 不健全な runner は削除して同じバケット内で再試行し、バケットが空になったら次のバケットへ移る。
 func (s *BrokerService) createSession(ctx context.Context) (*CreateSessionResult, error) {
 	sessionID, err := s.sessionFn()
 	if err != nil {
 		return nil, err
 	}
-	runner, err := s.repo.AcquireIdle(ctx, sessionID)
-	if err != nil {
-		return nil, err
+	bc := s.repo.BucketCount()
+	start := mrand.IntN(bc)
+	check := s.checker != nil
+	for i := range bc {
+		bucket := (start + i) % bc
+		for {
+			runner, err := s.repo.AcquireIdle(ctx, sessionID, bucket)
+			if errors.Is(err, store.ErrNoIdleRunner) {
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
+			if !check {
+				return &CreateSessionResult{SessionID: sessionID, Runner: runner}, nil
+			}
+			if checkErr := s.checker.Check(ctx, runner.PrivateURL); checkErr == nil {
+				return &CreateSessionResult{SessionID: sessionID, Runner: runner}, nil
+			} else if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			logPrintf("healthcheck failed for runner %s, deleting stale record", runner.RunnerID)
+			if err := s.repo.Delete(ctx, runner.RunnerID); err != nil {
+				return nil, fmt.Errorf("delete unhealthy runner %s: %w", runner.RunnerID, err)
+			}
+		}
 	}
-	return &CreateSessionResult{SessionID: sessionID, Runner: runner}, nil
+	return nil, store.ErrNoIdleRunner
 }
 
 // CloseSession はセッションを終了し紐づく runner を削除する。
@@ -109,13 +151,26 @@ func (s *BrokerService) CloseSession(ctx context.Context, sessionID string) erro
 
 // ResolveSession はセッション ID から runner を解決し、見つからなければ新規作成する。
 // sessionID が空の場合は検索をスキップして即座に新規作成する。
+// 既存 runner が不健全な場合は削除して新規 runner を割り当てる。
 func (s *BrokerService) ResolveSession(ctx context.Context, sessionID string) (*ResolveResult, error) {
+	reassigned := false
 	if sessionID != "" {
 		runner, err := s.repo.FindBySessionID(ctx, sessionID)
 		if err == nil {
-			return &ResolveResult{SessionID: sessionID, RunnerURL: runner.PrivateURL, Created: false}, nil
-		}
-		if !errors.Is(err, store.ErrNotFound) {
+			if s.checker == nil {
+				return &ResolveResult{SessionID: sessionID, RunnerURL: runner.PrivateURL, Created: false}, nil
+			}
+			if checkErr := s.checker.Check(ctx, runner.PrivateURL); checkErr == nil {
+				return &ResolveResult{SessionID: sessionID, RunnerURL: runner.PrivateURL, Created: false}, nil
+			} else if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			logPrintf("healthcheck failed for runner %s, deleting stale record", runner.RunnerID)
+			if err := s.repo.Delete(ctx, runner.RunnerID); err != nil {
+				return nil, fmt.Errorf("delete unhealthy runner %s: %w", runner.RunnerID, err)
+			}
+			reassigned = true
+		} else if !errors.Is(err, store.ErrNotFound) {
 			return nil, err
 		}
 	}
@@ -123,7 +178,12 @@ func (s *BrokerService) ResolveSession(ctx context.Context, sessionID string) (*
 	if err != nil {
 		return nil, err
 	}
-	return &ResolveResult{SessionID: result.SessionID, RunnerURL: result.Runner.PrivateURL, Created: true}, nil
+	return &ResolveResult{
+		SessionID:  result.SessionID,
+		RunnerURL:  result.Runner.PrivateURL,
+		Created:    true,
+		Reassigned: reassigned,
+	}, nil
 }
 
 // RegisterRunner は runner を idle として登録する。

@@ -86,7 +86,7 @@ func TestIntegration_AcquireIdle(t *testing.T) {
 		t.Fatalf("Register: %v", err)
 	}
 
-	runner, err := repo.AcquireIdle(ctx, "sess-1")
+	runner, err := repo.AcquireIdle(ctx, "sess-1", 1)
 	if err != nil {
 		t.Fatalf("AcquireIdle: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestIntegration_AcquireIdle_Empty(t *testing.T) {
 	client, tableName := setupIntegrationTable(t)
 	repo := NewDynamoRepository(client, tableName)
 
-	_, err := repo.AcquireIdle(context.Background(), "sess-1")
+	_, err := repo.AcquireIdle(context.Background(), "sess-1", 0)
 	if !errors.Is(err, ErrNoIdleRunner) {
 		t.Fatalf("expected ErrNoIdleRunner, got: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestIntegration_AcquireIdle_FindBySessionID(t *testing.T) {
 		t.Fatalf("Register: %v", err)
 	}
 
-	if _, err := repo.AcquireIdle(ctx, "sess-1"); err != nil {
+	if _, err := repo.AcquireIdle(ctx, "sess-1", 0); err != nil {
 		t.Fatalf("AcquireIdle: %v", err)
 	}
 
@@ -148,11 +148,11 @@ func TestIntegration_AcquireIdle_AlreadyBusy(t *testing.T) {
 	if err := repo.Register(ctx, "r1", "http://10.0.0.1:8080"); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
-	if _, err := repo.AcquireIdle(ctx, "sess-1"); err != nil {
+	if _, err := repo.AcquireIdle(ctx, "sess-1", 0); err != nil {
 		t.Fatalf("first AcquireIdle: %v", err)
 	}
 
-	_, err := repo.AcquireIdle(ctx, "sess-2")
+	_, err := repo.AcquireIdle(ctx, "sess-2", 0)
 	if !errors.Is(err, ErrNoIdleRunner) {
 		t.Fatalf("expected ErrNoIdleRunner, got: %v", err)
 	}

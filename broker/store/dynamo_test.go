@@ -229,16 +229,29 @@ func TestRegister_PutItemError(t *testing.T) {
 	}
 }
 
-// TestAcquireIdle_Success は idle runner の確保が成功するケースを検証する。
+// TestBucketCount は BucketCount がバケット数を返すことを検証する。
+func TestBucketCount(t *testing.T) {
+	t.Parallel()
+	repo := NewDynamoRepository(&mockDynamoDBAPI{}, "t")
+	if repo.BucketCount() != bucketCount {
+		t.Errorf("BucketCount() = %d, want %d", repo.BucketCount(), bucketCount)
+	}
+}
+
+// TestAcquireIdle_Success は指定バケットから idle runner の確保が成功するケースを検証する。
 func TestAcquireIdle_Success(t *testing.T) {
 	t.Parallel()
 	mock := &mockDynamoDBAPI{
-		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+		queryFn: func(_ context.Context, params *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			bucket := params.ExpressionAttributeValues[":b"].(*types.AttributeValueMemberS).Value
+			if bucket != "bucket-2" {
+				t.Errorf("bucket = %q, want %q", bucket, "bucket-2")
+			}
 			return &dynamodb.QueryOutput{
 				Items: []map[string]types.AttributeValue{
 					{
 						"runnerId":   &types.AttributeValueMemberS{Value: "r1"},
-						"idleBucket": &types.AttributeValueMemberS{Value: "bucket-0"},
+						"idleBucket": &types.AttributeValueMemberS{Value: "bucket-2"},
 					},
 				},
 			}, nil
@@ -249,7 +262,7 @@ func TestAcquireIdle_Success(t *testing.T) {
 	}
 	repo := NewDynamoRepository(mock, "t")
 
-	runner, err := repo.AcquireIdle(context.Background(), "sess-1")
+	runner, err := repo.AcquireIdle(context.Background(), "sess-1", 2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -264,24 +277,19 @@ func TestAcquireIdle_Success(t *testing.T) {
 	}
 }
 
-// TestAcquireIdle_NoIdleRunner は全バケット空の場合に ErrNoIdleRunner を返すことを検証する。
+// TestAcquireIdle_NoIdleRunner はバケットが空の場合に ErrNoIdleRunner を返すことを検証する。
 func TestAcquireIdle_NoIdleRunner(t *testing.T) {
 	t.Parallel()
-	queryCount := 0
 	mock := &mockDynamoDBAPI{
 		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
-			queryCount++
 			return &dynamodb.QueryOutput{Items: nil}, nil
 		},
 	}
 	repo := NewDynamoRepository(mock, "t")
 
-	_, err := repo.AcquireIdle(context.Background(), "sess-1")
+	_, err := repo.AcquireIdle(context.Background(), "sess-1", 0)
 	if !errors.Is(err, ErrNoIdleRunner) {
 		t.Fatalf("expected ErrNoIdleRunner, got: %v", err)
-	}
-	if queryCount != bucketCount {
-		t.Errorf("query count = %d, want %d", queryCount, bucketCount)
 	}
 }
 
@@ -295,46 +303,18 @@ func TestAcquireIdle_QueryError(t *testing.T) {
 	}
 	repo := NewDynamoRepository(mock, "t")
 
-	_, err := repo.AcquireIdle(context.Background(), "sess-1")
+	_, err := repo.AcquireIdle(context.Background(), "sess-1", 0)
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-// TestAcquireIdle_FallbackBucket は最初のバケットが空で次のバケットで見つかるケースを検証する。
-func TestAcquireIdle_FallbackBucket(t *testing.T) {
-	t.Parallel()
-	queryCount := 0
-	mock := &mockDynamoDBAPI{
-		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
-			queryCount++
-			if queryCount == 1 {
-				return &dynamodb.QueryOutput{Items: nil}, nil
-			}
-			return &dynamodb.QueryOutput{
-				Items: []map[string]types.AttributeValue{
-					{
-						"runnerId":   &types.AttributeValueMemberS{Value: "r2"},
-						"idleBucket": &types.AttributeValueMemberS{Value: "bucket-1"},
-					},
-				},
-			}, nil
-		},
-		updateItemFn: func(_ context.Context, _ *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
-			return &dynamodb.UpdateItemOutput{}, nil
-		},
-	}
-	repo := NewDynamoRepository(mock, "t")
-
-	runner, err := repo.AcquireIdle(context.Background(), "sess-1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if runner.RunnerID != "r2" {
-		t.Errorf("runnerID = %q, want %q", runner.RunnerID, "r2")
-	}
-	if queryCount != 2 {
-		t.Errorf("query call count = %d, want 2", queryCount)
+// assertBucket は QueryInput のバケットバインディングを検証するヘルパー。
+func assertBucket(t *testing.T, params *dynamodb.QueryInput, want string) {
+	t.Helper()
+	got, ok := params.ExpressionAttributeValues[":b"].(*types.AttributeValueMemberS)
+	if !ok || got.Value != want {
+		t.Fatalf("bucket binding = %v, want %q", params.ExpressionAttributeValues[":b"], want)
 	}
 }
 
@@ -344,7 +324,8 @@ func TestAcquireIdle_RetryWithinBucket(t *testing.T) {
 	queryCount := 0
 	updateCount := 0
 	mock := &mockDynamoDBAPI{
-		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+		queryFn: func(_ context.Context, params *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			assertBucket(t, params, "bucket-0")
 			queryCount++
 			if queryCount <= 2 {
 				return &dynamodb.QueryOutput{
@@ -368,7 +349,7 @@ func TestAcquireIdle_RetryWithinBucket(t *testing.T) {
 	}
 	repo := NewDynamoRepository(mock, "t")
 
-	runner, err := repo.AcquireIdle(context.Background(), "sess-1")
+	runner, err := repo.AcquireIdle(context.Background(), "sess-1", 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -383,15 +364,15 @@ func TestAcquireIdle_RetryWithinBucket(t *testing.T) {
 	}
 }
 
-// TestAcquireIdle_ConflictThenBucketEmpty はバケット内で競合後にバケットが空になり次のバケットへ移るケースを検証する。
+// TestAcquireIdle_ConflictThenBucketEmpty はバケット内で競合後にバケットが空になり ErrNoIdleRunner を返すことを検証する。
 func TestAcquireIdle_ConflictThenBucketEmpty(t *testing.T) {
 	t.Parallel()
 	queryCount := 0
 	mock := &mockDynamoDBAPI{
-		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+		queryFn: func(_ context.Context, params *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			assertBucket(t, params, "bucket-0")
 			queryCount++
-			switch queryCount {
-			case 1:
+			if queryCount == 1 {
 				return &dynamodb.QueryOutput{
 					Items: []map[string]types.AttributeValue{
 						{
@@ -400,46 +381,31 @@ func TestAcquireIdle_ConflictThenBucketEmpty(t *testing.T) {
 						},
 					},
 				}, nil
-			case 2:
-				return &dynamodb.QueryOutput{Items: nil}, nil
-			case 3:
-				return &dynamodb.QueryOutput{
-					Items: []map[string]types.AttributeValue{
-						{
-							"runnerId":   &types.AttributeValueMemberS{Value: "r3"},
-							"idleBucket": &types.AttributeValueMemberS{Value: "bucket-1"},
-						},
-					},
-				}, nil
-			default:
-				return &dynamodb.QueryOutput{Items: nil}, nil
 			}
+			return &dynamodb.QueryOutput{Items: nil}, nil
 		},
-		updateItemFn: func(_ context.Context, params *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
-			rid := params.Key["runnerId"].(*types.AttributeValueMemberS).Value
-			if rid == "r1" {
-				return nil, &types.ConditionalCheckFailedException{Message: aws.String("conflict")}
-			}
-			return &dynamodb.UpdateItemOutput{}, nil
+		updateItemFn: func(_ context.Context, _ *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
+			return nil, &types.ConditionalCheckFailedException{Message: aws.String("conflict")}
 		},
 	}
 	repo := NewDynamoRepository(mock, "t")
 
-	runner, err := repo.AcquireIdle(context.Background(), "sess-1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := repo.AcquireIdle(context.Background(), "sess-1", 0)
+	if !errors.Is(err, ErrNoIdleRunner) {
+		t.Fatalf("expected ErrNoIdleRunner, got: %v", err)
 	}
-	if runner.RunnerID != "r3" {
-		t.Errorf("runnerID = %q, want %q", runner.RunnerID, "r3")
+	if queryCount != 2 {
+		t.Errorf("query count = %d, want 2", queryCount)
 	}
 }
 
-// TestAcquireIdle_StaleGSI は GSI が stale な項目を返し続ける場合に無限ループせず次のバケットへ移ることを検証する。
+// TestAcquireIdle_StaleGSI は GSI が stale な項目を返し続ける場合に無限ループせず ErrNoIdleRunner を返すことを検証する。
 func TestAcquireIdle_StaleGSI(t *testing.T) {
 	t.Parallel()
 	queryCount := 0
 	mock := &mockDynamoDBAPI{
-		queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+		queryFn: func(_ context.Context, params *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			assertBucket(t, params, "bucket-0")
 			queryCount++
 			return &dynamodb.QueryOutput{
 				Items: []map[string]types.AttributeValue{
@@ -456,14 +422,12 @@ func TestAcquireIdle_StaleGSI(t *testing.T) {
 	}
 	repo := NewDynamoRepository(mock, "t")
 
-	_, err := repo.AcquireIdle(context.Background(), "sess-1")
+	_, err := repo.AcquireIdle(context.Background(), "sess-1", 0)
 	if !errors.Is(err, ErrNoIdleRunner) {
 		t.Fatalf("expected ErrNoIdleRunner, got: %v", err)
 	}
-	// 最初のバケットで2回 query して stale 検出 + 残りバケットは1回ずつで即 stale 検出
-	expectedQueries := bucketCount + 1
-	if queryCount != expectedQueries {
-		t.Errorf("query count = %d, want %d", queryCount, expectedQueries)
+	if queryCount != 2 {
+		t.Errorf("query count = %d, want 2 (initial + stale detection)", queryCount)
 	}
 }
 
@@ -487,7 +451,7 @@ func TestAcquireIdle_UpdateError(t *testing.T) {
 	}
 	repo := NewDynamoRepository(mock, "t")
 
-	_, err := repo.AcquireIdle(context.Background(), "sess-1")
+	_, err := repo.AcquireIdle(context.Background(), "sess-1", 0)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -509,7 +473,7 @@ func TestAcquireIdle_UnmarshalError(t *testing.T) {
 	}
 	repo := NewDynamoRepository(mock, "t")
 
-	_, err := repo.AcquireIdle(context.Background(), "sess-1")
+	_, err := repo.AcquireIdle(context.Background(), "sess-1", 0)
 	if err == nil {
 		t.Fatal("expected unmarshal error")
 	}

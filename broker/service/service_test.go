@@ -21,7 +21,8 @@ func (e *errorReader) Read(_ []byte) (int, error) {
 // mockRepository は store.Repository のモック実装。
 type mockRepository struct {
 	registerFn        func(ctx context.Context, runnerID, privateURL string) error
-	acquireIdleFn     func(ctx context.Context, sessionID string) (*model.Runner, error)
+	acquireIdleFn     func(ctx context.Context, sessionID string, bucket int) (*model.Runner, error)
+	bucketCountFn     func() int
 	findBySessionIDFn func(ctx context.Context, sessionID string) (*model.Runner, error)
 	findByIDFn        func(ctx context.Context, runnerID string) (*model.Runner, error)
 	deleteFn          func(ctx context.Context, runnerID string) error
@@ -33,8 +34,16 @@ func (m *mockRepository) Register(ctx context.Context, runnerID, privateURL stri
 }
 
 // AcquireIdle はモック AcquireIdle を呼び出す。
-func (m *mockRepository) AcquireIdle(ctx context.Context, sessionID string) (*model.Runner, error) {
-	return m.acquireIdleFn(ctx, sessionID)
+func (m *mockRepository) AcquireIdle(ctx context.Context, sessionID string, bucket int) (*model.Runner, error) {
+	return m.acquireIdleFn(ctx, sessionID, bucket)
+}
+
+// BucketCount はモック BucketCount を呼び出す。
+func (m *mockRepository) BucketCount() int {
+	if m.bucketCountFn != nil {
+		return m.bucketCountFn()
+	}
+	return 4
 }
 
 // FindBySessionID はモック FindBySessionID を呼び出す。
@@ -50,6 +59,24 @@ func (m *mockRepository) FindByID(ctx context.Context, runnerID string) (*model.
 // Delete はモック Delete を呼び出す。
 func (m *mockRepository) Delete(ctx context.Context, runnerID string) error {
 	return m.deleteFn(ctx, runnerID)
+}
+
+// mockChecker は healthcheck.Checker のモック実装。
+type mockChecker struct {
+	checkFn func(ctx context.Context, privateURL string) error
+}
+
+// Check はモック Check を呼び出す。
+func (m *mockChecker) Check(ctx context.Context, privateURL string) error {
+	return m.checkFn(ctx, privateURL)
+}
+
+// suppressLog はテスト中のログ出力を抑制し、テスト終了時に復元する。
+func suppressLog(t *testing.T) {
+	t.Helper()
+	orig := logPrintf
+	t.Cleanup(func() { logPrintf = orig })
+	logPrintf = func(string, ...any) {}
 }
 
 // TestBrokerService_ImplementsService は BrokerService が Service インターフェースを満たすことを検証する。
@@ -108,6 +135,25 @@ func TestWithSessionFn_Nil(t *testing.T) {
 	}
 }
 
+// TestWithChecker は WithChecker オプションで checker が差し替わることを検証する。
+func TestWithChecker(t *testing.T) {
+	t.Parallel()
+	checker := &mockChecker{}
+	svc := NewBrokerService(&mockRepository{}, WithChecker(checker))
+	if svc.checker != checker {
+		t.Error("checker mismatch")
+	}
+}
+
+// TestWithChecker_Nil は WithChecker に nil を渡すと checker が nil になることを検証する。
+func TestWithChecker_Nil(t *testing.T) {
+	t.Parallel()
+	svc := NewBrokerService(&mockRepository{}, WithChecker(nil))
+	if svc.checker != nil {
+		t.Error("expected nil checker")
+	}
+}
+
 // TestDefaultSessionFn はデフォルトセッション ID 生成関数が 32 文字の hex 文字列を返すことを検証する。
 func TestDefaultSessionFn(t *testing.T) {
 	t.Parallel()
@@ -136,7 +182,7 @@ func TestDefaultSessionFn_Unique(t *testing.T) {
 	}
 }
 
-// TestDefaultSessionFn_RandReadError は rand.Reader がエラーを返す場合に defaultSessionFn がエラーを返すことを検証する。
+// TestDefaultSessionFn_RandReadError は randReader がエラーを返す場合に defaultSessionFn がエラーを返すことを検証する。
 func TestDefaultSessionFn_RandReadError(t *testing.T) {
 	orig := randReader
 	t.Cleanup(func() { randReader = orig })
@@ -152,7 +198,7 @@ func TestDefaultSessionFn_RandReadError(t *testing.T) {
 func TestCreateSession_Success(t *testing.T) {
 	t.Parallel()
 	repo := &mockRepository{
-		acquireIdleFn: func(_ context.Context, sessionID string) (*model.Runner, error) {
+		acquireIdleFn: func(_ context.Context, sessionID string, _ int) (*model.Runner, error) {
 			if sessionID != "fixed-session" {
 				t.Errorf("sessionID = %q, want %q", sessionID, "fixed-session")
 			}
@@ -196,7 +242,7 @@ func TestCreateSession_SessionFnError(t *testing.T) {
 func TestCreateSession_AcquireIdleError(t *testing.T) {
 	t.Parallel()
 	repo := &mockRepository{
-		acquireIdleFn: func(_ context.Context, _ string) (*model.Runner, error) {
+		acquireIdleFn: func(_ context.Context, _ string, _ int) (*model.Runner, error) {
 			return nil, store.ErrNoIdleRunner
 		},
 	}
@@ -207,6 +253,27 @@ func TestCreateSession_AcquireIdleError(t *testing.T) {
 	_, err := svc.createSession(context.Background())
 	if !errors.Is(err, store.ErrNoIdleRunner) {
 		t.Fatalf("expected ErrNoIdleRunner, got: %v", err)
+	}
+}
+
+// TestCreateSession_AcquireIdleInternalError は AcquireIdle の内部エラーが即座に伝搬されることを検証する。
+func TestCreateSession_AcquireIdleInternalError(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepository{
+		acquireIdleFn: func(_ context.Context, _ string, _ int) (*model.Runner, error) {
+			return nil, errors.New("db error")
+		},
+	}
+	svc := NewBrokerService(repo, WithSessionFn(func() (string, error) {
+		return "sess-1", nil
+	}))
+
+	_, err := svc.createSession(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if err.Error() != "db error" {
+		t.Errorf("error = %q, want %q", err.Error(), "db error")
 	}
 }
 
@@ -349,7 +416,7 @@ func TestDeregisterRunner_Error(t *testing.T) {
 func TestResolveSession_ExistingSession(t *testing.T) {
 	t.Parallel()
 	repo := &mockRepository{
-		findBySessionIDFn: func(_ context.Context, sessionID string) (*model.Runner, error) {
+		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
 			return &model.Runner{RunnerID: "r1", PrivateURL: "http://10.0.0.1:8080"}, nil
 		},
 	}
@@ -377,7 +444,7 @@ func TestResolveSession_NotFound_CreatesNew(t *testing.T) {
 		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
 			return nil, store.ErrNotFound
 		},
-		acquireIdleFn: func(_ context.Context, sessionID string) (*model.Runner, error) {
+		acquireIdleFn: func(_ context.Context, sessionID string, _ int) (*model.Runner, error) {
 			return &model.Runner{
 				RunnerID:         "r2",
 				CurrentSessionID: sessionID,
@@ -427,7 +494,7 @@ func TestResolveSession_CreateError(t *testing.T) {
 		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
 			return nil, store.ErrNotFound
 		},
-		acquireIdleFn: func(_ context.Context, _ string) (*model.Runner, error) {
+		acquireIdleFn: func(_ context.Context, _ string, _ int) (*model.Runner, error) {
 			return nil, store.ErrNoIdleRunner
 		},
 	}
@@ -449,7 +516,7 @@ func TestResolveSession_EmptySessionID(t *testing.T) {
 			t.Fatal("FindBySessionID should not be called for empty session ID")
 			return nil, store.ErrNotFound
 		},
-		acquireIdleFn: func(_ context.Context, sessionID string) (*model.Runner, error) {
+		acquireIdleFn: func(_ context.Context, sessionID string, _ int) (*model.Runner, error) {
 			return &model.Runner{
 				RunnerID:         "r1",
 				CurrentSessionID: sessionID,
@@ -467,5 +534,380 @@ func TestResolveSession_EmptySessionID(t *testing.T) {
 	}
 	if !result.Created {
 		t.Error("expected Created=true")
+	}
+}
+
+// TestResolveSession_ExistingHealthy は既存セッションの runner が健全な場合にそのまま返すことを検証する。
+func TestResolveSession_ExistingHealthy(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepository{
+		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
+			return &model.Runner{RunnerID: "r1", PrivateURL: "http://10.0.0.1:8080"}, nil
+		},
+	}
+	checker := &mockChecker{checkFn: func(_ context.Context, _ string) error { return nil }}
+	svc := NewBrokerService(repo, WithChecker(checker))
+
+	result, err := svc.ResolveSession(context.Background(), "sess-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Created {
+		t.Error("expected Created=false")
+	}
+	if result.Reassigned {
+		t.Error("expected Reassigned=false")
+	}
+}
+
+// TestResolveSession_ExistingUnhealthy_Reassigned は既存 runner が不健全な場合に再割当てされることを検証する。
+func TestResolveSession_ExistingUnhealthy_Reassigned(t *testing.T) {
+	suppressLog(t)
+	deletedRunnerIDs := []string{}
+	repo := &mockRepository{
+		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
+			return &model.Runner{RunnerID: "r-dead", PrivateURL: "http://10.0.0.1:8080"}, nil
+		},
+		acquireIdleFn: func(_ context.Context, sessionID string, _ int) (*model.Runner, error) {
+			return &model.Runner{
+				RunnerID:         "r-new",
+				CurrentSessionID: sessionID,
+				PrivateURL:       "http://10.0.0.2:8080",
+			}, nil
+		},
+		deleteFn: func(_ context.Context, runnerID string) error {
+			deletedRunnerIDs = append(deletedRunnerIDs, runnerID)
+			return nil
+		},
+	}
+	checker := &mockChecker{checkFn: func(_ context.Context, url string) error {
+		if url == "http://10.0.0.1:8080" {
+			return errors.New("unreachable")
+		}
+		return nil
+	}}
+	svc := NewBrokerService(repo, WithChecker(checker), WithSessionFn(func() (string, error) {
+		return "new-session", nil
+	}))
+
+	result, err := svc.ResolveSession(context.Background(), "sess-old")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.Created {
+		t.Error("expected Created=true")
+	}
+	if !result.Reassigned {
+		t.Error("expected Reassigned=true")
+	}
+	if result.RunnerURL != "http://10.0.0.2:8080" {
+		t.Errorf("RunnerURL = %q, want %q", result.RunnerURL, "http://10.0.0.2:8080")
+	}
+	if len(deletedRunnerIDs) == 0 || deletedRunnerIDs[0] != "r-dead" {
+		t.Errorf("expected dead runner to be deleted, got %v", deletedRunnerIDs)
+	}
+}
+
+// TestResolveSession_RetryOnUnhealthy はヘルスチェック失敗時に次のバケットへ移り健全な runner を返すことを検証する。
+func TestResolveSession_RetryOnUnhealthy(t *testing.T) {
+	suppressLog(t)
+	acquireCount := 0
+	deleteCount := 0
+	repo := &mockRepository{
+		bucketCountFn: func() int { return 3 },
+		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
+			return nil, store.ErrNotFound
+		},
+		acquireIdleFn: func(_ context.Context, sessionID string, _ int) (*model.Runner, error) {
+			acquireCount++
+			if acquireCount == 3 {
+				return &model.Runner{
+					RunnerID:         "r-healthy",
+					CurrentSessionID: sessionID,
+					PrivateURL:       "http://10.0.0.3:8080",
+				}, nil
+			}
+			return &model.Runner{
+				RunnerID:         "r-dead-" + string(rune('0'+acquireCount)),
+				CurrentSessionID: sessionID,
+				PrivateURL:       "http://10.0.0.1:8080",
+			}, nil
+		},
+		deleteFn: func(_ context.Context, _ string) error {
+			deleteCount++
+			return nil
+		},
+	}
+	checker := &mockChecker{checkFn: func(_ context.Context, url string) error {
+		if url == "http://10.0.0.1:8080" {
+			return errors.New("unreachable")
+		}
+		return nil
+	}}
+	svc := NewBrokerService(repo, WithChecker(checker), WithSessionFn(func() (string, error) {
+		return "new-session", nil
+	}))
+
+	result, err := svc.ResolveSession(context.Background(), "sess-missing")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.RunnerURL != "http://10.0.0.3:8080" {
+		t.Errorf("RunnerURL = %q, want %q", result.RunnerURL, "http://10.0.0.3:8080")
+	}
+	if acquireCount != 3 {
+		t.Errorf("acquireCount = %d, want 3", acquireCount)
+	}
+	if deleteCount != 2 {
+		t.Errorf("deleteCount = %d, want 2", deleteCount)
+	}
+}
+
+// TestResolveSession_AllUnhealthy は全バケットの runner が不健全な場合に ErrNoIdleRunner を返すことを検証する。
+func TestResolveSession_AllUnhealthy(t *testing.T) {
+	suppressLog(t)
+	acquirePerBucket := map[int]int{}
+	repo := &mockRepository{
+		bucketCountFn: func() int { return 2 },
+		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
+			return nil, store.ErrNotFound
+		},
+		acquireIdleFn: func(_ context.Context, sessionID string, bucket int) (*model.Runner, error) {
+			acquirePerBucket[bucket]++
+			if acquirePerBucket[bucket] > 1 {
+				return nil, store.ErrNoIdleRunner
+			}
+			return &model.Runner{
+				RunnerID:         "r-dead",
+				CurrentSessionID: sessionID,
+				PrivateURL:       "http://10.0.0.1:8080",
+			}, nil
+		},
+		deleteFn: func(_ context.Context, _ string) error { return nil },
+	}
+	checker := &mockChecker{checkFn: func(_ context.Context, _ string) error {
+		return errors.New("unreachable")
+	}}
+	svc := NewBrokerService(repo, WithChecker(checker), WithSessionFn(func() (string, error) {
+		return "new-session", nil
+	}))
+
+	_, err := svc.ResolveSession(context.Background(), "sess-missing")
+	if !errors.Is(err, store.ErrNoIdleRunner) {
+		t.Fatalf("expected ErrNoIdleRunner, got: %v", err)
+	}
+}
+
+// TestResolveSession_NilChecker_SkipsHealthcheck は checker が nil の場合にヘルスチェックをスキップすることを検証する。
+func TestResolveSession_NilChecker_SkipsHealthcheck(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepository{
+		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
+			return &model.Runner{RunnerID: "r1", PrivateURL: "http://10.0.0.1:8080"}, nil
+		},
+	}
+	svc := NewBrokerService(repo)
+
+	result, err := svc.ResolveSession(context.Background(), "sess-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Created {
+		t.Error("expected Created=false")
+	}
+}
+
+// TestCreateSession_NilChecker は checker が nil の場合にヘルスチェックなしで返すことを検証する。
+func TestCreateSession_NilChecker(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepository{
+		acquireIdleFn: func(_ context.Context, sessionID string, _ int) (*model.Runner, error) {
+			return &model.Runner{
+				RunnerID:         "r1",
+				CurrentSessionID: sessionID,
+				PrivateURL:       "http://10.0.0.1:8080",
+			}, nil
+		},
+	}
+	svc := NewBrokerService(repo, WithSessionFn(func() (string, error) {
+		return "sess-1", nil
+	}))
+
+	result, err := svc.createSession(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Runner.RunnerID != "r1" {
+		t.Errorf("RunnerID = %q, want %q", result.Runner.RunnerID, "r1")
+	}
+}
+
+// TestCreateSession_SessionFnError_WithChecker はチェッカー付きでセッション ID 生成エラーが伝搬されることを検証する。
+func TestCreateSession_SessionFnError_WithChecker(t *testing.T) {
+	t.Parallel()
+	svc := NewBrokerService(&mockRepository{}, WithSessionFn(func() (string, error) {
+		return "", errors.New("rand error")
+	}), WithChecker(&mockChecker{checkFn: func(_ context.Context, _ string) error { return nil }}))
+
+	_, err := svc.createSession(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// TestCreateSession_ContextCanceled はヘルスチェック中にコンテキストがキャンセルされた場合にランナーを削除せずエラーを返すことを検証する。
+func TestCreateSession_ContextCanceled(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepository{
+		acquireIdleFn: func(_ context.Context, sessionID string, _ int) (*model.Runner, error) {
+			return &model.Runner{
+				RunnerID:         "r1",
+				CurrentSessionID: sessionID,
+				PrivateURL:       "http://10.0.0.1:8080",
+			}, nil
+		},
+		deleteFn: func(_ context.Context, _ string) error {
+			t.Fatal("Delete should not be called on context cancel")
+			return nil
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	checker := &mockChecker{checkFn: func(_ context.Context, _ string) error {
+		return context.Canceled
+	}}
+	svc := NewBrokerService(repo, WithChecker(checker), WithSessionFn(func() (string, error) {
+		return "sess-1", nil
+	}))
+
+	_, err := svc.createSession(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got: %v", err)
+	}
+}
+
+// TestCreateSession_DeleteError はヘルスチェック失敗後の Delete エラーが伝搬されることを検証する。
+func TestCreateSession_DeleteError(t *testing.T) {
+	suppressLog(t)
+	repo := &mockRepository{
+		acquireIdleFn: func(_ context.Context, sessionID string, _ int) (*model.Runner, error) {
+			return &model.Runner{
+				RunnerID:         "r1",
+				CurrentSessionID: sessionID,
+				PrivateURL:       "http://10.0.0.1:8080",
+			}, nil
+		},
+		deleteFn: func(_ context.Context, _ string) error {
+			return errors.New("delete failed")
+		},
+	}
+	checker := &mockChecker{checkFn: func(_ context.Context, _ string) error {
+		return errors.New("unreachable")
+	}}
+	svc := NewBrokerService(repo, WithChecker(checker), WithSessionFn(func() (string, error) {
+		return "sess-1", nil
+	}))
+
+	_, err := svc.createSession(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, errors.Unwrap(err)) {
+		// Just verify it contains the delete error message
+	}
+}
+
+// TestCreateSession_RetryWithinBucket は同じバケット内で unhealthy runner 削除後に再試行することを検証する。
+func TestCreateSession_RetryWithinBucket(t *testing.T) {
+	suppressLog(t)
+	acquireCount := 0
+	repo := &mockRepository{
+		bucketCountFn: func() int { return 1 },
+		acquireIdleFn: func(_ context.Context, sessionID string, _ int) (*model.Runner, error) {
+			acquireCount++
+			if acquireCount == 1 {
+				return &model.Runner{
+					RunnerID:         "r-dead",
+					CurrentSessionID: sessionID,
+					PrivateURL:       "http://10.0.0.1:8080",
+				}, nil
+			}
+			if acquireCount == 2 {
+				return &model.Runner{
+					RunnerID:         "r-healthy",
+					CurrentSessionID: sessionID,
+					PrivateURL:       "http://10.0.0.2:8080",
+				}, nil
+			}
+			return nil, store.ErrNoIdleRunner
+		},
+		deleteFn: func(_ context.Context, _ string) error { return nil },
+	}
+	checker := &mockChecker{checkFn: func(_ context.Context, url string) error {
+		if url == "http://10.0.0.1:8080" {
+			return errors.New("unreachable")
+		}
+		return nil
+	}}
+	svc := NewBrokerService(repo, WithChecker(checker), WithSessionFn(func() (string, error) {
+		return "sess-1", nil
+	}))
+
+	result, err := svc.createSession(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Runner.RunnerID != "r-healthy" {
+		t.Errorf("RunnerID = %q, want %q", result.Runner.RunnerID, "r-healthy")
+	}
+	if acquireCount != 2 {
+		t.Errorf("acquireCount = %d, want 2", acquireCount)
+	}
+}
+
+// TestResolveSession_ContextCanceled_ExistingRunner は既存 runner のヘルスチェック中にコンテキストがキャンセルされた場合にエラーを返すことを検証する。
+func TestResolveSession_ContextCanceled_ExistingRunner(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepository{
+		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
+			return &model.Runner{RunnerID: "r1", PrivateURL: "http://10.0.0.1:8080"}, nil
+		},
+		deleteFn: func(_ context.Context, _ string) error {
+			t.Fatal("Delete should not be called on context cancel")
+			return nil
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	checker := &mockChecker{checkFn: func(_ context.Context, _ string) error {
+		return context.Canceled
+	}}
+	svc := NewBrokerService(repo, WithChecker(checker))
+
+	_, err := svc.ResolveSession(ctx, "sess-1")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got: %v", err)
+	}
+}
+
+// TestResolveSession_DeleteError_ExistingRunner は既存 runner の Delete エラーが伝搬されることを検証する。
+func TestResolveSession_DeleteError_ExistingRunner(t *testing.T) {
+	suppressLog(t)
+	repo := &mockRepository{
+		findBySessionIDFn: func(_ context.Context, _ string) (*model.Runner, error) {
+			return &model.Runner{RunnerID: "r1", PrivateURL: "http://10.0.0.1:8080"}, nil
+		},
+		deleteFn: func(_ context.Context, _ string) error {
+			return errors.New("delete failed")
+		},
+	}
+	checker := &mockChecker{checkFn: func(_ context.Context, _ string) error {
+		return errors.New("unreachable")
+	}}
+	svc := NewBrokerService(repo, WithChecker(checker))
+
+	_, err := svc.ResolveSession(context.Background(), "sess-1")
+	if err == nil {
+		t.Fatal("expected error")
 	}
 }

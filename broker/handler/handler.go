@@ -68,6 +68,9 @@ func (h *Handler) GetResolve(c *gin.Context) {
 		c.SetSameSite(http.SameSiteStrictMode)
 		c.SetCookie(runnerIDCookie, result.SessionID, 0, "/", "", true, true)
 	}
+	if result.Reassigned {
+		c.Header("X-Session-Reassigned", "true")
+	}
 	c.Header("X-Runner-Url", result.RunnerURL)
 	c.Status(http.StatusOK)
 }

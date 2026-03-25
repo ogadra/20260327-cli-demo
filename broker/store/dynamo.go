@@ -79,41 +79,42 @@ func (r *DynamoRepository) Register(ctx context.Context, runnerID, privateURL st
 	return nil
 }
 
-// AcquireIdle は idle runner を1台確保し session を紐づける。
-// ランダムバケットから検索し、競合時は同じバケットで再試行、空なら次のバケットへ移る。
+// BucketCount は idle runner のバケット数を返す。
+func (r *DynamoRepository) BucketCount() int {
+	return bucketCount
+}
+
+// AcquireIdle は指定バケットから idle runner を1台確保し session を紐づける。
+// バケット内で競合した場合は同じバケット内で再試行する。
 // GSI は eventually consistent なため、assignSession 済みの runner が再度返される場合がある。
 // tried 集合で同一 runner の無限リトライを防止する。
 // sessionID の一意性は呼び出し側が保証する。
-func (r *DynamoRepository) AcquireIdle(ctx context.Context, sessionID string) (*model.Runner, error) {
-	start := rand.IntN(bucketCount)
+func (r *DynamoRepository) AcquireIdle(ctx context.Context, sessionID string, bucket int) (*model.Runner, error) {
+	bucketKey := fmt.Sprintf("bucket-%d", bucket)
 	tried := map[string]struct{}{}
-	for i := range bucketCount {
-		bucket := fmt.Sprintf("bucket-%d", (start+i)%bucketCount)
-		for {
-			runner, err := r.queryIdleBucket(ctx, bucket)
-			if err != nil {
-				return nil, err
-			}
-			if runner == nil {
-				break
-			}
-			if _, seen := tried[runner.RunnerID]; seen {
-				break
-			}
-			tried[runner.RunnerID] = struct{}{}
-			err = r.assignSession(ctx, runner.RunnerID, sessionID)
-			if err == nil {
-				runner.CurrentSessionID = sessionID
-				runner.IdleBucket = ""
-				return runner, nil
-			}
-			if errors.Is(err, ErrConditionFailed) {
-				continue
-			}
+	for {
+		runner, err := r.queryIdleBucket(ctx, bucketKey)
+		if err != nil {
 			return nil, err
 		}
+		if runner == nil {
+			return nil, ErrNoIdleRunner
+		}
+		if _, seen := tried[runner.RunnerID]; seen {
+			return nil, ErrNoIdleRunner
+		}
+		tried[runner.RunnerID] = struct{}{}
+		err = r.assignSession(ctx, runner.RunnerID, sessionID)
+		if err == nil {
+			runner.CurrentSessionID = sessionID
+			runner.IdleBucket = ""
+			return runner, nil
+		}
+		if errors.Is(err, ErrConditionFailed) {
+			continue
+		}
+		return nil, err
 	}
-	return nil, ErrNoIdleRunner
 }
 
 // queryIdleBucket は指定バケットから idle runner を1台取得する。
