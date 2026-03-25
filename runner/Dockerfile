@@ -25,16 +25,18 @@ FROM build AS binary
 RUN CGO_ENABLED=0 go build -o /server .
 
 # production image
-FROM debian:bookworm-slim
-
 FROM nixos/nix:2.34.3
+
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 RUN mkdir -p /etc/nix && \
     printf '%s\n' 'extra-experimental-features = nix-command flakes' > /etc/nix/nix.conf
 
 RUN nix-channel --update && nix-env -iA nixpkgs.bash nixpkgs.coreutils
 
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+RUN nix build nixpkgs#cowsay && \
+    nix build nixpkgs#pokemonsay
+
 COPY --from=binary /server /server
 EXPOSE 3000
 CMD ["/server"]
