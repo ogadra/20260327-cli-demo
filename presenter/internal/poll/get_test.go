@@ -375,6 +375,51 @@ func TestIsConditionalCheckFailed_False(t *testing.T) {
 	}
 }
 
+// TestTransactionCanceledReasons_Canceled は TransactionCanceledException のキャンセル理由を返すことを検証する。
+func TestTransactionCanceledReasons_Canceled(t *testing.T) {
+	t.Parallel()
+	err := &types.TransactionCanceledException{
+		CancellationReasons: []types.CancellationReason{
+			{Code: stringPtr("ConditionalCheckFailed")},
+			{Code: stringPtr("None")},
+		},
+	}
+	reasons := transactionCanceledReasons(err)
+	if len(reasons) != 2 {
+		t.Fatalf("expected 2 reasons, got %d", len(reasons))
+	}
+	if reasons[0] != "ConditionalCheckFailed" {
+		t.Errorf("expected ConditionalCheckFailed, got %s", reasons[0])
+	}
+}
+
+// TestTransactionCanceledReasons_NotCanceled は非 TransactionCanceledException で nil を返すことを検証する。
+func TestTransactionCanceledReasons_NotCanceled(t *testing.T) {
+	t.Parallel()
+	err := fmt.Errorf("other error")
+	reasons := transactionCanceledReasons(err)
+	if reasons != nil {
+		t.Errorf("expected nil, got %v", reasons)
+	}
+}
+
+// TestTransactionCanceledReasons_NilCode は Code が nil の場合に空文字を返すことを検証する。
+func TestTransactionCanceledReasons_NilCode(t *testing.T) {
+	t.Parallel()
+	err := &types.TransactionCanceledException{
+		CancellationReasons: []types.CancellationReason{
+			{Code: nil},
+		},
+	}
+	reasons := transactionCanceledReasons(err)
+	if len(reasons) != 1 {
+		t.Fatalf("expected 1 reason, got %d", len(reasons))
+	}
+	if reasons[0] != "" {
+		t.Errorf("expected empty string, got %s", reasons[0])
+	}
+}
+
 // stringPtr は文字列ポインタを返すヘルパー。
 func stringPtr(s string) *string {
 	return &s

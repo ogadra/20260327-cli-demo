@@ -23,6 +23,8 @@ type DynamoDBAPI interface {
 	UpdateItem(ctx context.Context, params *dynamodb.UpdateItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error)
 	// Query は DynamoDB のクエリを実行する。
 	Query(ctx context.Context, params *dynamodb.QueryInput, optFns ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error)
+	// TransactWriteItems は DynamoDB のトランザクション書き込みを実行する。
+	TransactWriteItems(ctx context.Context, params *dynamodb.TransactWriteItemsInput, optFns ...func(*dynamodb.Options)) (*dynamodb.TransactWriteItemsOutput, error)
 }
 
 // Store は poll_votes テーブルの操作を提供する。
@@ -77,6 +79,9 @@ var ErrVoteNotFound = errors.New("vote not found")
 
 // ErrPollNotFound はアンケートが存在しない場合のエラー。
 var ErrPollNotFound = errors.New("poll not found")
+
+// ErrInvalidChoice は無効な選択肢の場合のエラー。
+var ErrInvalidChoice = errors.New("invalid choice")
 
 // metaSK は META レコードのソートキー。
 const metaSK = "META"
