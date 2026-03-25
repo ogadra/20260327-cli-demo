@@ -7,6 +7,14 @@ export const MessageType = {
   PollError: "poll_error",
 } as const;
 
+/** Discriminant values for client-to-server presenter messages. */
+export const ClientMessageType = {
+  PollGet: "poll_get",
+  PollVote: "poll_vote",
+  PollUnvote: "poll_unvote",
+  PollSwitch: "poll_switch",
+} as const;
+
 /** Discriminated union of all server-to-client presenter messages. */
 export type PresenterMessage =
   | { type: typeof MessageType.SlideSync; page: number }
