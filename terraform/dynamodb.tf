@@ -15,7 +15,7 @@
 resource "aws_dynamodb_table" "runners" {
   # checkov:skip=CKV_AWS_28:PITR is not required for ephemeral runner state
   # checkov:skip=CKV_AWS_119:AWS managed encryption is sufficient for this use case
-  name         = "Runners"
+  name         = "bunshin-runners"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "runnerId"
 
