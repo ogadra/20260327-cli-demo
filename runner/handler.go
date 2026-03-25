@@ -42,17 +42,26 @@ type sseEvent struct {
 }
 
 // newHandler creates a gin.Engine with all API routes registered.
-// The returned engine handles POST /api/session, DELETE /api/session, and POST /api/execute.
+// The returned engine handles GET /health, POST /api/session, DELETE /api/session, and POST /api/execute.
 // The Validator v is used to judge non-whitelisted commands via LLM; it may be nil
 // in which case all non-whitelisted commands are rejected with 403.
 func newHandler(sm *SessionManager, v Validator) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.HandleMethodNotAllowed = true
+	r.GET("/health", handleHealth())
 	r.POST("/api/session", handleCreateSession(sm))
 	r.DELETE("/api/session", handleDeleteSession(sm))
 	r.POST("/api/execute", handleExecute(sm, v))
 	return r
+}
+
+// handleHealth returns a gin handler for GET /health.
+// It returns 200 OK with body "ok\n" to indicate the runner is reachable.
+func handleHealth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.String(http.StatusOK, "ok\n")
+	}
 }
 
 // handleCreateSession returns a gin handler for POST /api/session.
