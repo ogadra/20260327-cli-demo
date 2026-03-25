@@ -236,6 +236,9 @@ func (h *messageHandler) handlePollSwitch(ctx context.Context, connectionID stri
 	if msg.PollID == "" || msg.From == "" || msg.To == "" {
 		return h.sendError(ctx, connectionID, "pollId, from, and to are required")
 	}
+	if msg.From == msg.To {
+		return h.sendError(ctx, connectionID, "from and to must be different")
+	}
 	err := h.pollSwitch.Switch(ctx, msg.PollID, connectionID, msg.From, msg.To)
 	if err != nil {
 		return h.handlePollError(ctx, connectionID, msg.PollID, connectionID, err)
@@ -358,7 +361,13 @@ func run() error {
 
 	ddbClient := dynamodb.NewFromConfig(cfg)
 	connTable := os.Getenv("CONNECTIONS_TABLE")
+	if connTable == "" {
+		return fmt.Errorf("CONNECTIONS_TABLE environment variable is required")
+	}
 	pollTable := os.Getenv("POLL_VOTES_TABLE")
+	if pollTable == "" {
+		return fmt.Errorf("POLL_VOTES_TABLE environment variable is required")
+	}
 	apigwEndpoint := os.Getenv("APIGW_ENDPOINT")
 
 	apigwClient := apigatewaymanagementapi.NewFromConfig(cfg, func(o *apigatewaymanagementapi.Options) {

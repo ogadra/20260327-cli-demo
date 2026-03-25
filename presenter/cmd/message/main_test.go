@@ -1142,6 +1142,74 @@ func TestHandlePollSwitch_MissingFields(t *testing.T) {
 	}
 }
 
+// TestHandlePollSwitch_FromEqualsTo は from と to が同じ場合のエラーを検証する。
+func TestHandlePollSwitch_FromEqualsTo(t *testing.T) {
+	t.Parallel()
+	var sentPayload []byte
+	h := &messageHandler{
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
+				sentPayload = payload
+				return nil
+			},
+		},
+	}
+	req := newRequest("conn1", `{"type":"poll_switch","pollId":"q1","from":"A","to":"A"}`)
+	resp, err := h.handle(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if !strings.Contains(string(sentPayload), "different") {
+		t.Errorf("expected validation error about different, got %s", string(sentPayload))
+	}
+}
+
+// TestRun_MissingConnectionsTable は CONNECTIONS_TABLE 未設定時のエラーを検証する。
+func TestRun_MissingConnectionsTable(t *testing.T) {
+	origLoadConfig := loadConfig
+	origStartLambda := startLambda
+	defer func() {
+		loadConfig = origLoadConfig
+		startLambda = origStartLambda
+	}()
+
+	loadConfig = func(_ context.Context, _ ...func(*config.LoadOptions) error) (aws.Config, error) {
+		return aws.Config{}, nil
+	}
+	startLambda = func(_ interface{}) {}
+
+	t.Setenv("CONNECTIONS_TABLE", "")
+
+	if err := run(); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// TestRun_MissingPollVotesTable は POLL_VOTES_TABLE 未設定時のエラーを検証する。
+func TestRun_MissingPollVotesTable(t *testing.T) {
+	origLoadConfig := loadConfig
+	origStartLambda := startLambda
+	defer func() {
+		loadConfig = origLoadConfig
+		startLambda = origStartLambda
+	}()
+
+	loadConfig = func(_ context.Context, _ ...func(*config.LoadOptions) error) (aws.Config, error) {
+		return aws.Config{}, nil
+	}
+	startLambda = func(_ interface{}) {}
+
+	t.Setenv("CONNECTIONS_TABLE", "conn-table")
+	t.Setenv("POLL_VOTES_TABLE", "")
+
+	if err := run(); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 // TestMain_Error は main 関数のエラー処理を検証する。
 func TestMain_Error(t *testing.T) {
 	origRunFn := runFn
