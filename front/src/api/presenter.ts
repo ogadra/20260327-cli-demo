@@ -24,13 +24,24 @@ export const parsePresenterMessage = (raw: string): PresenterMessage | null => {
   try {
     const data: unknown = JSON.parse(raw);
     if (typeof data !== "object" || data === null || !("type" in data)) return null;
-    const msg = data as PresenterMessage;
-    if (
-      msg.type === MessageType.SlideSync ||
-      msg.type === MessageType.HandsOn ||
-      msg.type === MessageType.ViewerCount
-    ) {
-      return msg;
+    const msg = data as Record<string, unknown>;
+
+    if (msg.type === MessageType.SlideSync) {
+      return typeof msg.page === "number" ? { type: MessageType.SlideSync, page: msg.page } : null;
+    }
+    if (msg.type === MessageType.HandsOn) {
+      return typeof msg.instruction === "string" && typeof msg.placeholder === "string"
+        ? {
+            type: MessageType.HandsOn,
+            instruction: msg.instruction,
+            placeholder: msg.placeholder,
+          }
+        : null;
+    }
+    if (msg.type === MessageType.ViewerCount) {
+      return typeof msg.count === "number"
+        ? { type: MessageType.ViewerCount, count: msg.count }
+        : null;
     }
     return null;
   } catch {

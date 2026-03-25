@@ -36,4 +36,24 @@ describe("parsePresenterMessage", () => {
     expect(parsePresenterMessage(JSON.stringify(null))).toBeNull();
     expect(parsePresenterMessage(JSON.stringify(42))).toBeNull();
   });
+
+  it("returns null for invalid slide_sync payload shape", () => {
+    expect(
+      parsePresenterMessage(JSON.stringify({ type: MessageType.SlideSync, page: "3" })),
+    ).toBeNull();
+  });
+
+  it("returns null for invalid viewer_count payload shape", () => {
+    expect(
+      parsePresenterMessage(JSON.stringify({ type: MessageType.ViewerCount, count: "42" })),
+    ).toBeNull();
+  });
+
+  it("returns null for invalid hands_on payload shape", () => {
+    expect(
+      parsePresenterMessage(
+        JSON.stringify({ type: MessageType.HandsOn, instruction: 123, placeholder: null }),
+      ),
+    ).toBeNull();
+  });
 });
