@@ -2,14 +2,17 @@ import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { PresenterPanelProps } from "./PresenterPanel";
 
-vi.mock("./sequence", () => ({
-  defaultSequence: [
-    { type: "slide_sync", page: 0 },
-    { type: "hands_on", instruction: "Run echo", placeholder: "echo hello" },
-    { type: "poll_get", pollId: "q1", options: ["Yes", "No"], maxChoices: 1 },
-    { type: "slide_sync", page: 1 },
-  ],
-}));
+vi.mock("./sequence", async () => {
+  const { Action } = await vi.importActual<typeof import("../api/presenter")>("../api/presenter");
+  return {
+    defaultSequence: [
+      { type: Action.SlideSync, page: 0 },
+      { type: Action.HandsOn, instruction: "Run echo", placeholder: "echo hello" },
+      { type: Action.PollOpen, pollId: "q1", options: ["Yes", "No"], maxChoices: 1 },
+      { type: Action.SlideSync, page: 1 },
+    ],
+  };
+});
 
 /** Creates a fresh set of props with mock send functions for each test. */
 const createProps = (): PresenterPanelProps & {
@@ -33,7 +36,7 @@ describe("PresenterPanel", () => {
 
   /** Lazily imports PresenterPanel to pick up the mocked sequence. */
   const renderPanel = async (): Promise<void> => {
-    const { default: PresenterPanel } = await import("./PresenterPanel");
+    const { PresenterPanel } = await import("./PresenterPanel");
     render(<PresenterPanel {...props} />);
   };
 
@@ -134,14 +137,14 @@ describe("PresenterPanel", () => {
     expect(screen.getByTestId("step-description").textContent).toBe("Hands-on: Run echo");
   });
 
-  it("displays step description for poll_get step", async () => {
+  it("displays step description for poll_open step", async () => {
     await renderPanel();
     fireEvent.click(screen.getByTestId("next-button"));
     fireEvent.click(screen.getByTestId("next-button"));
     expect(screen.getByTestId("step-description").textContent).toBe("Poll: q1");
   });
 
-  it("shows poll results when available for poll_get step", async () => {
+  it("shows poll results when available for poll_open step", async () => {
     props.pollStates = {
       q1: {
         options: ["Yes", "No"],

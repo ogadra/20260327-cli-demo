@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { Action } from "../api/presenter";
 import type { PollStateData } from "../hooks/usePresenter";
 import { defaultSequence, type PresenterStep } from "./sequence";
 
@@ -19,11 +20,11 @@ export interface PresenterPanelProps {
 /** Derives a human-readable description from a presenter step. */
 const describeStep = (step: PresenterStep): string => {
   switch (step.type) {
-    case "slide_sync":
+    case Action.SlideSync:
       return `Slide ${step.page}`;
-    case "hands_on":
+    case Action.HandsOn:
       return `Hands-on: ${step.instruction}`;
-    case "poll_get":
+    case Action.PollOpen:
       return `Poll: ${step.pollId}`;
   }
 };
@@ -43,13 +44,13 @@ const PresenterPanel = ({
   const executeStep = useCallback(
     (step: PresenterStep): void => {
       switch (step.type) {
-        case "slide_sync":
+        case Action.SlideSync:
           sendSlideSync(step.page);
           break;
-        case "hands_on":
+        case Action.HandsOn:
           sendHandsOn(step.instruction, step.placeholder);
           break;
-        case "poll_get":
+        case Action.PollOpen:
           sendPollGet(step.pollId, step.options, step.maxChoices);
           break;
       }
@@ -99,7 +100,8 @@ const PresenterPanel = ({
   }, [executeStep, sequence]);
 
   const currentStep = sequence[stepIndex];
-  const pollState = currentStep.type === "poll_get" ? pollStates[currentStep.pollId] : undefined;
+  const pollState =
+    currentStep.type === Action.PollOpen ? pollStates[currentStep.pollId] : undefined;
 
   return (
     <div
@@ -194,4 +196,4 @@ const PresenterPanel = ({
   );
 };
 
-export default PresenterPanel;
+export { PresenterPanel };
