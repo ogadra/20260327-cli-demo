@@ -131,6 +131,18 @@ resource "aws_security_group_rule" "broker_ingress_runner" {
   description              = "HTTP from runner"
 }
 
+# broker outbound: to runner (healthcheck)
+resource "aws_security_group_rule" "broker_egress_runner" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
+  type                     = "egress"
+  from_port                = local.ecs_services["runner"].port
+  to_port                  = local.ecs_services["runner"].port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.runner.id
+  security_group_id        = aws_security_group.broker.id
+  description              = "HTTP to runner for healthcheck"
+}
+
 # broker outbound: to DynamoDB VPC endpoint
 resource "aws_security_group_rule" "broker_egress_dynamodb" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
@@ -168,6 +180,18 @@ resource "aws_security_group_rule" "runner_ingress_nginx" {
   source_security_group_id = aws_security_group.nginx.id
   security_group_id        = aws_security_group.runner.id
   description              = "HTTP from nginx"
+}
+
+# runner inbound: from broker (healthcheck)
+resource "aws_security_group_rule" "runner_ingress_broker" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
+  type                     = "ingress"
+  from_port                = local.ecs_services["runner"].port
+  to_port                  = local.ecs_services["runner"].port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.broker.id
+  security_group_id        = aws_security_group.runner.id
+  description              = "HTTP from broker for healthcheck"
 }
 
 # runner outbound: to broker
