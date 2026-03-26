@@ -141,6 +141,7 @@ export const PresenterPanel = ({
             background: stepIndex === 0 ? "#333" : "#555",
             color: stepIndex === 0 ? "#666" : "#fff",
             border: "none",
+            borderRadius: "4px",
             cursor: stepIndex === 0 ? "not-allowed" : "pointer",
             fontSize: "20px",
           }}
@@ -157,6 +158,7 @@ export const PresenterPanel = ({
             background: stepIndex === sequence.length - 1 ? "#333" : "#555",
             color: stepIndex === sequence.length - 1 ? "#666" : "#fff",
             border: "none",
+            borderRadius: "4px",
             cursor: stepIndex === sequence.length - 1 ? "not-allowed" : "pointer",
             fontSize: "20px",
           }}
