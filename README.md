@@ -15,6 +15,7 @@ lefthook install    # pre-commit フック設定
 docker build --target test broker/
 docker build --target test runner/
 docker build --target test front/
+docker build --target test presenter/
 docker build --target config-test nginx/
 ```
 
@@ -35,6 +36,7 @@ docker compose --profile broker --profile runner --profile nginx --profile front
 | nginx | 80 | リバースプロキシ |
 | broker | 8080 | 制御プレーン (DynamoDB) |
 | runner | 3000 | コマンド実行サーバー |
+| presenter | — | スライド同期・アンケート (AWS Lambda + API Gateway WebSocket) |
 
 ## API
 
@@ -59,6 +61,24 @@ SSE イベント種別: `stdout` (リアルタイム), `stderr` (完了時), `co
 | POST | `/internal/runners/register` | Runner 登録 |
 | DELETE | `/internal/runners/{runnerId}` | Runner 登録解除 |
 
+### Presenter WebSocket
+
+API Gateway WebSocket 経由で front と通信する。
+
+| 方向 | メッセージタイプ | 説明 |
+|------|----------------|------|
+| S→C | `slide_sync` | スライドページ同期 |
+| S→C | `hands_on` | ハンズオンモード切替 |
+| S→C | `viewer_count` | 接続中の視聴者数 |
+| S→C | `poll_state` | アンケート状態（選択肢・投票数・自分の選択） |
+| S→C | `poll_error` | アンケート操作エラー |
+| C→S | `slide_sync` | スライドページ送信（presenter ロール） |
+| C→S | `hands_on` | ハンズオンモード送信（presenter ロール） |
+| C→S | `poll_get` | アンケート取得・初期化 |
+| C→S | `poll_vote` | 投票 |
+| C→S | `poll_unvote` | 投票取消 |
+| C→S | `poll_switch` | 投票変更 |
+
 ## GitHub Actions シークレット
 
 デプロイワークフローで必要な Repository secrets。OIDC によるロール引き受けを使用するため、AWS クレデンシャルの直接設定は不要。
@@ -68,5 +88,6 @@ SSE イベント種別: `stdout` (リアルタイム), `stderr` (完了時), `co
 | `DEPLOY_BROKER_ROLE_ARN` | broker デプロイ用 IAM ロール ARN |
 | `DEPLOY_FRONT_ROLE_ARN` | front デプロイ用 IAM ロール ARN |
 | `DEPLOY_NGINX_ROLE_ARN` | nginx デプロイ用 IAM ロール ARN |
+| `DEPLOY_PRESENTER_ROLE_ARN` | presenter デプロイ用 IAM ロール ARN |
 | `DEPLOY_RUNNER_ROLE_ARN` | runner デプロイ用 IAM ロール ARN |
 | `FRONT_S3_BUCKET` | front アセット配信用 S3 バケット名 |
