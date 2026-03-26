@@ -11,6 +11,9 @@ if (!__ENV.RUNNER_COUNT) {
   throw new Error("RUNNER_COUNT environment variable is required");
 }
 const RUNNER_COUNT = parseInt(__ENV.RUNNER_COUNT, 10);
+if (Number.isNaN(RUNNER_COUNT) || RUNNER_COUNT <= 0) {
+  throw new Error(`RUNNER_COUNT must be a positive integer, got: ${__ENV.RUNNER_COUNT}`);
+}
 
 export const options = {
   scenarios: {
