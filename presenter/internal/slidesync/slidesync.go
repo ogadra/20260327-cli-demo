@@ -70,12 +70,12 @@ func (h *Handler) Handle(ctx context.Context, room, connectionID string, page in
 		return fmt.Errorf("marshal slide_sync: %w", err)
 	}
 
-	if err := h.broadcaster.Send(ctx, room, payload, connectionID); err != nil {
-		return fmt.Errorf("broadcast slide_sync: %w", err)
-	}
-
 	if err := h.stateWriter.PutState(ctx, room, page); err != nil {
 		return fmt.Errorf("save state: %w", err)
+	}
+
+	if err := h.broadcaster.Send(ctx, room, payload, connectionID); err != nil {
+		return fmt.Errorf("broadcast slide_sync: %w", err)
 	}
 
 	return nil
