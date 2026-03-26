@@ -105,6 +105,7 @@ resource "aws_dynamodb_table" "presenter_sessions" {
 }
 
 # Presenter room 状態テーブル。room ごとの現在のスライド位置を保持する
+# TTL なし: セッションをまたいで永続的に保持する設計
 #
 # アクセスパターン:
 #   1. room の現在のページを取得 -> GetItem by room

@@ -71,17 +71,9 @@ func (s *Store) GetState(ctx context.Context, room string) (int, error) {
 	if out.Item == nil {
 		return 0, nil
 	}
-	pageAttr, ok := out.Item["page"]
-	if !ok {
-		return 0, nil
+	var state State
+	if err := attributevalue.UnmarshalMap(out.Item, &state); err != nil {
+		return 0, fmt.Errorf("unmarshal state: %w", err)
 	}
-	pageVal, ok := pageAttr.(*types.AttributeValueMemberN)
-	if !ok {
-		return 0, nil
-	}
-	var page int
-	if _, err := fmt.Sscanf(pageVal.Value, "%d", &page); err != nil {
-		return 0, fmt.Errorf("parse page: %w", err)
-	}
-	return page, nil
+	return state.Page, nil
 }

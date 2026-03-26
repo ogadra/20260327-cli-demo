@@ -168,7 +168,7 @@ func TestGetState_MissingPageAttribute(t *testing.T) {
 	}
 }
 
-// TestGetState_NonNumberPage は page が数値型でない場合に 0 を返すことを検証する。
+// TestGetState_NonNumberPage は page が数値型でない場合にエラーを返すことを検証する。
 func TestGetState_NonNumberPage(t *testing.T) {
 	t.Parallel()
 	mock := &mockDynamoDBAPI{
@@ -183,16 +183,13 @@ func TestGetState_NonNumberPage(t *testing.T) {
 	}
 	store := NewStore(mock, "t")
 
-	page, err := store.GetState(context.Background(), "default")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if page != 0 {
-		t.Errorf("page = %d, want 0", page)
+	_, err := store.GetState(context.Background(), "default")
+	if err == nil {
+		t.Fatal("expected error for non-number page")
 	}
 }
 
-// TestGetState_InvalidNumber は page の数値パースが失敗する場合を検証する。
+// TestGetState_InvalidNumber は page の数値パースが失敗する場合にエラーを返すことを検証する。
 func TestGetState_InvalidNumber(t *testing.T) {
 	t.Parallel()
 	mock := &mockDynamoDBAPI{
