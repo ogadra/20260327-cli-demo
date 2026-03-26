@@ -806,19 +806,23 @@ func TestStreamReSourcesHmSessionVars(t *testing.T) {
 	}
 
 	written := stdinCapture.String()
-	if !strings.Contains(written, `unset __HM_SESS_VARS_SOURCED`) {
-		t.Errorf("stdin script does not unset __HM_SESS_VARS_SOURCED.\ngot: %s", written)
-	}
-	if !strings.Contains(written, `. "$HOME/.nix-profile/etc/profile.d/hm-session-vars.sh" 2>/dev/null`) {
-		t.Errorf("stdin script does not contain hm-session-vars.sh re-source.\ngot: %s", written)
+	reloadSnippet := `unset __HM_SESS_VARS_SOURCED; . "$HOME/.nix-profile/etc/profile.d/hm-session-vars.sh" 2>/dev/null`
+	// The reload snippet must appear both before the command and after __ec=$?.
+	count := strings.Count(written, reloadSnippet)
+	if count < 2 {
+		t.Errorf("expected reload snippet at least twice (before and after command), got %d.\nscript: %s", count, written)
 	}
 
-	// Verify ordering: __ec=$? -> unset -> source.
+	// Verify ordering: reload -> command -> __ec=$? -> reload.
+	firstReload := strings.Index(written, reloadSnippet)
+	cmdIdx := strings.Index(written, "echo hello")
 	ecIdx := strings.Index(written, "__ec=$?")
-	unsetIdx := strings.Index(written, "unset __HM_SESS_VARS_SOURCED")
-	sourceIdx := strings.Index(written, `hm-session-vars.sh`)
-	if ecIdx < 0 || unsetIdx < 0 || sourceIdx < 0 || ecIdx >= unsetIdx || unsetIdx >= sourceIdx {
-		t.Errorf("expected __ec=$? before unset before hm-session-vars.sh source.\ngot: %s", written)
+	secondReload := strings.Index(written[ecIdx:], reloadSnippet)
+	if firstReload < 0 || cmdIdx < 0 || ecIdx < 0 || secondReload < 0 {
+		t.Errorf("missing expected components in script.\nscript: %s", written)
+	}
+	if firstReload >= cmdIdx || cmdIdx >= ecIdx {
+		t.Errorf("expected reload before command before __ec=$?.\nscript: %s", written)
 	}
 }
 
