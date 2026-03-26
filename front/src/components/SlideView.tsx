@@ -27,7 +27,6 @@ const SlideView = ({
   if (!Slide) {
     return (
       <div
-        data-testid="slide-fallback"
         style={{
           display: "flex",
           alignItems: "center",
@@ -44,7 +43,7 @@ const SlideView = ({
     );
   }
   return (
-    <div data-testid="slide-content" style={{ width: "100%", height: "100%" }}>
+    <div role="region" aria-label="slide content" style={{ width: "100%", height: "100%" }}>
       <Slide
         pollStates={pollStates}
         onPollVote={onPollVote}

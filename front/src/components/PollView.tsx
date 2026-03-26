@@ -49,10 +49,11 @@ const PollView = ({
 
   return (
     <div
-      data-testid="poll-view"
+      role="group"
+      aria-label="Poll options"
       style={{ padding: "16px", fontFamily: "sans-serif", color: "#fff" }}
     >
-      {options.map((option, index) => {
+      {options.map((option) => {
         const count = votes[option] ?? 0;
         const pct = totalVotes > 0 ? (count / totalVotes) * 100 : 0;
         const selected = myChoices.includes(option);
@@ -61,7 +62,6 @@ const PollView = ({
         return (
           <button
             key={option}
-            data-testid={`poll-option-${index}`}
             type="button"
             onClick={() => handleClick(option)}
             disabled={disabled}
@@ -83,7 +83,8 @@ const PollView = ({
             }}
           >
             <div
-              data-testid={`poll-bar-${index}`}
+              aria-hidden="true"
+              data-slot="progress-bar"
               style={{
                 position: "absolute",
                 left: 0,
@@ -97,12 +98,17 @@ const PollView = ({
             <span style={{ position: "relative", zIndex: 1, flexGrow: 1, textAlign: "left" }}>
               {option}
             </span>
-            <span
-              data-testid={`poll-count-${index}`}
-              style={{ position: "relative", zIndex: 1, marginLeft: "8px", color: "#aaa" }}
-            >
+            <span style={{ position: "relative", zIndex: 1, marginLeft: "8px", color: "#aaa" }}>
               {count}
             </span>
+            <span
+              role="progressbar"
+              aria-label={`${option} votes`}
+              aria-valuenow={Math.round(pct)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}
+            />
           </button>
         );
       })}

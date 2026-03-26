@@ -37,7 +37,6 @@ const App = (): ReactNode => {
   return (
     <div style={{ position: "relative", height: "100dvh", background: "#000" }}>
       <div
-        data-testid="viewer-count"
         style={{
           position: "absolute",
           top: 8,
@@ -52,7 +51,8 @@ const App = (): ReactNode => {
       </div>
 
       <div
-        data-testid="slide-mode"
+        role="region"
+        aria-label="Slide mode"
         style={{
           display: mode === MessageType.SlideSync ? "flex" : "none",
           flexDirection: "column",
@@ -70,7 +70,6 @@ const App = (): ReactNode => {
         </div>
         {instruction && (
           <div
-            data-testid="instruction"
             style={{
               padding: "16px",
               textAlign: "center",
@@ -86,7 +85,8 @@ const App = (): ReactNode => {
       </div>
 
       <div
-        data-testid="hands-on-mode"
+        role="region"
+        aria-label="Hands-on mode"
         style={{
           display: mode === MessageType.HandsOn ? "flex" : "none",
           flexDirection: "column",

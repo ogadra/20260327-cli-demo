@@ -20,7 +20,7 @@ describe("SlideView", () => {
   it("renders the slide for page 0", () => {
     render(<SlideView page={0} {...pollProps} />);
     expect(screen.getByText("Slide Zero")).toBeDefined();
-    expect(screen.getByTestId("slide-content")).toBeDefined();
+    expect(screen.getByRole("region")).toBeDefined();
   });
 
   it("renders the slide for page 1", () => {
@@ -31,7 +31,6 @@ describe("SlideView", () => {
   it("renders fallback for out-of-range page", () => {
     render(<SlideView page={99} {...pollProps} />);
     expect(screen.getByText("Slide not found")).toBeDefined();
-    expect(screen.getByTestId("slide-fallback")).toBeDefined();
   });
 
   it("renders fallback for negative page", () => {
