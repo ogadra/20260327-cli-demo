@@ -27,6 +27,8 @@ RUN CGO_ENABLED=0 go build -o /server .
 # production image
 FROM nixos/nix:2.34.3
 
+ENV PATH="/usr/local/bin:${PATH}"
+
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 RUN mkdir -p /etc/nix && \
