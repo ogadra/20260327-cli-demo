@@ -98,21 +98,21 @@ describe("App", () => {
 
   it("shows slide mode by default", () => {
     render(<App />);
-    const slideMode = screen.getByTestId("slide-mode");
+    const slideMode = screen.getByRole("region", { name: "Slide mode" });
     expect(slideMode.style.display).toBe("flex");
-    const handsOnMode = screen.getByTestId("hands-on-mode");
+    const handsOnMode = document.querySelector('[aria-label="Hands-on mode"]') as HTMLElement;
     expect(handsOnMode.style.display).toBe("none");
   });
 
   it("hides instruction block when instruction is empty", () => {
     render(<App />);
-    expect(screen.queryByTestId("instruction")).toBeNull();
+    expect(screen.queryByText(/echo/)).toBeNull();
   });
 
   it("shows instruction block when instruction is provided", () => {
     mockPresenter.instruction = "echo hello を実行してみよう";
     render(<App />);
-    expect(screen.getByTestId("instruction").textContent).toBe("echo hello を実行してみよう");
+    expect(screen.getByText("echo hello を実行してみよう")).toBeInTheDocument();
   });
 
   it("passes placeholder to command input", () => {
@@ -125,22 +125,22 @@ describe("App", () => {
   it("shows hands-on mode when mode is hands_on", () => {
     mockPresenter.mode = MessageType.HandsOn;
     render(<App />);
-    const slideMode = screen.getByTestId("slide-mode");
+    const slideMode = document.querySelector('[aria-label="Slide mode"]') as HTMLElement;
     expect(slideMode.style.display).toBe("none");
-    const handsOnMode = screen.getByTestId("hands-on-mode");
+    const handsOnMode = screen.getByRole("region", { name: "Hands-on mode" });
     expect(handsOnMode.style.display).toBe("flex");
   });
 
   it("displays viewer count", () => {
     mockPresenter.viewerCount = 42;
     render(<App />);
-    expect(screen.getByTestId("viewer-count").textContent).toBe("42 viewers");
+    expect(screen.getByText(/viewers/)).toHaveTextContent("42 viewers");
   });
 
   it("places input as first child in hands-on mode", () => {
     mockPresenter.mode = MessageType.HandsOn;
     render(<App />);
-    const handsOnMode = screen.getByTestId("hands-on-mode");
+    const handsOnMode = screen.getByRole("region", { name: "Hands-on mode" });
     const firstChild = handsOnMode.children[0] as HTMLElement;
     expect(firstChild.tagName).toBe("INPUT");
     expect(firstChild.getAttribute("placeholder")).toBe("Enter command...");
