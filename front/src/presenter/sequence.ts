@@ -18,7 +18,6 @@ export type PresenterStep = SlideSyncPayload | HandsOnPayload;
 export const defaultSequence: PresenterStep[] = [
   { type: Action.SlideSync, page: 0 },
   { type: Action.SlideSync, page: 1 },
-  { type: Action.HandsOn, instruction: "Try running a command", placeholder: "echo hello" },
   { type: Action.SlideSync, page: 2 },
 ];
 
