@@ -1,18 +1,32 @@
-/** Discriminant values for server-to-client presenter messages. */
-export const MessageType = {
+/** Direction-independent action identifiers shared across server and client messages. */
+export const Action = {
   SlideSync: "slide_sync",
   HandsOn: "hands_on",
   ViewerCount: "viewer_count",
   PollState: "poll_state",
   PollError: "poll_error",
-} as const;
-
-/** Discriminant values for client-to-server presenter messages. */
-export const ClientMessageType = {
   PollGet: "poll_get",
   PollVote: "poll_vote",
   PollUnvote: "poll_unvote",
   PollSwitch: "poll_switch",
+  PollOpen: "poll_open",
+} as const;
+
+/** Discriminant values for server-to-client presenter messages. */
+export const MessageType = {
+  SlideSync: Action.SlideSync,
+  HandsOn: Action.HandsOn,
+  ViewerCount: Action.ViewerCount,
+  PollState: Action.PollState,
+  PollError: Action.PollError,
+} as const;
+
+/** Discriminant values for client-to-server presenter messages. */
+export const ClientMessageType = {
+  PollGet: Action.PollGet,
+  PollVote: Action.PollVote,
+  PollUnvote: Action.PollUnvote,
+  PollSwitch: Action.PollSwitch,
 } as const;
 
 /** Discriminated union of all server-to-client presenter messages. */
