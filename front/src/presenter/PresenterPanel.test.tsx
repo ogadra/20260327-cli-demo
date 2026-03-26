@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { PresenterPanelProps } from "./PresenterPanel";
 
 vi.mock("./sequence", async () => {
@@ -42,76 +42,75 @@ describe("PresenterPanel", () => {
 
   it("renders step counter", async () => {
     await renderPanel();
-    expect(screen.getByLabelText("step counter").textContent).toBe("Step 1 / 4");
+    const nav = screen.getByRole("navigation", { name: "status" });
+    expect(within(nav).getByText(/Step 1 \/ 4/)).toBeTruthy();
   });
 
   it("shows viewer count", async () => {
     props.viewerCount = 42;
     await renderPanel();
-    expect(screen.getByLabelText("viewer count").textContent).toBe("42 viewers");
+    expect(screen.getByText("42 viewers")).toBeTruthy();
   });
 
   it("disables prev button at step 0", async () => {
     await renderPanel();
-    expect(screen.getByRole("button", { name: "previous step" }).hasAttribute("disabled")).toBe(
-      true,
-    );
+    expect(screen.getByRole("button", { name: "Prev" }).hasAttribute("disabled")).toBe(true);
   });
 
   it("enables next button at step 0", async () => {
     await renderPanel();
-    expect(screen.getByRole("button", { name: "next step" }).hasAttribute("disabled")).toBe(false);
+    expect(screen.getByRole("button", { name: "Next" }).hasAttribute("disabled")).toBe(false);
   });
 
   it("advances step and calls sendHandsOn on next", async () => {
     await renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "next step" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(props.sendHandsOn).toHaveBeenCalledWith("Run echo", "echo hello");
-    expect(screen.getByLabelText("step counter").textContent).toBe("Step 2 / 4");
+    expect(screen.getByText(/Step 2 \/ 4/)).toBeTruthy();
   });
 
   it("calls sendPollGet when navigating to poll step", async () => {
     await renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "next step" }));
-    fireEvent.click(screen.getByRole("button", { name: "next step" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(props.sendPollGet).toHaveBeenCalledWith("q1", ["Yes", "No"], 1);
-    expect(screen.getByLabelText("step counter").textContent).toBe("Step 3 / 4");
+    expect(screen.getByText(/Step 3 \/ 4/)).toBeTruthy();
   });
 
   it("goes back with prev button", async () => {
     await renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "next step" }));
-    fireEvent.click(screen.getByRole("button", { name: "previous step" }));
-    expect(screen.getByLabelText("step counter").textContent).toBe("Step 1 / 4");
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Prev" }));
+    expect(screen.getByText(/Step 1 \/ 4/)).toBeTruthy();
   });
 
   it("disables next button at last step", async () => {
     await renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "next step" }));
-    fireEvent.click(screen.getByRole("button", { name: "next step" }));
-    fireEvent.click(screen.getByRole("button", { name: "next step" }));
-    expect(screen.getByRole("button", { name: "next step" }).hasAttribute("disabled")).toBe(true);
-    expect(screen.getByLabelText("step counter").textContent).toBe("Step 4 / 4");
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("button", { name: "Next" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText(/Step 4 \/ 4/)).toBeTruthy();
   });
 
   it("advances step on ArrowRight key", async () => {
     await renderPanel();
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(props.sendHandsOn).toHaveBeenCalledWith("Run echo", "echo hello");
-    expect(screen.getByLabelText("step counter").textContent).toBe("Step 2 / 4");
+    expect(screen.getByText(/Step 2 \/ 4/)).toBeTruthy();
   });
 
   it("goes back on ArrowLeft key", async () => {
     await renderPanel();
     fireEvent.keyDown(window, { key: "ArrowRight" });
     fireEvent.keyDown(window, { key: "ArrowLeft" });
-    expect(screen.getByLabelText("step counter").textContent).toBe("Step 1 / 4");
+    expect(screen.getByText(/Step 1 \/ 4/)).toBeTruthy();
   });
 
   it("does not go below step 0 on ArrowLeft", async () => {
     await renderPanel();
     fireEvent.keyDown(window, { key: "ArrowLeft" });
-    expect(screen.getByLabelText("step counter").textContent).toBe("Step 1 / 4");
+    expect(screen.getByText(/Step 1 \/ 4/)).toBeTruthy();
   });
 
   it("does not go beyond last step on ArrowRight", async () => {
@@ -120,7 +119,7 @@ describe("PresenterPanel", () => {
     fireEvent.keyDown(window, { key: "ArrowRight" });
     fireEvent.keyDown(window, { key: "ArrowRight" });
     fireEvent.keyDown(window, { key: "ArrowRight" });
-    expect(screen.getByLabelText("step counter").textContent).toBe("Step 4 / 4");
+    expect(screen.getByText(/Step 4 \/ 4/)).toBeTruthy();
   });
 
   it("executes step 0 on mount", async () => {
@@ -130,20 +129,20 @@ describe("PresenterPanel", () => {
 
   it("displays step description for slide_sync step", async () => {
     await renderPanel();
-    expect(screen.getByLabelText("step description").textContent).toBe("Slide 0");
+    expect(screen.getByText("Slide 0")).toBeTruthy();
   });
 
   it("displays step description for hands_on step", async () => {
     await renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "next step" }));
-    expect(screen.getByLabelText("step description").textContent).toBe("Hands-on: Run echo");
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText("Hands-on: Run echo")).toBeTruthy();
   });
 
   it("displays step description for poll_open step", async () => {
     await renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "next step" }));
-    fireEvent.click(screen.getByRole("button", { name: "next step" }));
-    expect(screen.getByLabelText("step description").textContent).toBe("Poll: q1");
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText("Poll: q1")).toBeTruthy();
   });
 
   it("shows poll results when available for poll_open step", async () => {
@@ -156,9 +155,9 @@ describe("PresenterPanel", () => {
       },
     };
     await renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "next step" }));
-    fireEvent.click(screen.getByRole("button", { name: "next step" }));
-    const results = screen.getByLabelText("poll results");
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    const results = screen.getByRole("region", { name: "poll results" });
     expect(results).toBeTruthy();
     expect(results.textContent).toContain("Yes");
     expect(results.textContent).toContain("10");
@@ -168,13 +167,13 @@ describe("PresenterPanel", () => {
 
   it("does not show poll results on non-poll steps", async () => {
     await renderPanel();
-    expect(screen.queryByLabelText("poll results")).toBeNull();
+    expect(screen.queryByRole("region", { name: "poll results" })).toBeNull();
   });
 
   it("does not show poll results when pollStates has no data for the poll", async () => {
     await renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "next step" }));
-    fireEvent.click(screen.getByRole("button", { name: "next step" }));
-    expect(screen.queryByLabelText("poll results")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.queryByRole("region", { name: "poll results" })).toBeNull();
   });
 });

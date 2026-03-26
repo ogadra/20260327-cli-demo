@@ -105,8 +105,6 @@ export const PresenterPanel = ({
 
   return (
     <div
-      role="region"
-      aria-label="presenter panel"
       style={{
         background: "#1a1a1a",
         color: "#fff",
@@ -116,7 +114,7 @@ export const PresenterPanel = ({
       }}
     >
       <nav
-        aria-label="status bar"
+        aria-label="status"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -125,15 +123,13 @@ export const PresenterPanel = ({
           color: "#aaa",
         }}
       >
-        <span aria-label="step counter">
+        <span>
           Step {stepIndex + 1} / {sequence.length}
         </span>
-        <span aria-label="viewer count">{viewerCount} viewers</span>
+        <span>{viewerCount} viewers</span>
       </nav>
 
-      <div aria-label="step description" style={{ fontSize: "20px", marginBottom: "24px" }}>
-        {describeStep(currentStep)}
-      </div>
+      <div style={{ fontSize: "20px", marginBottom: "24px" }}>{describeStep(currentStep)}</div>
 
       {pollState && (
         <section aria-label="poll results" style={{ marginBottom: "24px" }}>
@@ -159,7 +155,6 @@ export const PresenterPanel = ({
 
       <div style={{ display: "flex", gap: "12px" }}>
         <button
-          aria-label="previous step"
           type="button"
           disabled={stepIndex === 0}
           onClick={(): void => goTo(stepIndex - 1)}
@@ -176,7 +171,6 @@ export const PresenterPanel = ({
           Prev
         </button>
         <button
-          aria-label="next step"
           type="button"
           disabled={stepIndex === sequence.length - 1}
           onClick={(): void => goTo(stepIndex + 1)}
