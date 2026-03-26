@@ -38,6 +38,7 @@ data "aws_iam_policy_document" "presenter_ws_dynamodb" {
       aws_dynamodb_table.presenter_ws_connections.arn,
       aws_dynamodb_table.presenter_sessions.arn,
       aws_dynamodb_table.presenter_poll_votes.arn,
+      aws_dynamodb_table.presenter_room_state.arn,
     ]
   }
 }

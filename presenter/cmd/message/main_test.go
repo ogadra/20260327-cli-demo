@@ -14,6 +14,7 @@ import (
 
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/connection"
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/poll"
+	"github.com/ogadra/20260327-cli-demo/presenter/internal/roomstate"
 )
 
 // mockSlideSyncDispatcher はスライド同期ハンドラーのモック。
@@ -1220,6 +1221,7 @@ func TestRun_Success(t *testing.T) {
 
 	t.Setenv("CONNECTIONS_TABLE", "conn-table")
 	t.Setenv("POLL_VOTES_TABLE", "poll-table")
+	t.Setenv("ROOM_STATE_TABLE", "state-table")
 
 	if err := run(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1241,6 +1243,7 @@ func TestRun_DepsFactory(t *testing.T) {
 
 	t.Setenv("CONNECTIONS_TABLE", "conn-table")
 	t.Setenv("POLL_VOTES_TABLE", "poll-table")
+	t.Setenv("ROOM_STATE_TABLE", "state-table")
 
 	var capturedHandler any
 	startLambda = func(handler any) { capturedHandler = handler }
@@ -1257,8 +1260,10 @@ func TestRun_DepsFactory(t *testing.T) {
 func TestNewHandleDepsFactory(t *testing.T) {
 	t.Parallel()
 	cfg := aws.Config{}
-	connStore := connection.NewStore(dynamodb.NewFromConfig(cfg), "test-table")
-	factory := newHandleDepsFactory(cfg, connStore)
+	ddbClient := dynamodb.NewFromConfig(cfg)
+	connStore := connection.NewStore(ddbClient, "test-table")
+	stateStore := roomstate.NewStore(ddbClient, "state-table")
+	factory := newHandleDepsFactory(cfg, connStore, stateStore)
 	deps := factory("example.execute-api.ap-northeast-1.amazonaws.com", "ws")
 	if deps.slideSync == nil {
 		t.Fatal("expected slideSync to be non-nil")
@@ -1516,6 +1521,29 @@ func TestRun_MissingPollVotesTable(t *testing.T) {
 
 	t.Setenv("CONNECTIONS_TABLE", "conn-table")
 	t.Setenv("POLL_VOTES_TABLE", "")
+
+	if err := run(); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// TestRun_MissingRoomStateTable は ROOM_STATE_TABLE 未設定時のエラーを検証する。
+func TestRun_MissingRoomStateTable(t *testing.T) {
+	origLoadConfig := loadConfig
+	origStartLambda := startLambda
+	defer func() {
+		loadConfig = origLoadConfig
+		startLambda = origStartLambda
+	}()
+
+	loadConfig = func(_ context.Context, _ ...func(*config.LoadOptions) error) (aws.Config, error) {
+		return aws.Config{}, nil
+	}
+	startLambda = func(_ interface{}) {}
+
+	t.Setenv("CONNECTIONS_TABLE", "conn-table")
+	t.Setenv("POLL_VOTES_TABLE", "poll-table")
+	t.Setenv("ROOM_STATE_TABLE", "")
 
 	if err := run(); err == nil {
 		t.Fatal("expected error")

@@ -20,6 +20,7 @@ import (
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/connection"
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/handson"
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/poll"
+	"github.com/ogadra/20260327-cli-demo/presenter/internal/roomstate"
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/slidesync"
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/viewercount"
 )
@@ -397,7 +398,7 @@ func newAPIGWEndpoint(domainName, stage string) string {
 }
 
 // newHandleDepsFactory は AWS 設定と接続ストアから handleDepsFactory を生成する。
-func newHandleDepsFactory(cfg aws.Config, connStore *connection.Store) handleDepsFactory {
+func newHandleDepsFactory(cfg aws.Config, connStore *connection.Store, stateStore *roomstate.Store) handleDepsFactory {
 	return func(domainName, stage string) handleDeps {
 		endpoint := newAPIGWEndpoint(domainName, stage)
 		apigwClient := apigatewaymanagementapi.NewFromConfig(cfg, func(o *apigatewaymanagementapi.Options) {
@@ -405,7 +406,7 @@ func newHandleDepsFactory(cfg aws.Config, connStore *connection.Store) handleDep
 		})
 		b := broadcast.NewBroadcaster(apigwClient, connStore, connStore)
 		return handleDeps{
-			slideSync:    slidesync.NewHandler(connStore, b),
+			slideSync:    slidesync.NewHandler(connStore, b, stateStore),
 			handsOn:      handson.NewHandler(connStore, b),
 			viewerCount:  viewercount.NewHandler(connStore, &viewerCountAdapter{sender: b}),
 			broadcaster:  b,
@@ -432,8 +433,14 @@ func run() error {
 		return fmt.Errorf("POLL_VOTES_TABLE environment variable is required")
 	}
 
+	stateTable := os.Getenv("ROOM_STATE_TABLE")
+	if stateTable == "" {
+		return fmt.Errorf("ROOM_STATE_TABLE environment variable is required")
+	}
+
 	connStore := connection.NewStore(ddbClient, connTable)
 	pollStore := poll.NewStore(ddbClient, pollTable)
+	stateStore := roomstate.NewStore(ddbClient, stateTable)
 
 	h := &messageHandler{
 		pollGet:    pollStore,
@@ -441,7 +448,7 @@ func run() error {
 		pollUnvote: pollStore,
 		pollSwitch: pollStore,
 		connGetter: connStore,
-		newDeps:    newHandleDepsFactory(cfg, connStore),
+		newDeps:    newHandleDepsFactory(cfg, connStore, stateStore),
 	}
 
 	startLambda(h.handle)

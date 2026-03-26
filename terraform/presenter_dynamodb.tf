@@ -103,3 +103,29 @@ resource "aws_dynamodb_table" "presenter_sessions" {
     Environment = "shared"
   })
 }
+
+# Presenter room 状態テーブル。room ごとの現在のスライド位置を保持する
+#
+# アクセスパターン:
+#   1. room の現在のページを取得 -> GetItem by room
+#   2. room の現在のページを更新 -> PutItem by room
+#
+# trivy:ignore:AVD-AWS-0024 -- PITR is not required for room state
+# trivy:ignore:AVD-AWS-0025 -- AWS managed encryption is sufficient for this use case
+resource "aws_dynamodb_table" "presenter_room_state" {
+  # checkov:skip=CKV_AWS_28:PITR is not required for room state
+  # checkov:skip=CKV_AWS_119:AWS managed encryption is sufficient for this use case
+  name         = "bunshin-presenter-room-state"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "room"
+
+  attribute {
+    name = "room"
+    type = "S"
+  }
+
+  tags = merge(local.common_tags, {
+    Service     = "presenter"
+    Environment = "shared"
+  })
+}

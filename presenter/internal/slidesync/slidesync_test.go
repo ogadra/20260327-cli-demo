@@ -28,17 +28,31 @@ func (m *mockBroadcaster) Send(ctx context.Context, room string, payload []byte,
 	return m.sendFn(ctx, room, payload, excludeConnectionID)
 }
 
+// mockStateWriter は StateWriter のモック。
+type mockStateWriter struct {
+	putStateFn func(ctx context.Context, room string, page int) error
+}
+
+// PutState はモックの PutState を呼び出す。
+func (m *mockStateWriter) PutState(ctx context.Context, room string, page int) error {
+	return m.putStateFn(ctx, room, page)
+}
+
 // TestNewHandler は Handler の生成を検証する。
 func TestNewHandler(t *testing.T) {
 	t.Parallel()
 	g := &mockConnectionGetter{}
 	b := &mockBroadcaster{}
-	h := NewHandler(g, b)
+	sw := &mockStateWriter{}
+	h := NewHandler(g, b, sw)
 	if h.connGetter != g {
 		t.Error("connGetter mismatch")
 	}
 	if h.broadcaster != b {
 		t.Error("broadcaster mismatch")
+	}
+	if h.stateWriter != sw {
+		t.Error("stateWriter mismatch")
 	}
 	if h.jsonMarshal == nil {
 		t.Error("jsonMarshal should not be nil")
@@ -50,6 +64,7 @@ func TestHandle_Success(t *testing.T) {
 	t.Parallel()
 	var capturedExclude string
 	var capturedPayload []byte
+	var savedPage int
 	h := NewHandler(
 		&mockConnectionGetter{
 			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
@@ -60,6 +75,12 @@ func TestHandle_Success(t *testing.T) {
 			sendFn: func(_ context.Context, _ string, payload []byte, exclude string) error {
 				capturedExclude = exclude
 				capturedPayload = payload
+				return nil
+			},
+		},
+		&mockStateWriter{
+			putStateFn: func(_ context.Context, _ string, page int) error {
+				savedPage = page
 				return nil
 			},
 		},
@@ -75,6 +96,9 @@ func TestHandle_Success(t *testing.T) {
 	if string(capturedPayload) != expected {
 		t.Errorf("expected %s, got %s", expected, string(capturedPayload))
 	}
+	if savedPage != 3 {
+		t.Errorf("expected saved page 3, got %d", savedPage)
+	}
 }
 
 // TestHandle_NotPresenter は viewer ロールがスライド同期を拒否されることを検証する。
@@ -87,6 +111,7 @@ func TestHandle_NotPresenter(t *testing.T) {
 			},
 		},
 		&mockBroadcaster{},
+		&mockStateWriter{},
 	)
 	err := h.Handle(context.Background(), "default", "conn1", 3)
 	if err != ErrNotPresenter {
@@ -104,6 +129,7 @@ func TestHandle_GetError(t *testing.T) {
 			},
 		},
 		&mockBroadcaster{},
+		&mockStateWriter{},
 	)
 	err := h.Handle(context.Background(), "default", "conn1", 3)
 	if err == nil {
@@ -121,6 +147,7 @@ func TestHandle_MarshalError(t *testing.T) {
 			},
 		},
 		&mockBroadcaster{},
+		&mockStateWriter{},
 	)
 	h.jsonMarshal = func(_ any) ([]byte, error) {
 		return nil, fmt.Errorf("marshal error")
@@ -143,6 +170,33 @@ func TestHandle_BroadcastError(t *testing.T) {
 		&mockBroadcaster{
 			sendFn: func(_ context.Context, _ string, _ []byte, _ string) error {
 				return fmt.Errorf("broadcast error")
+			},
+		},
+		&mockStateWriter{},
+	)
+	err := h.Handle(context.Background(), "default", "conn1", 3)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// TestHandle_SaveStateError は状態保存エラーを検証する。
+func TestHandle_SaveStateError(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(
+		&mockConnectionGetter{
+			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
+				return &connection.Connection{Role: "presenter"}, nil
+			},
+		},
+		&mockBroadcaster{
+			sendFn: func(_ context.Context, _ string, _ []byte, _ string) error {
+				return nil
+			},
+		},
+		&mockStateWriter{
+			putStateFn: func(_ context.Context, _ string, _ int) error {
+				return fmt.Errorf("save error")
 			},
 		},
 	)
