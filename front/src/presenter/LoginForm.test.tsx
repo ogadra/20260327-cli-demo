@@ -9,7 +9,6 @@ describe("LoginForm", () => {
   beforeEach(() => {
     onSuccess.mockClear();
     vi.restoreAllMocks();
-    sessionStorage.clear();
   });
 
   it("renders password input and submit button", () => {
@@ -33,6 +32,7 @@ describe("LoginForm", () => {
 
     expect(globalThis.fetch).toHaveBeenCalledWith("/login", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password: "secret" }),
       credentials: "include",
       redirect: "manual",
