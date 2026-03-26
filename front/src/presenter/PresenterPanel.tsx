@@ -1,0 +1,197 @@
+import { type ReactNode, useCallback, useEffect, useState } from "react";
+import type { PollStateData } from "../hooks/usePresenter";
+import { defaultSequence, type PresenterStep } from "./sequence";
+
+/** Props for the PresenterPanel component. */
+export interface PresenterPanelProps {
+  /** Sends a slide_sync message to synchronize viewers to a given page. */
+  sendSlideSync: (page: number) => void;
+  /** Sends a hands_on message with instruction and placeholder text. */
+  sendHandsOn: (instruction: string, placeholder: string) => void;
+  /** Sends a poll_get message to initialize or retrieve a poll. */
+  sendPollGet: (pollId: string, options: string[], maxChoices: number) => void;
+  /** Number of currently connected viewers. */
+  viewerCount: number;
+  /** Poll states keyed by pollId. */
+  pollStates: Partial<Record<string, PollStateData>>;
+}
+
+/** Derives a human-readable description from a presenter step. */
+const describeStep = (step: PresenterStep): string => {
+  switch (step.type) {
+    case "slide_sync":
+      return `Slide ${step.page}`;
+    case "hands_on":
+      return `Hands-on: ${step.instruction}`;
+    case "poll_get":
+      return `Poll: ${step.pollId}`;
+  }
+};
+
+/** Presenter control panel that drives the presentation sequence via step navigation. */
+const PresenterPanel = ({
+  sendSlideSync,
+  sendHandsOn,
+  sendPollGet,
+  viewerCount,
+  pollStates,
+}: PresenterPanelProps): ReactNode => {
+  const sequence = defaultSequence;
+  const [stepIndex, setStepIndex] = useState(0);
+
+  /** Executes the send function corresponding to a given step. */
+  const executeStep = useCallback(
+    (step: PresenterStep): void => {
+      switch (step.type) {
+        case "slide_sync":
+          sendSlideSync(step.page);
+          break;
+        case "hands_on":
+          sendHandsOn(step.instruction, step.placeholder);
+          break;
+        case "poll_get":
+          sendPollGet(step.pollId, step.options, step.maxChoices);
+          break;
+      }
+    },
+    [sendSlideSync, sendHandsOn, sendPollGet],
+  );
+
+  /** Navigates to a specific step index and executes that step. */
+  const goTo = useCallback(
+    (index: number): void => {
+      setStepIndex(index);
+      executeStep(sequence[index]);
+    },
+    [executeStep, sequence],
+  );
+
+  /** Execute step 0 on mount. */
+  useEffect((): void => {
+    executeStep(sequence[0]);
+  }, [executeStep, sequence]);
+
+  /** Listen for keyboard navigation. */
+  useEffect((): (() => void) => {
+    /** Handles keydown events for arrow key navigation. */
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === "ArrowRight") {
+        setStepIndex((prev) => {
+          const next = prev + 1;
+          if (next >= sequence.length) return prev;
+          executeStep(sequence[next]);
+          return next;
+        });
+      } else if (e.key === "ArrowLeft") {
+        setStepIndex((prev) => {
+          const next = prev - 1;
+          if (next < 0) return prev;
+          executeStep(sequence[next]);
+          return next;
+        });
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return (): void => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [executeStep, sequence]);
+
+  const currentStep = sequence[stepIndex];
+  const pollState = currentStep.type === "poll_get" ? pollStates[currentStep.pollId] : undefined;
+
+  return (
+    <div
+      data-testid="presenter-panel"
+      style={{
+        background: "#1a1a1a",
+        color: "#fff",
+        padding: "24px",
+        fontFamily: "sans-serif",
+        minHeight: "100vh",
+      }}
+    >
+      <div
+        data-testid="status-bar"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: "24px",
+          fontSize: "14px",
+          color: "#aaa",
+        }}
+      >
+        <span data-testid="step-counter">
+          Step {stepIndex + 1} / {sequence.length}
+        </span>
+        <span data-testid="viewer-count">{viewerCount} viewers</span>
+      </div>
+
+      <div data-testid="step-description" style={{ fontSize: "20px", marginBottom: "24px" }}>
+        {describeStep(currentStep)}
+      </div>
+
+      {pollState && (
+        <div data-testid="poll-results" style={{ marginBottom: "24px" }}>
+          <div style={{ fontSize: "14px", color: "#aaa", marginBottom: "8px" }}>Poll Results</div>
+          {pollState.options.map((option) => (
+            <div
+              key={option}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                padding: "8px",
+                background: "#222",
+                borderRadius: "4px",
+                marginBottom: "4px",
+              }}
+            >
+              <span>{option}</span>
+              <span style={{ color: "#aaa" }}>{pollState.votes[option] ?? 0}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: "12px" }}>
+        <button
+          data-testid="prev-button"
+          type="button"
+          disabled={stepIndex === 0}
+          onClick={(): void => goTo(stepIndex - 1)}
+          style={{
+            padding: "8px 24px",
+            background: stepIndex === 0 ? "#333" : "#555",
+            color: stepIndex === 0 ? "#666" : "#fff",
+            border: "none",
+            borderRadius: "4px",
+            cursor: stepIndex === 0 ? "not-allowed" : "pointer",
+            fontSize: "16px",
+          }}
+        >
+          Prev
+        </button>
+        <button
+          data-testid="next-button"
+          type="button"
+          disabled={stepIndex === sequence.length - 1}
+          onClick={(): void => goTo(stepIndex + 1)}
+          style={{
+            padding: "8px 24px",
+            background: stepIndex === sequence.length - 1 ? "#333" : "#555",
+            color: stepIndex === sequence.length - 1 ? "#666" : "#fff",
+            border: "none",
+            borderRadius: "4px",
+            cursor: stepIndex === sequence.length - 1 ? "not-allowed" : "pointer",
+            fontSize: "16px",
+          }}
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default PresenterPanel;
