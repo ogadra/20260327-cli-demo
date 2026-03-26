@@ -163,6 +163,12 @@ describe("usePresenter", () => {
     expect(result.current.page).toBe(0);
   });
 
+  it("sends get_state on connection open", () => {
+    renderPresenter();
+    simulateOpen();
+    expect(latest().sent).toContainEqual(JSON.stringify({ action: "message", type: "get_state" }));
+  });
+
   it("sends slide_sync message via sendSlideSync", () => {
     const { result } = renderPresenter();
     simulateOpen();
@@ -170,6 +176,7 @@ describe("usePresenter", () => {
       result.current.sendSlideSync(7);
     });
     expect(latest().sent).toEqual([
+      JSON.stringify({ action: "message", type: "get_state" }),
       JSON.stringify({ action: "message", type: Action.SlideSync, page: 7 }),
     ]);
   });
@@ -181,6 +188,7 @@ describe("usePresenter", () => {
       result.current.sendHandsOn("try this", "$ try");
     });
     expect(latest().sent).toEqual([
+      JSON.stringify({ action: "message", type: "get_state" }),
       JSON.stringify({
         action: "message",
         type: Action.HandsOn,
@@ -455,6 +463,7 @@ describe("usePresenter", () => {
       result.current.sendPollGet("q1", ["A", "B"], 1);
     });
     expect(latest().sent).toEqual([
+      JSON.stringify({ action: "message", type: "get_state" }),
       JSON.stringify({
         action: "message",
         type: ClientMessageType.PollGet,
@@ -472,6 +481,7 @@ describe("usePresenter", () => {
       result.current.sendPollVote("q1", "A");
     });
     expect(latest().sent).toEqual([
+      JSON.stringify({ action: "message", type: "get_state" }),
       JSON.stringify({
         action: "message",
         type: ClientMessageType.PollVote,
@@ -488,6 +498,7 @@ describe("usePresenter", () => {
       result.current.sendPollUnvote("q1", "A");
     });
     expect(latest().sent).toEqual([
+      JSON.stringify({ action: "message", type: "get_state" }),
       JSON.stringify({
         action: "message",
         type: ClientMessageType.PollUnvote,
@@ -504,6 +515,7 @@ describe("usePresenter", () => {
       result.current.sendPollSwitch("q1", "A", "B");
     });
     expect(latest().sent).toEqual([
+      JSON.stringify({ action: "message", type: "get_state" }),
       JSON.stringify({
         action: "message",
         type: ClientMessageType.PollSwitch,
