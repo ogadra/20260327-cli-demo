@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -19,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/ogadra/20260327-cli-demo/presenter/internal/connection"
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/session"
 )
 
@@ -49,11 +51,20 @@ type sessionCreator interface {
 	Create(ctx context.Context, token string) error
 }
 
+// sessionValidatorAPI はセッションの有効性を検証するインターフェース。
+type sessionValidatorAPI interface {
+	// IsValid はトークンが有効かどうかを検証する。
+	IsValid(ctx context.Context, token string) (bool, error)
+}
+
 // secretGetter は Secrets Manager クライアント。テスト時に差し替える。
 var secretGetter secretGetterAPI
 
 // sessCreator はセッション作成。テスト時に差し替える。
 var sessCreator sessionCreator
+
+// sessValidator はセッション検証。テスト時に差し替える。
+var sessValidator sessionValidatorAPI
 
 // secretARN はシークレットの ARN。テスト時に差し替える。
 var secretARN string
@@ -85,7 +96,7 @@ func generateToken() (string, error) {
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	switch req.RequestContext.HTTP.Method {
 	case "GET":
-		return handleGet()
+		return handleGet(ctx, req)
 	case "POST":
 		return handlePost(ctx, req)
 	default:
@@ -93,9 +104,32 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	}
 }
 
-// handleGet は GET リクエストを処理する。
-func handleGet() (events.APIGatewayV2HTTPResponse, error) {
-	body, err := jsonMarshal(map[string]string{"message": "presenter login"})
+// parseCookieValue は Cookie ヘッダー文字列から指定された名前の値を取得する。
+func parseCookieValue(cookieHeader, name string) string {
+	header := http.Header{}
+	header.Add("Cookie", cookieHeader)
+	request := http.Request{Header: header}
+	c, err := request.Cookie(name)
+	if err != nil {
+		return ""
+	}
+	return c.Value
+}
+
+// handleGet は GET リクエストを処理する。cookie の slide_auth トークンが有効なら 200、無効なら 401 を返す。
+func handleGet(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+	token := parseCookieValue(req.Headers["cookie"], "slide_auth")
+	if token == "" {
+		return events.APIGatewayV2HTTPResponse{StatusCode: 401, Body: `{"error":"unauthorized"}`}, nil
+	}
+	valid, err := sessValidator.IsValid(ctx, token)
+	if err != nil {
+		return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: `{"error":"internal server error"}`}, nil
+	}
+	if !valid {
+		return events.APIGatewayV2HTTPResponse{StatusCode: 401, Body: `{"error":"unauthorized"}`}, nil
+	}
+	body, err := jsonMarshal(map[string]string{"status": "authenticated"})
 	if err != nil {
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: `{"error":"internal server error"}`}, nil
 	}
@@ -167,6 +201,7 @@ func run() error {
 
 	ddbClient := dynamodb.NewFromConfig(cfg)
 	sessCreator = session.NewStore(ddbClient, sessionsTable)
+	sessValidator = connection.NewSessionStore(ddbClient, sessionsTable)
 	secretGetter = secretsmanager.NewFromConfig(cfg)
 
 	startLambda(handler)

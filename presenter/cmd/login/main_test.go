@@ -41,6 +41,16 @@ func (m *mockSessionCreator) Create(ctx context.Context, token string) error {
 	return m.createFn(ctx, token)
 }
 
+// mockSessionValidator は sessionValidatorAPI のモック実装。
+type mockSessionValidator struct {
+	isValidFn func(ctx context.Context, token string) (bool, error)
+}
+
+// IsValid はモックの IsValid を呼び出す。
+func (m *mockSessionValidator) IsValid(ctx context.Context, token string) (bool, error) {
+	return m.isValidFn(ctx, token)
+}
+
 // newHTTPRequest はテスト用の APIGatewayV2HTTPRequest を生成する。
 func newHTTPRequest(method, body string) events.APIGatewayV2HTTPRequest {
 	return events.APIGatewayV2HTTPRequest{
@@ -50,6 +60,31 @@ func newHTTPRequest(method, body string) events.APIGatewayV2HTTPRequest {
 			},
 		},
 		Body: body,
+	}
+}
+
+// newHTTPRequestWithCookie はテスト用の Cookie 付き APIGatewayV2HTTPRequest を生成する。
+func newHTTPRequestWithCookie(method, cookie string) events.APIGatewayV2HTTPRequest {
+	return events.APIGatewayV2HTTPRequest{
+		RequestContext: events.APIGatewayV2HTTPRequestContext{
+			HTTP: events.APIGatewayV2HTTPRequestContextHTTPDescription{
+				Method: method,
+			},
+		},
+		Headers: map[string]string{
+			"cookie": cookie,
+		},
+	}
+}
+
+// setupGetDeps は GET テスト用の依存を設定する。クリーンアップ関数を返す。
+func setupGetDeps(t *testing.T) func() {
+	t.Helper()
+	origSessValidator := sessValidator
+	origJSONMarshal := jsonMarshal
+	return func() {
+		sessValidator = origSessValidator
+		jsonMarshal = origJSONMarshal
 	}
 }
 
@@ -76,10 +111,21 @@ func setupPostDeps(t *testing.T) func() {
 	}
 }
 
-// TestHandler_GET は GET リクエストで 200 とメッセージを返すことを検証する。
-func TestHandler_GET(t *testing.T) {
-	t.Parallel()
-	req := newHTTPRequest("GET", "")
+// TestHandler_GET_Authenticated は有効な cookie で GET リクエストが 200 を返すことを検証する。
+func TestHandler_GET_Authenticated(t *testing.T) {
+	cleanup := setupGetDeps(t)
+	defer cleanup()
+
+	sessValidator = &mockSessionValidator{
+		isValidFn: func(_ context.Context, token string) (bool, error) {
+			if token != "validtoken" {
+				t.Errorf("unexpected token: %s", token)
+			}
+			return true, nil
+		},
+	}
+
+	req := newHTTPRequestWithCookie("GET", "slide_auth=validtoken")
 	resp, err := handler(context.Background(), req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -87,19 +133,83 @@ func TestHandler_GET(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
-	if resp.Body != `{"message":"presenter login"}` {
+	if resp.Body != `{"status":"authenticated"}` {
 		t.Errorf("unexpected body: %s", resp.Body)
+	}
+}
+
+// TestHandler_GET_NoCookie は cookie なしで GET リクエストが 401 を返すことを検証する。
+func TestHandler_GET_NoCookie(t *testing.T) {
+	cleanup := setupGetDeps(t)
+	defer cleanup()
+
+	req := newHTTPRequest("GET", "")
+	resp, err := handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 401 {
+		t.Errorf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
+// TestHandler_GET_InvalidSession は無効なセッションで GET リクエストが 401 を返すことを検証する。
+func TestHandler_GET_InvalidSession(t *testing.T) {
+	cleanup := setupGetDeps(t)
+	defer cleanup()
+
+	sessValidator = &mockSessionValidator{
+		isValidFn: func(_ context.Context, _ string) (bool, error) {
+			return false, nil
+		},
+	}
+
+	req := newHTTPRequestWithCookie("GET", "slide_auth=expired")
+	resp, err := handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 401 {
+		t.Errorf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
+// TestHandler_GET_ValidatorError はセッション検証エラーで GET リクエストが 500 を返すことを検証する。
+func TestHandler_GET_ValidatorError(t *testing.T) {
+	cleanup := setupGetDeps(t)
+	defer cleanup()
+
+	sessValidator = &mockSessionValidator{
+		isValidFn: func(_ context.Context, _ string) (bool, error) {
+			return false, fmt.Errorf("dynamo error")
+		},
+	}
+
+	req := newHTTPRequestWithCookie("GET", "slide_auth=sometoken")
+	resp, err := handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 500 {
+		t.Errorf("expected 500, got %d", resp.StatusCode)
 	}
 }
 
 // TestHandler_GET_MarshalError は GET リクエストで jsonMarshal がエラーを返す場合を検証する。
 func TestHandler_GET_MarshalError(t *testing.T) {
-	orig := jsonMarshal
-	defer func() { jsonMarshal = orig }()
+	cleanup := setupGetDeps(t)
+	defer cleanup()
+
+	sessValidator = &mockSessionValidator{
+		isValidFn: func(_ context.Context, _ string) (bool, error) {
+			return true, nil
+		},
+	}
 	jsonMarshal = func(_ any) ([]byte, error) {
 		return nil, fmt.Errorf("marshal error")
 	}
-	req := newHTTPRequest("GET", "")
+
+	req := newHTTPRequestWithCookie("GET", "slide_auth=validtoken")
 	resp, err := handler(context.Background(), req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
