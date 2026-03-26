@@ -138,6 +138,37 @@ func TestHandler_GET_Authenticated(t *testing.T) {
 	}
 }
 
+// TestHandler_GET_AuthenticatedViaCookiesField は API Gateway v2 の Cookies フィールド経由で認証が通ることを検証する。
+func TestHandler_GET_AuthenticatedViaCookiesField(t *testing.T) {
+	cleanup := setupGetDeps(t)
+	defer cleanup()
+
+	sessValidator = &mockSessionValidator{
+		isValidFn: func(_ context.Context, token string) (bool, error) {
+			if token != "v2token" {
+				t.Errorf("unexpected token: %s", token)
+			}
+			return true, nil
+		},
+	}
+
+	req := events.APIGatewayV2HTTPRequest{
+		RequestContext: events.APIGatewayV2HTTPRequestContext{
+			HTTP: events.APIGatewayV2HTTPRequestContextHTTPDescription{
+				Method: "GET",
+			},
+		},
+		Cookies: []string{"slide_auth=v2token"},
+	}
+	resp, err := handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
 // TestHandler_GET_NoCookie は cookie なしで GET リクエストが 401 を返すことを検証する。
 func TestHandler_GET_NoCookie(t *testing.T) {
 	cleanup := setupGetDeps(t)
