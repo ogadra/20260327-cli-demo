@@ -258,6 +258,9 @@ func TestHandler_GET_CacheHeaders(t *testing.T) {
 			if resp.Headers["Cache-Control"] != "no-store" {
 				t.Errorf("Cache-Control = %q, want %q", resp.Headers["Cache-Control"], "no-store")
 			}
+			if resp.Headers["Content-Type"] != "application/json" {
+				t.Errorf("Content-Type = %q, want %q", resp.Headers["Content-Type"], "application/json")
+			}
 			if resp.Headers["Vary"] != "Cookie" {
 				t.Errorf("Vary = %q, want %q", resp.Headers["Vary"], "Cookie")
 			}
