@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import type { SlideProps } from "../components/SlideView";
 
-/** Title slide displayed as the first page of the presentation. */
-export const Slide0 = (_props: SlideProps): ReactNode => (
+/** Placeholder slide displayed as the third page of the presentation. */
+export const Slide2 = (_props: SlideProps): ReactNode => (
   <div
     style={{
       display: "flex",
@@ -15,6 +15,6 @@ export const Slide0 = (_props: SlideProps): ReactNode => (
       fontFamily: "sans-serif",
     }}
   >
-    Welcome
+    Slide 2
   </div>
 );

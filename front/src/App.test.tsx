@@ -71,7 +71,7 @@ vi.mock("@xterm/addon-fit", () => {
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 
 vi.mock("./slides/index", () => ({
-  default: [() => <div>Test Slide</div>],
+  slides: [() => <div>Test Slide</div>],
 }));
 
 beforeEach(() => {
