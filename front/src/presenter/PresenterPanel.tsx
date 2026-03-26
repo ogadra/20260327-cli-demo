@@ -95,9 +95,10 @@ export const PresenterPanel = ({
       style={{
         background: "#1a1a1a",
         color: "#fff",
-        padding: "24px",
         fontFamily: "sans-serif",
-        minHeight: "100vh",
+        height: "100dvh",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
       <header
@@ -105,7 +106,7 @@ export const PresenterPanel = ({
         style={{
           display: "flex",
           justifyContent: "space-between",
-          marginBottom: "24px",
+          padding: "16px 24px",
           fontSize: "14px",
           color: "#aaa",
         }}
@@ -116,21 +117,38 @@ export const PresenterPanel = ({
         <span>{viewerCount} viewers</span>
       </header>
 
-      <div style={{ fontSize: "20px", marginBottom: "24px" }}>{describeStep(currentStep)}</div>
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "20px",
+          padding: "0 24px",
+        }}
+      >
+        {describeStep(currentStep)}
+      </div>
 
-      <div style={{ display: "flex", gap: "12px" }}>
+      <div
+        style={{
+          display: "flex",
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
+      >
         <button
           type="button"
           disabled={stepIndex === 0}
           onClick={(): void => goTo(stepIndex - 1)}
           style={{
-            padding: "8px 24px",
+            flex: 1,
+            padding: "32px 0",
             background: stepIndex === 0 ? "#333" : "#555",
             color: stepIndex === 0 ? "#666" : "#fff",
             border: "none",
             borderRadius: "4px",
             cursor: stepIndex === 0 ? "not-allowed" : "pointer",
-            fontSize: "16px",
+            fontSize: "20px",
           }}
         >
           Prev
@@ -140,13 +158,14 @@ export const PresenterPanel = ({
           disabled={stepIndex === sequence.length - 1}
           onClick={(): void => goTo(stepIndex + 1)}
           style={{
-            padding: "8px 24px",
+            flex: 1,
+            padding: "32px 0",
             background: stepIndex === sequence.length - 1 ? "#333" : "#555",
             color: stepIndex === sequence.length - 1 ? "#666" : "#fff",
             border: "none",
             borderRadius: "4px",
             cursor: stepIndex === sequence.length - 1 ? "not-allowed" : "pointer",
-            fontSize: "16px",
+            fontSize: "20px",
           }}
         >
           Next
