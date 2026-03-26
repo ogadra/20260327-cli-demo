@@ -67,7 +67,11 @@ resource "aws_cloudfront_function" "spa_rewrite" {
     function handler(event) {
       var request = event.request;
       if (!request.uri.includes('.')) {
-        request.uri = '/index.html';
+        if (request.uri === '/presenter' || request.uri === '/presenter/') {
+          request.uri = '/presenter.html';
+        } else {
+          request.uri = '/index.html';
+        }
       }
       return request;
     }
