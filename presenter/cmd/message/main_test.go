@@ -25,6 +25,16 @@ func (m *mockSlideSyncDispatcher) Handle(ctx context.Context, room, connectionID
 	return m.handleFn(ctx, room, connectionID, page)
 }
 
+// mockHandsOnDispatcher はハンズオン指示ハンドラーのモック。
+type mockHandsOnDispatcher struct {
+	handleFn func(ctx context.Context, room, connectionID, instruction, placeholder string) error
+}
+
+// Handle はモックの Handle を呼び出す。
+func (m *mockHandsOnDispatcher) Handle(ctx context.Context, room, connectionID, instruction, placeholder string) error {
+	return m.handleFn(ctx, room, connectionID, instruction, placeholder)
+}
+
 // mockViewerCountDispatcher は接続数通知ハンドラーのモック。
 type mockViewerCountDispatcher struct {
 	handleFn func(ctx context.Context, room, connectionID string) error
@@ -169,6 +179,69 @@ func TestHandle_SlideSyncError(t *testing.T) {
 		},
 	}
 	req := newRequest("conn1", `{"type":"slide_sync","page":1}`)
+	resp, err := h.handle(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	var errResp errorResponse
+	if unmarshalErr := json.Unmarshal(sentPayload, &errResp); unmarshalErr != nil {
+		t.Fatalf("unmarshal error response: %v", unmarshalErr)
+	}
+	if errResp.Type != "error" {
+		t.Errorf("expected type error, got %s", errResp.Type)
+	}
+}
+
+// TestHandle_HandsOn はハンズオン指示メッセージの正常処理を検証する。
+func TestHandle_HandsOn(t *testing.T) {
+	t.Parallel()
+	var capturedInstruction, capturedPlaceholder string
+	h := &messageHandler{
+		handsOn: &mockHandsOnDispatcher{
+			handleFn: func(_ context.Context, _, _, instruction, placeholder string) error {
+				capturedInstruction = instruction
+				capturedPlaceholder = placeholder
+				return nil
+			},
+		},
+	}
+	req := newRequest("conn1", `{"type":"hands_on","instruction":"Write hello world","placeholder":"your code here"}`)
+	resp, err := h.handle(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if capturedInstruction != "Write hello world" {
+		t.Errorf("expected instruction 'Write hello world', got %s", capturedInstruction)
+	}
+	if capturedPlaceholder != "your code here" {
+		t.Errorf("expected placeholder 'your code here', got %s", capturedPlaceholder)
+	}
+}
+
+// TestHandle_HandsOnError はハンズオン指示エラー時のエラーレスポンス送信を検証する。
+func TestHandle_HandsOnError(t *testing.T) {
+	t.Parallel()
+	var sentPayload []byte
+	h := &messageHandler{
+		handsOn: &mockHandsOnDispatcher{
+			handleFn: func(_ context.Context, _, _, _, _ string) error {
+				return fmt.Errorf("not presenter")
+			},
+		},
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
+				sentPayload = payload
+				return nil
+			},
+		},
+	}
+	req := newRequest("conn1", `{"type":"hands_on","instruction":"test","placeholder":"test"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

@@ -17,6 +17,7 @@ import (
 
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/broadcast"
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/connection"
+	"github.com/ogadra/20260327-cli-demo/presenter/internal/handson"
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/poll"
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/slidesync"
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/viewercount"
@@ -44,6 +45,12 @@ const room = "default"
 type slideSyncDispatcher interface {
 	// Handle はスライドページ同期を処理する。
 	Handle(ctx context.Context, room, connectionID string, page int) error
+}
+
+// handsOnDispatcher はハンズオン指示ハンドラーインターフェース。
+type handsOnDispatcher interface {
+	// Handle はハンズオン指示を処理する。
+	Handle(ctx context.Context, room, connectionID, instruction, placeholder string) error
 }
 
 // viewerCountDispatcher は接続数通知ハンドラーインターフェース。
@@ -97,6 +104,7 @@ type singleSender interface {
 // messageHandler は $default イベントを処理するハンドラー。
 type messageHandler struct {
 	slideSync    slideSyncDispatcher
+	handsOn      handsOnDispatcher
 	viewerCount  viewerCountDispatcher
 	pollGet      pollGetter
 	pollVote     pollVoter
@@ -109,14 +117,16 @@ type messageHandler struct {
 
 // incomingMessage はクライアントからの受信メッセージ。
 type incomingMessage struct {
-	Type       string   `json:"type"`
-	Page       int      `json:"page"`
-	PollID     string   `json:"pollId"`
-	Options    []string `json:"options"`
-	MaxChoices int      `json:"maxChoices"`
-	Choice     string   `json:"choice"`
-	From       string   `json:"from"`
-	To         string   `json:"to"`
+	Type        string   `json:"type"`
+	Page        int      `json:"page"`
+	Instruction string   `json:"instruction"`
+	Placeholder string   `json:"placeholder"`
+	PollID      string   `json:"pollId"`
+	Options     []string `json:"options"`
+	MaxChoices  int      `json:"maxChoices"`
+	Choice      string   `json:"choice"`
+	From        string   `json:"from"`
+	To          string   `json:"to"`
 }
 
 // pollStateResponse はアンケート状態レスポンス。
@@ -156,6 +166,8 @@ func (h *messageHandler) handle(ctx context.Context, req events.APIGatewayWebsoc
 	switch msg.Type {
 	case "slide_sync":
 		return h.handleSlideSync(ctx, connectionID, msg)
+	case "hands_on":
+		return h.handleHandsOn(ctx, connectionID, msg)
 	case "viewer_count":
 		return h.handleViewerCount(ctx, connectionID)
 	case "poll_get":
@@ -174,6 +186,14 @@ func (h *messageHandler) handle(ctx context.Context, req events.APIGatewayWebsoc
 // handleSlideSync はスライド同期メッセージを処理する。
 func (h *messageHandler) handleSlideSync(ctx context.Context, connectionID string, msg incomingMessage) (events.APIGatewayProxyResponse, error) {
 	if err := h.slideSync.Handle(ctx, room, connectionID, msg.Page); err != nil {
+		return h.sendError(ctx, connectionID, err.Error())
+	}
+	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+}
+
+// handleHandsOn はハンズオン指示メッセージを処理する。
+func (h *messageHandler) handleHandsOn(ctx context.Context, connectionID string, msg incomingMessage) (events.APIGatewayProxyResponse, error) {
+	if err := h.handsOn.Handle(ctx, room, connectionID, msg.Instruction, msg.Placeholder); err != nil {
 		return h.sendError(ctx, connectionID, err.Error())
 	}
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
@@ -390,10 +410,12 @@ func run() error {
 	pollStore := poll.NewStore(ddbClient, pollTable)
 	b := broadcast.NewBroadcaster(apigwClient, connStore, connStore)
 	ssHandler := slidesync.NewHandler(connStore, b)
+	hoHandler := handson.NewHandler(connStore, b)
 	vcHandler := viewercount.NewHandler(connStore, &viewerCountAdapter{sender: b})
 
 	h := &messageHandler{
 		slideSync:    ssHandler,
+		handsOn:      hoHandler,
 		viewerCount:  vcHandler,
 		pollGet:      pollStore,
 		pollVote:     pollStore,
