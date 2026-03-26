@@ -130,7 +130,12 @@ export const PresenterPanel = ({
         {describeStep(currentStep)}
       </div>
 
-      <div style={{ display: "flex" }}>
+      <div
+        style={{
+          display: "flex",
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
+      >
         <button
           type="button"
           disabled={stepIndex === 0}
