@@ -53,6 +53,9 @@ func (h *Handler) Handle(ctx context.Context, room, connectionID, instruction, p
 	if err != nil {
 		return fmt.Errorf("get connection: %w", err)
 	}
+	if conn == nil {
+		return fmt.Errorf("get connection: nil connection")
+	}
 	if conn.Role != "presenter" {
 		return ErrNotPresenter
 	}

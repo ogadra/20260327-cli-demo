@@ -198,10 +198,12 @@ func TestHandle_SlideSyncError(t *testing.T) {
 // TestHandle_HandsOn はハンズオン指示メッセージの正常処理を検証する。
 func TestHandle_HandsOn(t *testing.T) {
 	t.Parallel()
-	var capturedInstruction, capturedPlaceholder string
+	var capturedRoom, capturedConnID, capturedInstruction, capturedPlaceholder string
 	h := &messageHandler{
 		handsOn: &mockHandsOnDispatcher{
-			handleFn: func(_ context.Context, _, _, instruction, placeholder string) error {
+			handleFn: func(_ context.Context, room, connectionID, instruction, placeholder string) error {
+				capturedRoom = room
+				capturedConnID = connectionID
 				capturedInstruction = instruction
 				capturedPlaceholder = placeholder
 				return nil
@@ -215,6 +217,12 @@ func TestHandle_HandsOn(t *testing.T) {
 	}
 	if resp.StatusCode != 200 {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if capturedRoom != "default" {
+		t.Errorf("expected room default, got %s", capturedRoom)
+	}
+	if capturedConnID != "conn1" {
+		t.Errorf("expected connectionID conn1, got %s", capturedConnID)
 	}
 	if capturedInstruction != "Write hello world" {
 		t.Errorf("expected instruction 'Write hello world', got %s", capturedInstruction)

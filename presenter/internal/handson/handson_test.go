@@ -131,6 +131,23 @@ func TestHandle_MarshalError(t *testing.T) {
 	}
 }
 
+// TestHandle_NilConnection は connGetter が nil, nil を返した場合のエラーを検証する。
+func TestHandle_NilConnection(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(
+		&mockConnectionGetter{
+			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
+				return nil, nil
+			},
+		},
+		&mockBroadcaster{},
+	)
+	err := h.Handle(context.Background(), "default", "conn1", "instruction", "placeholder")
+	if err == nil {
+		t.Fatal("expected error for nil connection")
+	}
+}
+
 // TestHandle_BroadcastError はブロードキャストエラーを検証する。
 func TestHandle_BroadcastError(t *testing.T) {
 	t.Parallel()
