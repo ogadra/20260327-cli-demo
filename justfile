@@ -19,3 +19,11 @@ apply env: (_validate-env env)
 # Destroy resources for the specified environment
 destroy env: (_validate-env env)
     terraform -chdir=terraform destroy -var-file=environments/{{env}}.tfvars
+
+# Run k6 load test against the specified base URL
+loadtest base_url:
+    k6 run -e BASE_URL={{base_url}} loadtest/loadtest.js 2>&1 | tee k6-output.log
+
+# Check for runner_id duplicates in k6 output (empty output means no duplicates)
+loadtest-check-dup:
+    grep 'RUNNER_ID:' k6-output.log | sed 's/.*RUNNER_ID://' | sort | uniq -d
