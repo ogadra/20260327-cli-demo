@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { SlideProps } from "../components/SlideView";
 
 /** Placeholder slide displayed as the third page of the presentation. */
-const Slide2 = (_props: SlideProps): ReactNode => (
+export const Slide2 = (_props: SlideProps): ReactNode => (
   <div
     style={{
       display: "flex",
@@ -18,5 +18,3 @@ const Slide2 = (_props: SlideProps): ReactNode => (
     Slide 2
   </div>
 );
-
-export default Slide2;

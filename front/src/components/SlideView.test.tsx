@@ -4,7 +4,7 @@ import SlideView from "./SlideView";
 
 vi.mock("../slides/index", () => {
   return {
-    default: [() => <div>Slide Zero</div>, () => <div>Slide One</div>],
+    slides: [() => <div>Slide Zero</div>, () => <div>Slide One</div>],
   };
 });
 

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import slides from "../slides/index";
+import { slides } from "../slides/index";
 import type { PollStateData } from "../hooks/usePresenter";
 
 /** Props passed to each slide component providing access to all poll states and poll actions. */
