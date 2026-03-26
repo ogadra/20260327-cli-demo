@@ -115,14 +115,21 @@ type handleDeps struct {
 	singleSender singleSender
 }
 
+// stateReader は room の現在のスライドページを取得するインターフェース。
+type stateReader interface {
+	// GetState は room の現在のスライドページを取得する。
+	GetState(ctx context.Context, room string) (int, error)
+}
+
 // messageHandler は $default イベントを処理するハンドラー。
 type messageHandler struct {
-	pollGet    pollGetter
-	pollVote   pollVoter
-	pollUnvote pollUnvoter
-	pollSwitch pollSwitcher
-	connGetter connectionGetter
-	newDeps    handleDepsFactory
+	pollGet     pollGetter
+	pollVote    pollVoter
+	pollUnvote  pollUnvoter
+	pollSwitch  pollSwitcher
+	connGetter  connectionGetter
+	stateReader stateReader
+	newDeps     handleDepsFactory
 }
 
 // incomingMessage はクライアントからの受信メッセージ。
@@ -181,6 +188,8 @@ func (h *messageHandler) handle(ctx context.Context, req events.APIGatewayWebsoc
 		return h.handleHandsOn(ctx, connectionID, msg, deps)
 	case "viewer_count":
 		return h.handleViewerCount(ctx, connectionID, deps)
+	case "get_state":
+		return h.handleGetState(ctx, connectionID, deps)
 	case "poll_get":
 		return h.handlePollGet(ctx, connectionID, msg, deps)
 	case "poll_vote":
@@ -215,6 +224,32 @@ func (h *messageHandler) handleViewerCount(ctx context.Context, connectionID str
 	if err := deps.viewerCount.Handle(ctx, room, connectionID); err != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("viewer_count: %w", err)
 	}
+	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+}
+
+// slideSyncResponse はスライド同期レスポンス。
+type slideSyncResponse struct {
+	Type string `json:"type"`
+	Page int    `json:"page"`
+}
+
+// handleGetState は現在のスライド位置を送信元に返す。
+func (h *messageHandler) handleGetState(ctx context.Context, connectionID string, deps handleDeps) (events.APIGatewayProxyResponse, error) {
+	page, err := h.stateReader.GetState(ctx, room)
+	if err != nil {
+		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("get state: %w", err)
+	}
+
+	resp := slideSyncResponse{Type: "slide_sync", Page: page}
+	payload, err := jsonMarshal(resp)
+	if err != nil {
+		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("marshal slide_sync: %w", err)
+	}
+
+	if err := deps.singleSender.SendToOne(ctx, room, connectionID, payload); err != nil {
+		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("send slide_sync: %w", err)
+	}
+
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 }
 
@@ -443,12 +478,13 @@ func run() error {
 	stateStore := roomstate.NewStore(ddbClient, stateTable)
 
 	h := &messageHandler{
-		pollGet:    pollStore,
-		pollVote:   pollStore,
-		pollUnvote: pollStore,
-		pollSwitch: pollStore,
-		connGetter: connStore,
-		newDeps:    newHandleDepsFactory(cfg, connStore, stateStore),
+		pollGet:     pollStore,
+		pollVote:    pollStore,
+		pollUnvote:  pollStore,
+		pollSwitch:  pollStore,
+		connGetter:  connStore,
+		stateReader: stateStore,
+		newDeps:     newHandleDepsFactory(cfg, connStore, stateStore),
 	}
 
 	startLambda(h.handle)

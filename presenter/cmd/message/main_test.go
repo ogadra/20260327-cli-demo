@@ -127,6 +127,16 @@ func newRequest(connectionID, body string) events.APIGatewayWebsocketProxyReques
 	}
 }
 
+// mockStateReader は stateReader のモック。
+type mockStateReader struct {
+	getStateFn func(ctx context.Context, room string) (int, error)
+}
+
+// GetState はモックの GetState を呼び出す。
+func (m *mockStateReader) GetState(ctx context.Context, room string) (int, error) {
+	return m.getStateFn(ctx, room)
+}
+
 // testHandlerOpts はテスト用 messageHandler 構築オプション。
 type testHandlerOpts struct {
 	slideSync    slideSyncDispatcher
@@ -137,6 +147,7 @@ type testHandlerOpts struct {
 	pollUnvote   pollUnvoter
 	pollSwitch   pollSwitcher
 	connGetter   connectionGetter
+	stateReader  stateReader
 	broadcaster  messageBroadcaster
 	singleSender singleSender
 }
@@ -144,11 +155,12 @@ type testHandlerOpts struct {
 // newTestHandler はテスト用の messageHandler を生成する。
 func newTestHandler(opts testHandlerOpts) *messageHandler {
 	return &messageHandler{
-		pollGet:    opts.pollGet,
-		pollVote:   opts.pollVote,
-		pollUnvote: opts.pollUnvote,
-		pollSwitch: opts.pollSwitch,
-		connGetter: opts.connGetter,
+		pollGet:     opts.pollGet,
+		pollVote:    opts.pollVote,
+		pollUnvote:  opts.pollUnvote,
+		pollSwitch:  opts.pollSwitch,
+		connGetter:  opts.connGetter,
+		stateReader: opts.stateReader,
 		newDeps: func(_, _ string) handleDeps {
 			return handleDeps{
 				slideSync:    opts.slideSync,
@@ -338,6 +350,98 @@ func TestHandle_ViewerCountError(t *testing.T) {
 		},
 	})
 	req := newRequest("conn1", `{"type":"viewer_count"}`)
+	_, err := h.handle(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// TestHandle_GetState は現在のスライド位置を返す正常処理を検証する。
+func TestHandle_GetState(t *testing.T) {
+	t.Parallel()
+	var sentPayload []byte
+	h := newTestHandler(testHandlerOpts{
+		stateReader: &mockStateReader{
+			getStateFn: func(_ context.Context, _ string) (int, error) {
+				return 5, nil
+			},
+		},
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
+				sentPayload = payload
+				return nil
+			},
+		},
+	})
+	req := newRequest("conn1", `{"type":"get_state"}`)
+	resp, err := h.handle(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	expected := `{"type":"slide_sync","page":5}`
+	if string(sentPayload) != expected {
+		t.Errorf("expected %s, got %s", expected, string(sentPayload))
+	}
+}
+
+// TestHandle_GetStateError は状態取得エラーを検証する。
+func TestHandle_GetStateError(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(testHandlerOpts{
+		stateReader: &mockStateReader{
+			getStateFn: func(_ context.Context, _ string) (int, error) {
+				return 0, fmt.Errorf("state error")
+			},
+		},
+	})
+	req := newRequest("conn1", `{"type":"get_state"}`)
+	_, err := h.handle(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// TestHandle_GetStateSendError は状態送信エラーを検証する。
+func TestHandle_GetStateSendError(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(testHandlerOpts{
+		stateReader: &mockStateReader{
+			getStateFn: func(_ context.Context, _ string) (int, error) {
+				return 0, nil
+			},
+		},
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, _ []byte) error {
+				return fmt.Errorf("send error")
+			},
+		},
+	})
+	req := newRequest("conn1", `{"type":"get_state"}`)
+	_, err := h.handle(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// TestHandle_GetStateMarshalError は状態 marshal エラーを検証する。
+// jsonMarshal を差し替えるため非 parallel。
+func TestHandle_GetStateMarshalError(t *testing.T) {
+	orig := jsonMarshal
+	defer func() { jsonMarshal = orig }()
+	jsonMarshal = func(_ any) ([]byte, error) {
+		return nil, fmt.Errorf("marshal error")
+	}
+	h := newTestHandler(testHandlerOpts{
+		stateReader: &mockStateReader{
+			getStateFn: func(_ context.Context, _ string) (int, error) {
+				return 0, nil
+			},
+		},
+	})
+	req := newRequest("conn1", `{"type":"get_state"}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
 		t.Fatal("expected error")

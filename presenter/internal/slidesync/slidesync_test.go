@@ -172,7 +172,11 @@ func TestHandle_BroadcastError(t *testing.T) {
 				return fmt.Errorf("broadcast error")
 			},
 		},
-		&mockStateWriter{},
+		&mockStateWriter{
+			putStateFn: func(_ context.Context, _ string, _ int) error {
+				return nil
+			},
+		},
 	)
 	err := h.Handle(context.Background(), "default", "conn1", 3)
 	if err == nil {
