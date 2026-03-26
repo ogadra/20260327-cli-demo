@@ -48,7 +48,11 @@ const PollView = ({
   };
 
   return (
-    <div role="group" style={{ padding: "16px", fontFamily: "sans-serif", color: "#fff" }}>
+    <div
+      role="group"
+      aria-label="Poll options"
+      style={{ padding: "16px", fontFamily: "sans-serif", color: "#fff" }}
+    >
       {options.map((option) => {
         const count = votes[option] ?? 0;
         const pct = totalVotes > 0 ? (count / totalVotes) * 100 : 0;
@@ -80,6 +84,7 @@ const PollView = ({
           >
             <div
               aria-hidden="true"
+              data-slot="progress-bar"
               style={{
                 position: "absolute",
                 left: 0,
@@ -96,6 +101,14 @@ const PollView = ({
             <span style={{ position: "relative", zIndex: 1, marginLeft: "8px", color: "#aaa" }}>
               {count}
             </span>
+            <span
+              role="progressbar"
+              aria-label={`${option} votes`}
+              aria-valuenow={Math.round(pct)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}
+            />
           </button>
         );
       })}
