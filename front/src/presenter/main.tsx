@@ -1,41 +1,22 @@
-import { StrictMode, useCallback, useEffect, useState, type ReactNode } from "react";
+import { StrictMode, useEffect, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
+import { Action } from "../api/presenter";
 import { usePresenter } from "../hooks/usePresenter";
-import PresenterPanel from "./PresenterPanel";
-import LoginForm from "./LoginForm";
+import { PresenterPanel } from "./PresenterPanel";
 import { defaultSequence } from "./sequence";
 
 /** WebSocket URL derived from the current page origin. */
 const wsUrl = (): string => location.origin.replace(/^http/, "ws") + "/ws";
 
-/** Root component for the presenter page. */
+/** Root component for the presenter page that connects the usePresenter hook to the PresenterPanel. */
 const PresenterApp = (): ReactNode => {
-  const [loggedIn, setLoggedIn] = useState(
-    () => sessionStorage.getItem("presenterLoggedIn") === "1",
-  );
-
-  /** Handle successful login by storing state in sessionStorage. */
-  const handleLoginSuccess = useCallback((): void => {
-    sessionStorage.setItem("presenterLoggedIn", "1");
-    setLoggedIn(true);
-  }, []);
-
-  if (!loggedIn) {
-    return <LoginForm onSuccess={handleLoginSuccess} />;
-  }
-
-  return <PresenterAppInner />;
-};
-
-/** Inner component rendered after login that uses the presenter hook. */
-const PresenterAppInner = (): ReactNode => {
   const { viewerCount, pollStates, sendSlideSync, sendHandsOn, sendPollGet } =
     usePresenter(wsUrl());
 
-  /** Send all poll_get steps on mount to initialize polls. */
+  /** Send all poll_open steps on mount to initialize polls. */
   useEffect((): void => {
     for (const step of defaultSequence) {
-      if (step.type === "poll_get") {
+      if (step.type === Action.PollOpen) {
         sendPollGet(step.pollId, step.options, step.maxChoices);
       }
     }
