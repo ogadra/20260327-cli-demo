@@ -101,18 +101,26 @@ type singleSender interface {
 	SendToOne(ctx context.Context, room, connectionID string, payload []byte) error
 }
 
-// messageHandler は $default イベントを処理するハンドラー。
-type messageHandler struct {
+// handleDepsFactory はリクエストごとの依存を生成するファクトリー。
+type handleDepsFactory func(domainName, stage string) handleDeps
+
+// handleDeps はリクエストごとに生成される依存。
+type handleDeps struct {
 	slideSync    slideSyncDispatcher
 	handsOn      handsOnDispatcher
 	viewerCount  viewerCountDispatcher
-	pollGet      pollGetter
-	pollVote     pollVoter
-	pollUnvote   pollUnvoter
-	pollSwitch   pollSwitcher
-	connGetter   connectionGetter
 	broadcaster  messageBroadcaster
 	singleSender singleSender
+}
+
+// messageHandler は $default イベントを処理するハンドラー。
+type messageHandler struct {
+	pollGet    pollGetter
+	pollVote   pollVoter
+	pollUnvote pollUnvoter
+	pollSwitch pollSwitcher
+	connGetter connectionGetter
+	newDeps    handleDepsFactory
 }
 
 // incomingMessage はクライアントからの受信メッセージ。
@@ -157,6 +165,7 @@ type errorResponse struct {
 // handle は $default イベントを処理する。
 func (h *messageHandler) handle(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
 	connectionID := req.RequestContext.ConnectionID
+	deps := h.newDeps(req.RequestContext.DomainName, req.RequestContext.Stage)
 
 	var msg incomingMessage
 	if err := json.Unmarshal([]byte(req.Body), &msg); err != nil {
@@ -165,52 +174,52 @@ func (h *messageHandler) handle(ctx context.Context, req events.APIGatewayWebsoc
 
 	switch msg.Type {
 	case "slide_sync":
-		return h.handleSlideSync(ctx, connectionID, msg)
+		return h.handleSlideSync(ctx, connectionID, msg, deps)
 	case "hands_on":
-		return h.handleHandsOn(ctx, connectionID, msg)
+		return h.handleHandsOn(ctx, connectionID, msg, deps)
 	case "viewer_count":
-		return h.handleViewerCount(ctx, connectionID)
+		return h.handleViewerCount(ctx, connectionID, deps)
 	case "poll_get":
-		return h.handlePollGet(ctx, connectionID, msg)
+		return h.handlePollGet(ctx, connectionID, msg, deps)
 	case "poll_vote":
-		return h.handlePollVote(ctx, connectionID, msg)
+		return h.handlePollVote(ctx, connectionID, msg, deps)
 	case "poll_unvote":
-		return h.handlePollUnvote(ctx, connectionID, msg)
+		return h.handlePollUnvote(ctx, connectionID, msg, deps)
 	case "poll_switch":
-		return h.handlePollSwitch(ctx, connectionID, msg)
+		return h.handlePollSwitch(ctx, connectionID, msg, deps)
 	default:
-		return h.sendError(ctx, connectionID, "unknown message type")
+		return h.sendError(ctx, connectionID, "unknown message type", deps)
 	}
 }
 
 // handleSlideSync はスライド同期メッセージを処理する。
-func (h *messageHandler) handleSlideSync(ctx context.Context, connectionID string, msg incomingMessage) (events.APIGatewayProxyResponse, error) {
-	if err := h.slideSync.Handle(ctx, room, connectionID, msg.Page); err != nil {
-		return h.sendError(ctx, connectionID, err.Error())
+func (h *messageHandler) handleSlideSync(ctx context.Context, connectionID string, msg incomingMessage, deps handleDeps) (events.APIGatewayProxyResponse, error) {
+	if err := deps.slideSync.Handle(ctx, room, connectionID, msg.Page); err != nil {
+		return h.sendError(ctx, connectionID, err.Error(), deps)
 	}
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 }
 
 // handleHandsOn はハンズオン指示メッセージを処理する。
-func (h *messageHandler) handleHandsOn(ctx context.Context, connectionID string, msg incomingMessage) (events.APIGatewayProxyResponse, error) {
-	if err := h.handsOn.Handle(ctx, room, connectionID, msg.Instruction, msg.Placeholder); err != nil {
-		return h.sendError(ctx, connectionID, err.Error())
+func (h *messageHandler) handleHandsOn(ctx context.Context, connectionID string, msg incomingMessage, deps handleDeps) (events.APIGatewayProxyResponse, error) {
+	if err := deps.handsOn.Handle(ctx, room, connectionID, msg.Instruction, msg.Placeholder); err != nil {
+		return h.sendError(ctx, connectionID, err.Error(), deps)
 	}
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 }
 
 // handleViewerCount は接続数通知メッセージを処理する。
-func (h *messageHandler) handleViewerCount(ctx context.Context, connectionID string) (events.APIGatewayProxyResponse, error) {
-	if err := h.viewerCount.Handle(ctx, room, connectionID); err != nil {
+func (h *messageHandler) handleViewerCount(ctx context.Context, connectionID string, deps handleDeps) (events.APIGatewayProxyResponse, error) {
+	if err := deps.viewerCount.Handle(ctx, room, connectionID); err != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("viewer_count: %w", err)
 	}
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 }
 
 // handlePollGet はアンケート状態取得メッセージを処理する。
-func (h *messageHandler) handlePollGet(ctx context.Context, connectionID string, msg incomingMessage) (events.APIGatewayProxyResponse, error) {
+func (h *messageHandler) handlePollGet(ctx context.Context, connectionID string, msg incomingMessage, deps handleDeps) (events.APIGatewayProxyResponse, error) {
 	if msg.PollID == "" {
-		return h.sendError(ctx, connectionID, "pollId is required")
+		return h.sendError(ctx, connectionID, "pollId is required", deps)
 	}
 
 	conn, err := h.connGetter.Get(ctx, room, connectionID)
@@ -222,62 +231,62 @@ func (h *messageHandler) handlePollGet(ctx context.Context, connectionID string,
 	state, err := h.pollGet.Get(ctx, msg.PollID, connectionID, msg.Options, msg.MaxChoices, isPresenter)
 	if err != nil {
 		if isPollBusinessError(err) {
-			return h.sendError(ctx, connectionID, err.Error())
+			return h.sendError(ctx, connectionID, err.Error(), deps)
 		}
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("poll_get: %w", err)
 	}
 
-	return h.sendPollState(ctx, connectionID, state)
+	return h.sendPollState(ctx, connectionID, state, deps)
 }
 
 // handlePollVote は投票メッセージを処理する。
-func (h *messageHandler) handlePollVote(ctx context.Context, connectionID string, msg incomingMessage) (events.APIGatewayProxyResponse, error) {
+func (h *messageHandler) handlePollVote(ctx context.Context, connectionID string, msg incomingMessage, deps handleDeps) (events.APIGatewayProxyResponse, error) {
 	if msg.PollID == "" || msg.Choice == "" {
-		return h.sendError(ctx, connectionID, "pollId and choice are required")
+		return h.sendError(ctx, connectionID, "pollId and choice are required", deps)
 	}
 	err := h.pollVote.Vote(ctx, msg.PollID, connectionID, msg.Choice)
 	if err != nil {
-		return h.handlePollError(ctx, connectionID, msg.PollID, connectionID, err)
+		return h.handlePollError(ctx, connectionID, msg.PollID, connectionID, err, deps)
 	}
-	return h.refreshAndBroadcastPoll(ctx, msg.PollID, connectionID)
+	return h.refreshAndBroadcastPoll(ctx, msg.PollID, connectionID, deps)
 }
 
 // handlePollUnvote は投票取消メッセージを処理する。
-func (h *messageHandler) handlePollUnvote(ctx context.Context, connectionID string, msg incomingMessage) (events.APIGatewayProxyResponse, error) {
+func (h *messageHandler) handlePollUnvote(ctx context.Context, connectionID string, msg incomingMessage, deps handleDeps) (events.APIGatewayProxyResponse, error) {
 	if msg.PollID == "" || msg.Choice == "" {
-		return h.sendError(ctx, connectionID, "pollId and choice are required")
+		return h.sendError(ctx, connectionID, "pollId and choice are required", deps)
 	}
 	err := h.pollUnvote.Unvote(ctx, msg.PollID, connectionID, msg.Choice)
 	if err != nil {
-		return h.handlePollError(ctx, connectionID, msg.PollID, connectionID, err)
+		return h.handlePollError(ctx, connectionID, msg.PollID, connectionID, err, deps)
 	}
-	return h.refreshAndBroadcastPoll(ctx, msg.PollID, connectionID)
+	return h.refreshAndBroadcastPoll(ctx, msg.PollID, connectionID, deps)
 }
 
 // handlePollSwitch は投票変更メッセージを処理する。
-func (h *messageHandler) handlePollSwitch(ctx context.Context, connectionID string, msg incomingMessage) (events.APIGatewayProxyResponse, error) {
+func (h *messageHandler) handlePollSwitch(ctx context.Context, connectionID string, msg incomingMessage, deps handleDeps) (events.APIGatewayProxyResponse, error) {
 	if msg.PollID == "" || msg.From == "" || msg.To == "" {
-		return h.sendError(ctx, connectionID, "pollId, from, and to are required")
+		return h.sendError(ctx, connectionID, "pollId, from, and to are required", deps)
 	}
 	if msg.From == msg.To {
-		return h.sendError(ctx, connectionID, "from and to must be different")
+		return h.sendError(ctx, connectionID, "from and to must be different", deps)
 	}
 	err := h.pollSwitch.Switch(ctx, msg.PollID, connectionID, msg.From, msg.To)
 	if err != nil {
-		return h.handlePollError(ctx, connectionID, msg.PollID, connectionID, err)
+		return h.handlePollError(ctx, connectionID, msg.PollID, connectionID, err, deps)
 	}
-	return h.refreshAndBroadcastPoll(ctx, msg.PollID, connectionID)
+	return h.refreshAndBroadcastPoll(ctx, msg.PollID, connectionID, deps)
 }
 
 // handlePollError はアンケート操作エラーを処理する。業務エラーは poll_error を送信元に返す。
 // ErrPollNotFound の場合は状態再取得をスキップしてエラーメッセージのみ返す。
-func (h *messageHandler) handlePollError(ctx context.Context, connectionID, pollID, visitorID string, err error) (events.APIGatewayProxyResponse, error) {
+func (h *messageHandler) handlePollError(ctx context.Context, connectionID, pollID, visitorID string, err error, deps handleDeps) (events.APIGatewayProxyResponse, error) {
 	if !isPollBusinessError(err) {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("poll operation: %w", err)
 	}
 
 	if errors.Is(err, poll.ErrPollNotFound) {
-		return h.sendError(ctx, connectionID, err.Error())
+		return h.sendError(ctx, connectionID, err.Error(), deps)
 	}
 
 	state, getErr := h.pollGet.Get(ctx, pollID, visitorID, nil, 0, false)
@@ -297,7 +306,7 @@ func (h *messageHandler) handlePollError(ctx context.Context, connectionID, poll
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("marshal poll_error: %w", marshalErr)
 	}
 
-	if sendErr := h.singleSender.SendToOne(ctx, room, connectionID, payload); sendErr != nil {
+	if sendErr := deps.singleSender.SendToOne(ctx, room, connectionID, payload); sendErr != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("send poll_error: %w", sendErr)
 	}
 
@@ -314,16 +323,16 @@ func isPollBusinessError(err error) bool {
 }
 
 // refreshAndBroadcastPoll は最新のアンケート状態を取得してブロードキャストする。
-func (h *messageHandler) refreshAndBroadcastPoll(ctx context.Context, pollID, visitorID string) (events.APIGatewayProxyResponse, error) {
+func (h *messageHandler) refreshAndBroadcastPoll(ctx context.Context, pollID, visitorID string, deps handleDeps) (events.APIGatewayProxyResponse, error) {
 	state, err := h.pollGet.Get(ctx, pollID, visitorID, nil, 0, false)
 	if err != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("refresh poll state: %w", err)
 	}
-	return h.broadcastPollState(ctx, state)
+	return h.broadcastPollState(ctx, state, deps)
 }
 
 // sendPollState はアンケート状態を要求元の接続にのみ送信する。
-func (h *messageHandler) sendPollState(ctx context.Context, connectionID string, state *poll.PollState) (events.APIGatewayProxyResponse, error) {
+func (h *messageHandler) sendPollState(ctx context.Context, connectionID string, state *poll.PollState, deps handleDeps) (events.APIGatewayProxyResponse, error) {
 	resp := pollStateResponse{
 		Type:       "poll_state",
 		PollID:     state.PollID,
@@ -337,7 +346,7 @@ func (h *messageHandler) sendPollState(ctx context.Context, connectionID string,
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("marshal poll_state: %w", err)
 	}
 
-	if err := h.singleSender.SendToOne(ctx, room, connectionID, payload); err != nil {
+	if err := deps.singleSender.SendToOne(ctx, room, connectionID, payload); err != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("send poll_state: %w", err)
 	}
 
@@ -345,7 +354,7 @@ func (h *messageHandler) sendPollState(ctx context.Context, connectionID string,
 }
 
 // broadcastPollState はアンケート状態を全接続にブロードキャストする。
-func (h *messageHandler) broadcastPollState(ctx context.Context, state *poll.PollState) (events.APIGatewayProxyResponse, error) {
+func (h *messageHandler) broadcastPollState(ctx context.Context, state *poll.PollState, deps handleDeps) (events.APIGatewayProxyResponse, error) {
 	resp := pollStateResponse{
 		Type:       "poll_state",
 		PollID:     state.PollID,
@@ -359,7 +368,7 @@ func (h *messageHandler) broadcastPollState(ctx context.Context, state *poll.Pol
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("marshal poll_state: %w", err)
 	}
 
-	if err := h.broadcaster.Send(ctx, room, payload, ""); err != nil {
+	if err := deps.broadcaster.Send(ctx, room, payload, ""); err != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("broadcast poll_state: %w", err)
 	}
 
@@ -367,18 +376,23 @@ func (h *messageHandler) broadcastPollState(ctx context.Context, state *poll.Pol
 }
 
 // sendError はエラーレスポンスを送信元に返す。
-func (h *messageHandler) sendError(ctx context.Context, connectionID, errMsg string) (events.APIGatewayProxyResponse, error) {
+func (h *messageHandler) sendError(ctx context.Context, connectionID, errMsg string, deps handleDeps) (events.APIGatewayProxyResponse, error) {
 	resp := errorResponse{Type: "error", Error: errMsg}
 	payload, err := jsonMarshal(resp)
 	if err != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("marshal error: %w", err)
 	}
 
-	if err := h.singleSender.SendToOne(ctx, room, connectionID, payload); err != nil {
+	if err := deps.singleSender.SendToOne(ctx, room, connectionID, payload); err != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("send error: %w", err)
 	}
 
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+}
+
+// newAPIGWEndpoint は requestContext の domainName と stage からエンドポイント URL を構築する。
+func newAPIGWEndpoint(domainName, stage string) string {
+	return fmt.Sprintf("https://%s/%s", domainName, stage)
 }
 
 // run は依存を初期化し Lambda ハンドラーを起動する。
@@ -398,32 +412,30 @@ func run() error {
 	if pollTable == "" {
 		return fmt.Errorf("POLL_VOTES_TABLE environment variable is required")
 	}
-	apigwEndpoint := os.Getenv("APIGW_ENDPOINT")
-
-	apigwClient := apigatewaymanagementapi.NewFromConfig(cfg, func(o *apigatewaymanagementapi.Options) {
-		if apigwEndpoint != "" {
-			o.BaseEndpoint = &apigwEndpoint
-		}
-	})
 
 	connStore := connection.NewStore(ddbClient, connTable)
 	pollStore := poll.NewStore(ddbClient, pollTable)
-	b := broadcast.NewBroadcaster(apigwClient, connStore, connStore)
-	ssHandler := slidesync.NewHandler(connStore, b)
-	hoHandler := handson.NewHandler(connStore, b)
-	vcHandler := viewercount.NewHandler(connStore, &viewerCountAdapter{sender: b})
 
 	h := &messageHandler{
-		slideSync:    ssHandler,
-		handsOn:      hoHandler,
-		viewerCount:  vcHandler,
-		pollGet:      pollStore,
-		pollVote:     pollStore,
-		pollUnvote:   pollStore,
-		pollSwitch:   pollStore,
-		connGetter:   connStore,
-		broadcaster:  b,
-		singleSender: b,
+		pollGet:    pollStore,
+		pollVote:   pollStore,
+		pollUnvote: pollStore,
+		pollSwitch: pollStore,
+		connGetter: connStore,
+		newDeps: func(domainName, stage string) handleDeps {
+			endpoint := newAPIGWEndpoint(domainName, stage)
+			apigwClient := apigatewaymanagementapi.NewFromConfig(cfg, func(o *apigatewaymanagementapi.Options) {
+				o.BaseEndpoint = &endpoint
+			})
+			b := broadcast.NewBroadcaster(apigwClient, connStore, connStore)
+			return handleDeps{
+				slideSync:    slidesync.NewHandler(connStore, b),
+				handsOn:      handson.NewHandler(connStore, b),
+				viewerCount:  viewercount.NewHandler(connStore, &viewerCountAdapter{sender: b}),
+				broadcaster:  b,
+				singleSender: b,
+			}
+		},
 	}
 
 	startLambda(h.handle)

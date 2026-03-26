@@ -8,6 +8,9 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+
+	"github.com/ogadra/20260327-cli-demo/presenter/internal/connection"
 )
 
 // mockConnectionManager は connectionManager のモック。
@@ -59,10 +62,12 @@ func TestHandle_Success(t *testing.T) {
 				return 0, nil
 			},
 		},
-		broadcaster: &mockBroadcaster{
-			sendFn: func(_ context.Context, _ string, _ []byte, _ string) error {
-				return nil
-			},
+		newBroadcaster: func(_, _ string) messageBroadcaster {
+			return &mockBroadcaster{
+				sendFn: func(_ context.Context, _ string, _ []byte, _ string) error {
+					return nil
+				},
+			}
 		},
 	}
 	resp, err := h.handle(context.Background(), newRequest("conn1"))
@@ -86,7 +91,7 @@ func TestHandle_DeleteError(t *testing.T) {
 				return fmt.Errorf("delete error")
 			},
 		},
-		broadcaster: &mockBroadcaster{},
+		newBroadcaster: func(_, _ string) messageBroadcaster { return &mockBroadcaster{} },
 	}
 	resp, err := h.handle(context.Background(), newRequest("conn1"))
 	if err == nil {
@@ -109,7 +114,7 @@ func TestHandle_CountError(t *testing.T) {
 				return 0, fmt.Errorf("count error")
 			},
 		},
-		broadcaster: &mockBroadcaster{},
+		newBroadcaster: func(_, _ string) messageBroadcaster { return &mockBroadcaster{} },
 	}
 	resp, err := h.handle(context.Background(), newRequest("conn1"))
 	if err == nil {
@@ -132,10 +137,12 @@ func TestHandle_BroadcastError(t *testing.T) {
 				return 5, nil
 			},
 		},
-		broadcaster: &mockBroadcaster{
-			sendFn: func(_ context.Context, _ string, _ []byte, _ string) error {
-				return fmt.Errorf("broadcast error")
-			},
+		newBroadcaster: func(_, _ string) messageBroadcaster {
+			return &mockBroadcaster{
+				sendFn: func(_ context.Context, _ string, _ []byte, _ string) error {
+					return fmt.Errorf("broadcast error")
+				},
+			}
 		},
 	}
 	resp, err := h.handle(context.Background(), newRequest("conn1"))
@@ -163,7 +170,7 @@ func TestHandle_MarshalError(t *testing.T) {
 				return 1, nil
 			},
 		},
-		broadcaster: &mockBroadcaster{},
+		newBroadcaster: func(_, _ string) messageBroadcaster { return &mockBroadcaster{} },
 	}
 	resp, err := h.handle(context.Background(), newRequest("conn1"))
 	if err == nil {
@@ -195,25 +202,25 @@ func TestRun_Success(t *testing.T) {
 	}
 }
 
-// TestRun_SuccessWithEndpoint は APIGW_ENDPOINT が設定されている場合に run が正常に完了することを検証する。
-func TestRun_SuccessWithEndpoint(t *testing.T) {
-	origStart := startLambda
-	origLoadConfig := loadConfig
-	defer func() {
-		startLambda = origStart
-		loadConfig = origLoadConfig
-	}()
-
-	t.Setenv("CONNECTIONS_TABLE", "conn-table")
-	t.Setenv("APIGW_ENDPOINT", "https://example.com")
-
-	startLambda = func(handler any) {}
-	loadConfig = func(_ context.Context, _ ...func(*config.LoadOptions) error) (aws.Config, error) {
-		return aws.Config{}, nil
+// TestNewBroadcasterFactory は newBroadcasterFactory が Broadcaster を返すことを検証する。
+func TestNewBroadcasterFactory(t *testing.T) {
+	t.Parallel()
+	cfg := aws.Config{}
+	connStore := connection.NewStore(dynamodb.NewFromConfig(cfg), "test-table")
+	factory := newBroadcasterFactory(cfg, connStore)
+	b := factory("example.execute-api.ap-northeast-1.amazonaws.com", "ws")
+	if b == nil {
+		t.Fatal("expected broadcaster to be non-nil")
 	}
+}
 
-	if err := run(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+// TestNewAPIGWEndpoint は requestContext からエンドポイント URL を構築することを検証する。
+func TestNewAPIGWEndpoint(t *testing.T) {
+	t.Parallel()
+	got := newAPIGWEndpoint("abc123.execute-api.ap-northeast-1.amazonaws.com", "ws")
+	expected := "https://abc123.execute-api.ap-northeast-1.amazonaws.com/ws"
+	if got != expected {
+		t.Errorf("expected %s, got %s", expected, got)
 	}
 }
 

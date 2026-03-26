@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewaymanagementapi"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -37,10 +38,13 @@ var jsonMarshal = json.Marshal
 // room は WebSocket 接続のグループ識別子。
 const room = "default"
 
+// broadcasterFactory は requestContext からエンドポイントを構築し Broadcaster を生成する。
+type broadcasterFactory func(domainName, stage string) messageBroadcaster
+
 // disconnectHandler は $disconnect イベントを処理するハンドラー。
 type disconnectHandler struct {
-	connStore   connectionManager
-	broadcaster messageBroadcaster
+	connStore      connectionManager
+	newBroadcaster broadcasterFactory
 }
 
 // connectionManager は接続の削除とカウントのインターフェース。
@@ -76,11 +80,28 @@ func (h *disconnectHandler) handle(ctx context.Context, req events.APIGatewayWeb
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("marshal viewer_count: %w", err)
 	}
 
-	if err := h.broadcaster.Send(ctx, room, payload, ""); err != nil {
+	broadcaster := h.newBroadcaster(req.RequestContext.DomainName, req.RequestContext.Stage)
+	if err := broadcaster.Send(ctx, room, payload, ""); err != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("broadcast viewer_count: %w", err)
 	}
 
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+}
+
+// newAPIGWEndpoint は requestContext の domainName と stage からエンドポイント URL を構築する。
+func newAPIGWEndpoint(domainName, stage string) string {
+	return fmt.Sprintf("https://%s/%s", domainName, stage)
+}
+
+// newBroadcasterFactory は AWS 設定と接続ストアから broadcasterFactory を生成する。
+func newBroadcasterFactory(cfg aws.Config, connStore *connection.Store) broadcasterFactory {
+	return func(domainName, stage string) messageBroadcaster {
+		endpoint := newAPIGWEndpoint(domainName, stage)
+		apigwClient := apigatewaymanagementapi.NewFromConfig(cfg, func(o *apigatewaymanagementapi.Options) {
+			o.BaseEndpoint = &endpoint
+		})
+		return broadcast.NewBroadcaster(apigwClient, connStore, connStore)
+	}
 }
 
 // run は依存を初期化し Lambda ハンドラーを起動する。
@@ -96,20 +117,12 @@ func run() error {
 	if connTable == "" {
 		return fmt.Errorf("CONNECTIONS_TABLE environment variable is required")
 	}
-	apigwEndpoint := os.Getenv("APIGW_ENDPOINT")
-
-	apigwClient := apigatewaymanagementapi.NewFromConfig(cfg, func(o *apigatewaymanagementapi.Options) {
-		if apigwEndpoint != "" {
-			o.BaseEndpoint = &apigwEndpoint
-		}
-	})
 
 	connStore := connection.NewStore(ddbClient, connTable)
-	b := broadcast.NewBroadcaster(apigwClient, connStore, connStore)
 
 	h := &disconnectHandler{
-		connStore:   connStore,
-		broadcaster: b,
+		connStore:      connStore,
+		newBroadcaster: newBroadcasterFactory(cfg, connStore),
 	}
 
 	startLambda(h.handle)
