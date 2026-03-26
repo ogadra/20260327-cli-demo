@@ -79,6 +79,25 @@ API Gateway WebSocket 経由で front と通信する。
 | C→S | `poll_unvote` | 投票取消 |
 | C→S | `poll_switch` | 投票変更 |
 
+## Presenter ログイン設定
+
+Presenter 操作パネルのログイン認証に使用するパスワードの bcrypt ハッシュを AWS Secrets Manager に登録する必要がある。
+
+```bash
+# bcrypt ハッシュを生成
+read -r -s -p "Presenter password: " PRESENTER_PASSWORD
+echo
+HASH=$(printf '%s\n' "$PRESENTER_PASSWORD" | htpasswd -nBiC 10 presenter | cut -d: -f2)
+unset PRESENTER_PASSWORD
+
+# Secrets Manager にセット
+aws secretsmanager put-secret-value \
+  --secret-id bunshin-presenter-password-hash \
+  --secret-string "$HASH"
+```
+
+Terraform が `bunshin-presenter-password-hash` シークレットと Login Lambda の環境変数 `SECRET_ARN` を自動設定するため、上記のシークレット値の登録のみ手動で行う。
+
 ## GitHub Actions シークレット
 
 デプロイワークフローで必要な Repository secrets。OIDC によるロール引き受けを使用するため、AWS クレデンシャルの直接設定は不要。
