@@ -13,7 +13,7 @@ export const Action = {
 } as const;
 
 /** Discriminant values for server-to-client presenter messages. */
-export const MessageType = {
+export const ServerMessageType = {
   SlideSync: Action.SlideSync,
   HandsOn: Action.HandsOn,
   ViewerCount: Action.ViewerCount,
@@ -128,29 +128,29 @@ export const parsePresenterMessage = (raw: string): PresenterMessage | null => {
     if (typeof data !== "object" || data === null || !("type" in data)) return null;
     const msg = data as Record<string, unknown>;
 
-    if (msg.type === MessageType.SlideSync) {
+    if (msg.type === ServerMessageType.SlideSync) {
       return isSlideSyncPayload(msg)
-        ? { type: MessageType.SlideSync, page: msg.page as number }
+        ? { type: ServerMessageType.SlideSync, page: msg.page as number }
         : null;
     }
-    if (msg.type === MessageType.HandsOn) {
+    if (msg.type === ServerMessageType.HandsOn) {
       return isHandsOnPayload(msg)
         ? {
-            type: MessageType.HandsOn,
+            type: ServerMessageType.HandsOn,
             instruction: msg.instruction as string,
             placeholder: msg.placeholder as string,
           }
         : null;
     }
-    if (msg.type === MessageType.ViewerCount) {
+    if (msg.type === ServerMessageType.ViewerCount) {
       return isViewerCountPayload(msg)
-        ? { type: MessageType.ViewerCount, count: msg.count as number }
+        ? { type: ServerMessageType.ViewerCount, count: msg.count as number }
         : null;
     }
-    if (msg.type === MessageType.PollState) {
+    if (msg.type === ServerMessageType.PollState) {
       return isPollStatePayload(msg)
         ? {
-            type: MessageType.PollState,
+            type: ServerMessageType.PollState,
             pollId: msg.pollId as string,
             options: msg.options as string[],
             maxChoices: msg.maxChoices as number,
@@ -159,10 +159,10 @@ export const parsePresenterMessage = (raw: string): PresenterMessage | null => {
           }
         : null;
     }
-    if (msg.type === MessageType.PollError) {
+    if (msg.type === ServerMessageType.PollError) {
       return isPollErrorPayload(msg)
         ? {
-            type: MessageType.PollError,
+            type: ServerMessageType.PollError,
             pollId: msg.pollId as string,
             error: msg.error as string,
             votes: msg.votes as Record<string, number>,
