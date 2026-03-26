@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/connection"
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/poll"
@@ -1247,17 +1248,33 @@ func TestRun_DepsFactory(t *testing.T) {
 	if err := run(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	handlerFn := capturedHandler.(func(context.Context, events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error))
-	req := events.APIGatewayWebsocketProxyRequest{
-		RequestContext: events.APIGatewayWebsocketProxyRequestContext{
-			ConnectionID: "test-conn",
-			DomainName:   "test.execute-api.ap-northeast-1.amazonaws.com",
-			Stage:        "ws",
-		},
-		Body: `{"type":"viewer_count"}`,
+	if capturedHandler == nil {
+		t.Fatal("expected handler to be registered")
 	}
-	_, _ = handlerFn(context.Background(), req)
+}
+
+// TestNewHandleDepsFactory は newHandleDepsFactory が依存を返すことを検証する。
+func TestNewHandleDepsFactory(t *testing.T) {
+	t.Parallel()
+	cfg := aws.Config{}
+	connStore := connection.NewStore(dynamodb.NewFromConfig(cfg), "test-table")
+	factory := newHandleDepsFactory(cfg, connStore)
+	deps := factory("example.execute-api.ap-northeast-1.amazonaws.com", "ws")
+	if deps.slideSync == nil {
+		t.Fatal("expected slideSync to be non-nil")
+	}
+	if deps.handsOn == nil {
+		t.Fatal("expected handsOn to be non-nil")
+	}
+	if deps.viewerCount == nil {
+		t.Fatal("expected viewerCount to be non-nil")
+	}
+	if deps.broadcaster == nil {
+		t.Fatal("expected broadcaster to be non-nil")
+	}
+	if deps.singleSender == nil {
+		t.Fatal("expected singleSender to be non-nil")
+	}
 }
 
 // TestNewAPIGWEndpoint は requestContext からエンドポイント URL を構築することを検証する。

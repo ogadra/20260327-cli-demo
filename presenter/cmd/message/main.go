@@ -11,6 +11,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewaymanagementapi"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -395,6 +396,24 @@ func newAPIGWEndpoint(domainName, stage string) string {
 	return fmt.Sprintf("https://%s/%s", domainName, stage)
 }
 
+// newHandleDepsFactory は AWS 設定と接続ストアから handleDepsFactory を生成する。
+func newHandleDepsFactory(cfg aws.Config, connStore *connection.Store) handleDepsFactory {
+	return func(domainName, stage string) handleDeps {
+		endpoint := newAPIGWEndpoint(domainName, stage)
+		apigwClient := apigatewaymanagementapi.NewFromConfig(cfg, func(o *apigatewaymanagementapi.Options) {
+			o.BaseEndpoint = &endpoint
+		})
+		b := broadcast.NewBroadcaster(apigwClient, connStore, connStore)
+		return handleDeps{
+			slideSync:    slidesync.NewHandler(connStore, b),
+			handsOn:      handson.NewHandler(connStore, b),
+			viewerCount:  viewercount.NewHandler(connStore, &viewerCountAdapter{sender: b}),
+			broadcaster:  b,
+			singleSender: b,
+		}
+	}
+}
+
 // run は依存を初期化し Lambda ハンドラーを起動する。
 func run() error {
 	ctx := context.Background()
@@ -422,20 +441,7 @@ func run() error {
 		pollUnvote: pollStore,
 		pollSwitch: pollStore,
 		connGetter: connStore,
-		newDeps: func(domainName, stage string) handleDeps {
-			endpoint := newAPIGWEndpoint(domainName, stage)
-			apigwClient := apigatewaymanagementapi.NewFromConfig(cfg, func(o *apigatewaymanagementapi.Options) {
-				o.BaseEndpoint = &endpoint
-			})
-			b := broadcast.NewBroadcaster(apigwClient, connStore, connStore)
-			return handleDeps{
-				slideSync:    slidesync.NewHandler(connStore, b),
-				handsOn:      handson.NewHandler(connStore, b),
-				viewerCount:  viewercount.NewHandler(connStore, &viewerCountAdapter{sender: b}),
-				broadcaster:  b,
-				singleSender: b,
-			}
-		},
+		newDeps:    newHandleDepsFactory(cfg, connStore),
 	}
 
 	startLambda(h.handle)

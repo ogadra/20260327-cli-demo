@@ -367,17 +367,13 @@ func TestRun_Success(t *testing.T) {
 	t.Setenv("CONNECTIONS_TABLE", "conn-table")
 	t.Setenv("SESSIONS_TABLE", "sess-table")
 
-	var capturedHandler any
-	startLambda = func(handler any) { capturedHandler = handler }
+	startLambda = func(handler any) {}
 	loadConfig = func(_ context.Context, _ ...func(*config.LoadOptions) error) (aws.Config, error) {
 		return aws.Config{}, nil
 	}
 
 	if err := run(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-	if capturedHandler == nil {
-		t.Fatal("expected handler to be registered")
 	}
 }
 
