@@ -128,22 +128,27 @@ func requestCookieValue(req events.APIGatewayV2HTTPRequest, name string) string 
 
 // handleGet は GET リクエストを処理する。cookie の slide_auth トークンが有効なら 200、無効なら 401 を返す。
 func handleGet(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+	headers := map[string]string{
+		"Content-Type":  "application/json",
+		"Cache-Control": "no-store",
+		"Vary":          "Cookie",
+	}
 	token := requestCookieValue(req, "slide_auth")
 	if token == "" {
-		return events.APIGatewayV2HTTPResponse{StatusCode: 401, Body: `{"error":"unauthorized"}`}, nil
+		return events.APIGatewayV2HTTPResponse{StatusCode: 401, Headers: headers, Body: `{"error":"unauthorized"}`}, nil
 	}
 	valid, err := sessValidator.IsValid(ctx, token)
 	if err != nil {
-		return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: `{"error":"internal server error"}`}, nil
+		return events.APIGatewayV2HTTPResponse{StatusCode: 500, Headers: headers, Body: `{"error":"internal server error"}`}, nil
 	}
 	if !valid {
-		return events.APIGatewayV2HTTPResponse{StatusCode: 401, Body: `{"error":"unauthorized"}`}, nil
+		return events.APIGatewayV2HTTPResponse{StatusCode: 401, Headers: headers, Body: `{"error":"unauthorized"}`}, nil
 	}
 	body, err := jsonMarshal(map[string]string{"status": "authenticated"})
 	if err != nil {
-		return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: `{"error":"internal server error"}`}, nil
+		return events.APIGatewayV2HTTPResponse{StatusCode: 500, Headers: headers, Body: `{"error":"internal server error"}`}, nil
 	}
-	return events.APIGatewayV2HTTPResponse{StatusCode: 200, Body: string(body)}, nil
+	return events.APIGatewayV2HTTPResponse{StatusCode: 200, Headers: headers, Body: string(body)}, nil
 }
 
 // handlePost は POST リクエストを処理する。パスワード検証とセッション作成を行う。

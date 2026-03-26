@@ -224,6 +224,47 @@ func TestHandler_GET_ValidatorError(t *testing.T) {
 	}
 }
 
+// TestHandler_GET_CacheHeaders は GET レスポンスに Cache-Control と Vary ヘッダーが含まれることを検証する。
+func TestHandler_GET_CacheHeaders(t *testing.T) {
+	cleanup := setupGetDeps(t)
+	defer cleanup()
+
+	sessValidator = &mockSessionValidator{
+		isValidFn: func(_ context.Context, _ string) (bool, error) {
+			return true, nil
+		},
+	}
+
+	tests := []struct {
+		name string
+		req  events.APIGatewayV2HTTPRequest
+	}{
+		{
+			name: "authenticated",
+			req:  newHTTPRequestWithCookie("GET", "slide_auth=validtoken"),
+		},
+		{
+			name: "no cookie",
+			req:  newHTTPRequest("GET", ""),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := handler(context.Background(), tt.req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if resp.Headers["Cache-Control"] != "no-store" {
+				t.Errorf("Cache-Control = %q, want %q", resp.Headers["Cache-Control"], "no-store")
+			}
+			if resp.Headers["Vary"] != "Cookie" {
+				t.Errorf("Vary = %q, want %q", resp.Headers["Vary"], "Cookie")
+			}
+		})
+	}
+}
+
 // TestHandler_GET_MarshalError は GET リクエストで jsonMarshal がエラーを返す場合を検証する。
 func TestHandler_GET_MarshalError(t *testing.T) {
 	cleanup := setupGetDeps(t)
