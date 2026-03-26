@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -115,9 +116,15 @@ func handlePost(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: `{"error":"internal server error"}`}, nil
 	}
 
+	if secretOut.SecretString == nil || *secretOut.SecretString == "" {
+		return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: `{"error":"internal server error"}`}, nil
+	}
 	hash := *secretOut.SecretString
 	if err := compareHashFn([]byte(hash), []byte(loginReq.Password)); err != nil {
-		return events.APIGatewayV2HTTPResponse{StatusCode: 401, Body: `{"error":"unauthorized"}`}, nil
+		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+			return events.APIGatewayV2HTTPResponse{StatusCode: 401, Body: `{"error":"unauthorized"}`}, nil
+		}
+		return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: `{"error":"internal server error"}`}, nil
 	}
 
 	token, err := tokenFn()
@@ -133,9 +140,9 @@ func handlePost(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events
 	return events.APIGatewayV2HTTPResponse{
 		StatusCode: 302,
 		Headers: map[string]string{
-			"Set-Cookie": cookie,
-			"Location":   "/",
+			"Location": "/",
 		},
+		Cookies: []string{cookie},
 	}, nil
 }
 

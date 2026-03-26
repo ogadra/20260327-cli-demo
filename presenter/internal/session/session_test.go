@@ -4,9 +4,7 @@ package session
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -33,9 +31,6 @@ func TestNewStore(t *testing.T) {
 	if store.tableName != "test-table" {
 		t.Errorf("tableName = %q, want %q", store.tableName, "test-table")
 	}
-	if store.nowFn == nil {
-		t.Error("nowFn is nil")
-	}
 	if store.marshalFn == nil {
 		t.Error("marshalFn is nil")
 	}
@@ -54,8 +49,6 @@ func TestCreate_Success(t *testing.T) {
 		},
 	}
 	store := NewStore(mock, "sessions")
-	fixedTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	store.nowFn = func() time.Time { return fixedTime }
 
 	err := store.Create(context.Background(), "abc123")
 	if err != nil {
@@ -78,13 +71,8 @@ func TestCreate_Success(t *testing.T) {
 	if statusAttr.Value != "valid" {
 		t.Errorf("status = %q, want %q", statusAttr.Value, "valid")
 	}
-	ttlAttr, ok := capturedItem["ttl"].(*types.AttributeValueMemberN)
-	if !ok {
-		t.Fatalf("ttl attribute type = %T, want *types.AttributeValueMemberN", capturedItem["ttl"])
-	}
-	expectedTTL := fixedTime.Add(7 * 24 * time.Hour).Unix()
-	if ttlAttr.Value != fmt.Sprintf("%d", expectedTTL) {
-		t.Errorf("ttl = %s, want %d", ttlAttr.Value, expectedTTL)
+	if _, hasTTL := capturedItem["ttl"]; hasTTL {
+		t.Error("session should not have TTL attribute")
 	}
 }
 

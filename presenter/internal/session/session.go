@@ -4,7 +4,6 @@ package session
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -21,14 +20,12 @@ type DynamoDBAPI interface {
 type sessionItem struct {
 	Token  string `dynamodbav:"token"`
 	Status string `dynamodbav:"status"`
-	TTL    int64  `dynamodbav:"ttl"`
 }
 
 // Store はセッションテーブルの操作を提供する。
 type Store struct {
 	client    DynamoDBAPI
 	tableName string
-	nowFn     func() time.Time
 	marshalFn func(in interface{}) (map[string]types.AttributeValue, error)
 }
 
@@ -37,17 +34,15 @@ func NewStore(client DynamoDBAPI, tableName string) *Store {
 	return &Store{
 		client:    client,
 		tableName: tableName,
-		nowFn:     time.Now,
 		marshalFn: attributevalue.MarshalMap,
 	}
 }
 
-// Create はセッションを作成する。TTL は現在時刻から 7 日後に設定される。
+// Create はセッションを作成する。セッションは無期限で有効。DynamoDB TTL によるレコード自動削除は行わない。
 func (s *Store) Create(ctx context.Context, token string) error {
 	item := sessionItem{
 		Token:  token,
 		Status: "valid",
-		TTL:    s.nowFn().Add(7 * 24 * time.Hour).Unix(),
 	}
 	av, err := s.marshalFn(item)
 	if err != nil {

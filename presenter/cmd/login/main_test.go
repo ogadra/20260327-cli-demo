@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // errorReader は常にエラーを返す io.Reader。
@@ -159,9 +160,8 @@ func TestHandler_POST_Success(t *testing.T) {
 	if createdToken != "aabbccdd" {
 		t.Errorf("token = %q, want %q", createdToken, "aabbccdd")
 	}
-	cookie := resp.Headers["Set-Cookie"]
-	if cookie != "slide_auth=aabbccdd; HttpOnly; Secure; SameSite=Strict; Path=/" {
-		t.Errorf("unexpected cookie: %s", cookie)
+	if len(resp.Cookies) != 1 || resp.Cookies[0] != "slide_auth=aabbccdd; HttpOnly; Secure; SameSite=Strict; Path=/" {
+		t.Errorf("unexpected cookies: %v", resp.Cookies)
 	}
 	location := resp.Headers["Location"]
 	if location != "/" {
@@ -218,7 +218,7 @@ func TestHandler_POST_WrongPassword(t *testing.T) {
 		},
 	}
 	compareHashFn = func(_, _ []byte) error {
-		return fmt.Errorf("mismatch")
+		return bcrypt.ErrMismatchedHashAndPassword
 	}
 
 	req := newHTTPRequest("POST", `{"password":"wrong"}`)
@@ -228,6 +228,55 @@ func TestHandler_POST_WrongPassword(t *testing.T) {
 	}
 	if resp.StatusCode != 401 {
 		t.Errorf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
+// TestHandler_POST_BcryptInternalError は bcrypt のフォーマットエラーなど ErrMismatchedHashAndPassword 以外のエラーで 500 を返すことを検証する。
+func TestHandler_POST_BcryptInternalError(t *testing.T) {
+	cleanup := setupPostDeps(t)
+	defer cleanup()
+
+	secretGetter = &mockSecretGetter{
+		getSecretValueFn: func(_ context.Context, _ *secretsmanager.GetSecretValueInput, _ ...func(*secretsmanager.Options)) (*secretsmanager.GetSecretValueOutput, error) {
+			return &secretsmanager.GetSecretValueOutput{
+				SecretString: aws.String(validBcryptHash),
+			}, nil
+		},
+	}
+	compareHashFn = func(_, _ []byte) error {
+		return fmt.Errorf("hashedSecret too short to be a bcrypted password")
+	}
+
+	req := newHTTPRequest("POST", `{"password":"test"}`)
+	resp, err := handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 500 {
+		t.Errorf("expected 500, got %d", resp.StatusCode)
+	}
+}
+
+// TestHandler_POST_NilSecretString は SecretString が nil の場合に 500 を返すことを検証する。
+func TestHandler_POST_NilSecretString(t *testing.T) {
+	cleanup := setupPostDeps(t)
+	defer cleanup()
+
+	secretGetter = &mockSecretGetter{
+		getSecretValueFn: func(_ context.Context, _ *secretsmanager.GetSecretValueInput, _ ...func(*secretsmanager.Options)) (*secretsmanager.GetSecretValueOutput, error) {
+			return &secretsmanager.GetSecretValueOutput{
+				SecretString: nil,
+			}, nil
+		},
+	}
+
+	req := newHTTPRequest("POST", `{"password":"test"}`)
+	resp, err := handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 500 {
+		t.Errorf("expected 500, got %d", resp.StatusCode)
 	}
 }
 
