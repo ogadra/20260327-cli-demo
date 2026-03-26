@@ -1,8 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Action } from "../api/presenter";
-import type { PollStateData } from "../hooks/usePresenter";
-import { defaultPolls, defaultSequence, type PresenterStep } from "./sequence";
-import type { PollOpenPayload } from "./sequence";
+import { defaultSequence, type PresenterStep } from "./sequence";
 
 /** Props for the PresenterPanel component. */
 export interface PresenterPanelProps {
@@ -12,8 +10,6 @@ export interface PresenterPanelProps {
   sendHandsOn: (instruction: string, placeholder: string) => void;
   /** Number of currently connected viewers. */
   viewerCount: number;
-  /** Poll states keyed by pollId. */
-  pollStates: Partial<Record<string, PollStateData>>;
 }
 
 /** Derives a human-readable description from a presenter step. */
@@ -31,7 +27,6 @@ export const PresenterPanel = ({
   sendSlideSync,
   sendHandsOn,
   viewerCount,
-  pollStates,
 }: PresenterPanelProps): ReactNode => {
   const sequence = defaultSequence;
   const [stepIndex, setStepIndex] = useState(0);
@@ -94,8 +89,6 @@ export const PresenterPanel = ({
   }, [sequence.length]);
 
   const currentStep = sequence[stepIndex];
-  const activePoll = defaultPolls.find((p: PollOpenPayload) => pollStates[p.pollId] !== undefined);
-  const pollState = activePoll ? pollStates[activePoll.pollId] : undefined;
 
   return (
     <div
@@ -124,28 +117,6 @@ export const PresenterPanel = ({
       </header>
 
       <div style={{ fontSize: "20px", marginBottom: "24px" }}>{describeStep(currentStep)}</div>
-
-      {pollState && (
-        <section aria-label="poll results" style={{ marginBottom: "24px" }}>
-          <div style={{ fontSize: "14px", color: "#aaa", marginBottom: "8px" }}>Poll Results</div>
-          {pollState.options.map((option) => (
-            <div
-              key={option}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                padding: "8px",
-                background: "#222",
-                borderRadius: "4px",
-                marginBottom: "4px",
-              }}
-            >
-              <span>{option}</span>
-              <span style={{ color: "#aaa" }}>{pollState.votes[option] ?? 0}</span>
-            </div>
-          ))}
-        </section>
-      )}
 
       <div style={{ display: "flex", gap: "12px" }}>
         <button

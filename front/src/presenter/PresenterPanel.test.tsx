@@ -10,7 +10,7 @@ vi.mock("./sequence", async () => {
       { type: Action.HandsOn, instruction: "Run echo", placeholder: "echo hello" },
       { type: Action.SlideSync, page: 1 },
     ],
-    defaultPolls: [{ type: Action.PollOpen, pollId: "q1", options: ["Yes", "No"], maxChoices: 1 }],
+    defaultPolls: [],
   };
 });
 
@@ -22,7 +22,6 @@ const createProps = (): PresenterPanelProps & {
   sendSlideSync: vi.fn(),
   sendHandsOn: vi.fn(),
   viewerCount: 0,
-  pollStates: {},
 });
 
 describe("PresenterPanel", () => {
@@ -141,30 +140,5 @@ describe("PresenterPanel", () => {
     await renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByText("Hands-on: Run echo")).toBeTruthy();
-  });
-
-  /** Verify that poll results are shown when pollStates has data for a defaultPoll. */
-  it("shows poll results when pollStates has data for a defaultPoll", async () => {
-    props.pollStates = {
-      q1: {
-        options: ["Yes", "No"],
-        maxChoices: 1,
-        votes: { Yes: 10, No: 5 },
-        myChoices: [],
-      },
-    };
-    await renderPanel();
-    const results = screen.getByRole("region", { name: "poll results" });
-    expect(results).toBeTruthy();
-    expect(results.textContent).toContain("Yes");
-    expect(results.textContent).toContain("10");
-    expect(results.textContent).toContain("No");
-    expect(results.textContent).toContain("5");
-  });
-
-  /** Verify that poll results are not shown when pollStates is empty. */
-  it("does not show poll results when pollStates is empty", async () => {
-    await renderPanel();
-    expect(screen.queryByRole("region", { name: "poll results" })).toBeNull();
   });
 });
