@@ -71,9 +71,7 @@ func newHTTPRequestWithCookie(method, cookie string) events.APIGatewayV2HTTPRequ
 				Method: method,
 			},
 		},
-		Headers: map[string]string{
-			"cookie": cookie,
-		},
+		Cookies: []string{cookie},
 	}
 }
 
@@ -158,7 +156,7 @@ func TestHandler_GET_AuthenticatedViaCookiesField(t *testing.T) {
 				Method: "GET",
 			},
 		},
-		Cookies: []string{"slide_auth=v2token"},
+		Cookies: []string{"other=value", "slide_auth=v2token"},
 	}
 	resp, err := handler(context.Background(), req)
 	if err != nil {

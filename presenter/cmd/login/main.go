@@ -116,14 +116,14 @@ func parseCookieValue(cookieHeader, name string) string {
 	return c.Value
 }
 
-// requestCookieValue は API Gateway v2 の Cookies フィールドまたは Headers["cookie"] から指定された名前の cookie 値を取得する。
+// requestCookieValue は API Gateway v2 の Cookies フィールドから指定された名前の cookie 値を取得する。
 func requestCookieValue(req events.APIGatewayV2HTTPRequest, name string) string {
 	for _, raw := range req.Cookies {
 		if v := parseCookieValue(raw, name); v != "" {
 			return v
 		}
 	}
-	return parseCookieValue(req.Headers["cookie"], name)
+	return ""
 }
 
 // handleGet は GET リクエストを処理する。cookie の slide_auth トークンが有効なら 200、無効なら 401 を返す。
