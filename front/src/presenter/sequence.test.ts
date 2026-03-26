@@ -14,6 +14,17 @@ describe("defaultSequence", () => {
     const first = defaultSequence[0];
     expect(first).toEqual({ type: Action.SlideSync, page: 0 });
   });
+
+  /** Verify that the default sequence contains 4 steps in the expected order. */
+  it("contains 4 steps in the expected order", () => {
+    expect(defaultSequence).toHaveLength(4);
+    expect(defaultSequence).toEqual([
+      { type: Action.SlideSync, page: 0 },
+      { type: Action.SlideSync, page: 1 },
+      { type: Action.HandsOn, instruction: "Try running a command", placeholder: "echo hello" },
+      { type: Action.SlideSync, page: 2 },
+    ]);
+  });
 });
 
 describe("PresenterStep discriminated union", () => {

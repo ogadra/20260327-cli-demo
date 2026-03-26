@@ -15,7 +15,12 @@ export type PollOpenPayload = {
 export type PresenterStep = SlideSyncPayload | HandsOnPayload;
 
 /** Default presentation sequence used by the presenter control panel. */
-export const defaultSequence: PresenterStep[] = [{ type: Action.SlideSync, page: 0 }];
+export const defaultSequence: PresenterStep[] = [
+  { type: Action.SlideSync, page: 0 },
+  { type: Action.SlideSync, page: 1 },
+  { type: Action.HandsOn, instruction: "Try running a command", placeholder: "echo hello" },
+  { type: Action.SlideSync, page: 2 },
+];
 
 /** Default poll list reserved for future use. */
 export const defaultPolls: PollOpenPayload[] = [];
