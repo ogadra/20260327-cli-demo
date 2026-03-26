@@ -9,9 +9,8 @@ import {
 /** Maximum reconnection delay in milliseconds. */
 const MAX_DELAY = 8000;
 
-/** Snapshot of the current poll state received from the server. */
+/** Snapshot of a single poll state received from the server. */
 export interface PollStateData {
-  pollId: string;
   options: string[];
   maxChoices: number;
   votes: Record<string, number>;
@@ -25,7 +24,7 @@ export interface UsePresenterResult {
   instruction: string;
   placeholder: string;
   viewerCount: number;
-  pollState: PollStateData | null;
+  pollStates: Partial<Record<string, PollStateData>>;
   sendSlideSync: (page: number) => void;
   sendHandsOn: (instruction: string, placeholder: string) => void;
   sendPollGet: (pollId: string, options: string[], maxChoices: number) => void;
@@ -40,7 +39,7 @@ export interface UsePresenterDeps {
 }
 
 /**
- * Hook that manages a presenter WebSocket connection including page, mode, viewer count, and poll state.
+ * Hook that manages a presenter WebSocket connection including page, mode, viewer count, and poll states keyed by pollId.
  * Connects on mount with auto-reconnect and disconnects on unmount.
  * @param wsUrl - WebSocket URL to connect to.
  * @param deps - Optional dependency overrides for testing.
@@ -55,7 +54,7 @@ export const usePresenter = (
   const [instruction, setInstruction] = useState("");
   const [placeholder, setPlaceholder] = useState("");
   const [viewerCount, setViewerCount] = useState(0);
-  const [pollState, setPollState] = useState<PollStateData | null>(null);
+  const [pollStates, setPollStates] = useState<Record<string, PollStateData>>({});
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -89,18 +88,25 @@ export const usePresenter = (
             setViewerCount(msg.count);
             break;
           case MessageType.PollState:
-            setPollState({
-              pollId: msg.pollId,
-              options: msg.options,
-              maxChoices: msg.maxChoices,
-              votes: msg.votes,
-              myChoices: msg.myChoices,
-            });
+            setPollStates((prev) => ({
+              ...prev,
+              [msg.pollId]: {
+                options: msg.options,
+                maxChoices: msg.maxChoices,
+                votes: msg.votes,
+                myChoices: msg.myChoices,
+              },
+            }));
             break;
           case MessageType.PollError:
-            setPollState((prev) =>
-              prev ? { ...prev, votes: msg.votes, myChoices: msg.myChoices } : prev,
-            );
+            setPollStates((prev) => {
+              const existing = prev[msg.pollId];
+              if (!existing) return prev;
+              return {
+                ...prev,
+                [msg.pollId]: { ...existing, votes: msg.votes, myChoices: msg.myChoices },
+              };
+            });
             break;
         }
       };
@@ -183,7 +189,7 @@ export const usePresenter = (
     instruction,
     placeholder,
     viewerCount,
-    pollState,
+    pollStates,
     sendSlideSync,
     sendHandsOn,
     sendPollGet,

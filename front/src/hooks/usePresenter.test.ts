@@ -314,12 +314,12 @@ describe("usePresenter", () => {
     expect(instances).toHaveLength(1);
   });
 
-  it("returns initial pollState as null", () => {
+  it("returns initial pollStates as empty object", () => {
     const { result } = renderPresenter();
-    expect(result.current.pollState).toBeNull();
+    expect(result.current.pollStates).toEqual({});
   });
 
-  it("updates pollState on poll_state message", () => {
+  it("updates pollStates on poll_state message keyed by pollId", () => {
     const { result } = renderPresenter();
     simulateOpen();
     act(() => {
@@ -334,12 +334,52 @@ describe("usePresenter", () => {
         }),
       );
     });
-    expect(result.current.pollState).toEqual({
-      pollId: "q1",
+    expect(result.current.pollStates["q1"]).toEqual({
       options: ["A", "B"],
       maxChoices: 1,
       votes: { A: 10, B: 5 },
       myChoices: ["A"],
+    });
+  });
+
+  it("stores multiple polls independently", () => {
+    const { result } = renderPresenter();
+    simulateOpen();
+    act(() => {
+      simulateMessage(
+        JSON.stringify({
+          type: MessageType.PollState,
+          pollId: "q1",
+          options: ["A", "B"],
+          maxChoices: 1,
+          votes: { A: 1 },
+          myChoices: [],
+        }),
+      );
+    });
+    act(() => {
+      simulateMessage(
+        JSON.stringify({
+          type: MessageType.PollState,
+          pollId: "q2",
+          options: ["X", "Y", "Z"],
+          maxChoices: 2,
+          votes: { X: 3 },
+          myChoices: ["X"],
+        }),
+      );
+    });
+    expect(result.current.pollStates["q1"]).toEqual({
+      options: ["A", "B"],
+      maxChoices: 1,
+      votes: { A: 1 },
+      myChoices: [],
+    });
+    expect(result.current.pollStates["q2"]).toEqual({
+      options: ["X", "Y", "Z"],
+      maxChoices: 2,
+      votes: { X: 3 },
+      myChoices: ["X"],
     });
   });
 
@@ -361,7 +401,7 @@ describe("usePresenter", () => {
     expect(result.current.mode).toBe(MessageType.SlideSync);
   });
 
-  it("updates pollState votes and myChoices on poll_error message", () => {
+  it("updates pollStates votes and myChoices on poll_error message", () => {
     const { result } = renderPresenter();
     simulateOpen();
     act(() => {
@@ -387,11 +427,11 @@ describe("usePresenter", () => {
         }),
       );
     });
-    expect(result.current.pollState?.votes).toEqual({ A: 6 });
-    expect(result.current.pollState?.myChoices).toEqual(["A"]);
+    expect(result.current.pollStates["q1"]?.votes).toEqual({ A: 6 });
+    expect(result.current.pollStates["q1"]?.myChoices).toEqual(["A"]);
   });
 
-  it("ignores poll_error when no prior pollState exists", () => {
+  it("ignores poll_error when no prior pollState exists for the pollId", () => {
     const { result } = renderPresenter();
     simulateOpen();
     act(() => {
@@ -405,7 +445,7 @@ describe("usePresenter", () => {
         }),
       );
     });
-    expect(result.current.pollState).toBeNull();
+    expect(result.current.pollStates["q1"]).toBeUndefined();
   });
 
   it("sends poll_get message via sendPollGet", () => {

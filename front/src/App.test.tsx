@@ -18,6 +18,7 @@ const defaultPresenter = {
   instruction: "",
   placeholder: "",
   viewerCount: 0,
+  pollStates: {} as Record<string, unknown>,
 };
 
 const mockPresenter: {
@@ -26,12 +27,19 @@ const mockPresenter: {
   instruction: string;
   placeholder: string;
   viewerCount: number;
+  pollStates: Record<string, unknown>;
   sendSlideSync: ReturnType<typeof vi.fn>;
   sendHandsOn: ReturnType<typeof vi.fn>;
+  sendPollVote: ReturnType<typeof vi.fn>;
+  sendPollUnvote: ReturnType<typeof vi.fn>;
+  sendPollSwitch: ReturnType<typeof vi.fn>;
 } = {
   ...defaultPresenter,
   sendSlideSync: vi.fn(),
   sendHandsOn: vi.fn(),
+  sendPollVote: vi.fn(),
+  sendPollUnvote: vi.fn(),
+  sendPollSwitch: vi.fn(),
 };
 
 vi.mock("./hooks/usePresenter", () => ({
