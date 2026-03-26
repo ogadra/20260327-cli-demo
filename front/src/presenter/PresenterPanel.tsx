@@ -1,6 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Action } from "../api/presenter";
-import type { PollStateData } from "../hooks/usePresenter";
 import { defaultSequence, type PresenterStep } from "./sequence";
 
 /** Props for the PresenterPanel component. */
@@ -9,12 +8,8 @@ export interface PresenterPanelProps {
   sendSlideSync: (page: number) => void;
   /** Sends a hands_on message with instruction and placeholder text. */
   sendHandsOn: (instruction: string, placeholder: string) => void;
-  /** Sends a poll_get message to initialize or retrieve a poll. */
-  sendPollGet: (pollId: string, options: string[], maxChoices: number) => void;
   /** Number of currently connected viewers. */
   viewerCount: number;
-  /** Poll states keyed by pollId. */
-  pollStates: Partial<Record<string, PollStateData>>;
 }
 
 /** Derives a human-readable description from a presenter step. */
@@ -24,8 +19,6 @@ const describeStep = (step: PresenterStep): string => {
       return `Slide ${step.page}`;
     case Action.HandsOn:
       return `Hands-on: ${step.instruction}`;
-    case Action.PollOpen:
-      return `Poll: ${step.pollId}`;
   }
 };
 
@@ -33,9 +26,7 @@ const describeStep = (step: PresenterStep): string => {
 export const PresenterPanel = ({
   sendSlideSync,
   sendHandsOn,
-  sendPollGet,
   viewerCount,
-  pollStates,
 }: PresenterPanelProps): ReactNode => {
   const sequence = defaultSequence;
   const [stepIndex, setStepIndex] = useState(0);
@@ -51,12 +42,9 @@ export const PresenterPanel = ({
         case Action.HandsOn:
           sendHandsOn(step.instruction, step.placeholder);
           break;
-        case Action.PollOpen:
-          sendPollGet(step.pollId, step.options, step.maxChoices);
-          break;
       }
     },
-    [sendSlideSync, sendHandsOn, sendPollGet],
+    [sendSlideSync, sendHandsOn],
   );
 
   /** Navigates to a specific step index. */
@@ -101,8 +89,6 @@ export const PresenterPanel = ({
   }, [sequence.length]);
 
   const currentStep = sequence[stepIndex];
-  const pollState =
-    currentStep.type === Action.PollOpen ? pollStates[currentStep.pollId] : undefined;
 
   return (
     <div
@@ -131,28 +117,6 @@ export const PresenterPanel = ({
       </header>
 
       <div style={{ fontSize: "20px", marginBottom: "24px" }}>{describeStep(currentStep)}</div>
-
-      {pollState && (
-        <section aria-label="poll results" style={{ marginBottom: "24px" }}>
-          <div style={{ fontSize: "14px", color: "#aaa", marginBottom: "8px" }}>Poll Results</div>
-          {pollState.options.map((option) => (
-            <div
-              key={option}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                padding: "8px",
-                background: "#222",
-                borderRadius: "4px",
-                marginBottom: "4px",
-              }}
-            >
-              <span>{option}</span>
-              <span style={{ color: "#aaa" }}>{pollState.votes[option] ?? 0}</span>
-            </div>
-          ))}
-        </section>
-      )}
 
       <div style={{ display: "flex", gap: "12px" }}>
         <button
