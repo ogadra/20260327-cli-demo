@@ -120,7 +120,7 @@ func (h *connectHandler) handle(ctx context.Context, req events.APIGatewayWebsoc
 	}
 
 	broadcaster := h.newBroadcaster(req.RequestContext.DomainName, req.RequestContext.Stage)
-	if err := broadcaster.Send(ctx, room, payload, ""); err != nil {
+	if err := broadcaster.Send(ctx, room, payload, connectionID); err != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("broadcast viewer_count: %w", err)
 	}
 
