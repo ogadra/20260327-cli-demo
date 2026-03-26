@@ -30,7 +30,7 @@ const describeStep = (step: PresenterStep): string => {
 };
 
 /** Presenter control panel that drives the presentation sequence via step navigation. */
-const PresenterPanel = ({
+export const PresenterPanel = ({
   sendSlideSync,
   sendHandsOn,
   sendPollGet,
@@ -105,7 +105,8 @@ const PresenterPanel = ({
 
   return (
     <div
-      data-testid="presenter-panel"
+      role="region"
+      aria-label="presenter panel"
       style={{
         background: "#1a1a1a",
         color: "#fff",
@@ -114,8 +115,8 @@ const PresenterPanel = ({
         minHeight: "100vh",
       }}
     >
-      <div
-        data-testid="status-bar"
+      <nav
+        aria-label="status bar"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -124,18 +125,18 @@ const PresenterPanel = ({
           color: "#aaa",
         }}
       >
-        <span data-testid="step-counter">
+        <span aria-label="step counter">
           Step {stepIndex + 1} / {sequence.length}
         </span>
-        <span data-testid="viewer-count">{viewerCount} viewers</span>
-      </div>
+        <span aria-label="viewer count">{viewerCount} viewers</span>
+      </nav>
 
-      <div data-testid="step-description" style={{ fontSize: "20px", marginBottom: "24px" }}>
+      <div aria-label="step description" style={{ fontSize: "20px", marginBottom: "24px" }}>
         {describeStep(currentStep)}
       </div>
 
       {pollState && (
-        <div data-testid="poll-results" style={{ marginBottom: "24px" }}>
+        <section aria-label="poll results" style={{ marginBottom: "24px" }}>
           <div style={{ fontSize: "14px", color: "#aaa", marginBottom: "8px" }}>Poll Results</div>
           {pollState.options.map((option) => (
             <div
@@ -153,12 +154,12 @@ const PresenterPanel = ({
               <span style={{ color: "#aaa" }}>{pollState.votes[option] ?? 0}</span>
             </div>
           ))}
-        </div>
+        </section>
       )}
 
       <div style={{ display: "flex", gap: "12px" }}>
         <button
-          data-testid="prev-button"
+          aria-label="previous step"
           type="button"
           disabled={stepIndex === 0}
           onClick={(): void => goTo(stepIndex - 1)}
@@ -175,7 +176,7 @@ const PresenterPanel = ({
           Prev
         </button>
         <button
-          data-testid="next-button"
+          aria-label="next step"
           type="button"
           disabled={stepIndex === sequence.length - 1}
           onClick={(): void => goTo(stepIndex + 1)}
@@ -195,5 +196,3 @@ const PresenterPanel = ({
     </div>
   );
 };
-
-export { PresenterPanel };
