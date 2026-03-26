@@ -73,7 +73,7 @@ API Gateway WebSocket 経由で front と通信する。
 | S→C | `poll_state` | アンケート状態（選択肢・投票数・自分の選択） |
 | S→C | `poll_error` | アンケート操作エラー |
 | C→S | `slide_sync` | スライドページ送信（presenter ロール） |
-| C→S | `hands_on` | ハンズオンモード送信（presenter ロール） |
+| C→S | `viewer_count` | 視聴者数取得 |
 | C→S | `poll_get` | アンケート取得・初期化 |
 | C→S | `poll_vote` | 投票 |
 | C→S | `poll_unvote` | 投票取消 |
