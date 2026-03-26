@@ -63,6 +63,7 @@ resource "aws_lambda_function" "presenter_ws" {
       CONNECTIONS_TABLE = aws_dynamodb_table.presenter_ws_connections.name
       SESSIONS_TABLE    = aws_dynamodb_table.presenter_sessions.name
       POLL_VOTES_TABLE  = aws_dynamodb_table.presenter_poll_votes.name
+      ROOM_STATE_TABLE  = aws_dynamodb_table.presenter_room_state.name
     }
   }
 

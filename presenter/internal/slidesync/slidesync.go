@@ -21,18 +21,26 @@ type Broadcaster interface {
 	Send(ctx context.Context, room string, payload []byte, excludeConnectionID string) error
 }
 
+// StateWriter は room の現在のスライドページを保存するインターフェース。
+type StateWriter interface {
+	// PutState は room の現在のスライドページを保存する。
+	PutState(ctx context.Context, room string, page int) error
+}
+
 // Handler はスライド同期ハンドラー。
 type Handler struct {
 	connGetter  ConnectionGetter
 	broadcaster Broadcaster
+	stateWriter StateWriter
 	jsonMarshal func(v any) ([]byte, error)
 }
 
 // NewHandler は Handler を生成する。
-func NewHandler(connGetter ConnectionGetter, broadcaster Broadcaster) *Handler {
+func NewHandler(connGetter ConnectionGetter, broadcaster Broadcaster, stateWriter StateWriter) *Handler {
 	return &Handler{
 		connGetter:  connGetter,
 		broadcaster: broadcaster,
+		stateWriter: stateWriter,
 		jsonMarshal: json.Marshal,
 	}
 }
@@ -64,6 +72,10 @@ func (h *Handler) Handle(ctx context.Context, room, connectionID string, page in
 
 	if err := h.broadcaster.Send(ctx, room, payload, connectionID); err != nil {
 		return fmt.Errorf("broadcast slide_sync: %w", err)
+	}
+
+	if err := h.stateWriter.PutState(ctx, room, page); err != nil {
+		return fmt.Errorf("save state: %w", err)
 	}
 
 	return nil
