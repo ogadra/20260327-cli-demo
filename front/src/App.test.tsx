@@ -57,7 +57,7 @@ describe("App", () => {
     expect(screen.getByText(/viewers/)).toHaveTextContent("42 viewers");
   });
 
-  it("scrolls to the active page on page change", () => {
+  it("scrolls to the active page on initial render", () => {
     mockPresenter.page = 1;
     render(<App />);
     expect(scrollIntoViewMock).toHaveBeenCalled();
@@ -68,6 +68,16 @@ describe("App", () => {
     render(<App />);
     expect(scrollIntoViewMock).toHaveBeenCalledWith(
       expect.objectContaining({ behavior: "instant" }),
+    );
+  });
+
+  it("uses smooth scroll for subsequent navigations", () => {
+    const { rerender } = render(<App />);
+    scrollIntoViewMock.mockClear();
+    mockPresenter.page = 1;
+    rerender(<App />);
+    expect(scrollIntoViewMock).toHaveBeenCalledWith(
+      expect.objectContaining({ behavior: "smooth" }),
     );
   });
 });
