@@ -43,7 +43,7 @@ const SlideView = ({
     );
   }
   return (
-    <div role="region" style={{ width: "100%", height: "100%" }}>
+    <div role="region" aria-label="slide content" style={{ width: "100%", height: "100%" }}>
       <Slide
         pollStates={pollStates}
         onPollVote={onPollVote}

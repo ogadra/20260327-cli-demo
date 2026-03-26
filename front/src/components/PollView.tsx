@@ -79,8 +79,7 @@ const PollView = ({
             }}
           >
             <div
-              role="progressbar"
-              aria-label={option}
+              aria-hidden="true"
               style={{
                 position: "absolute",
                 left: 0,

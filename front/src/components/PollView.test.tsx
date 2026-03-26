@@ -30,8 +30,10 @@ describe("PollView", () => {
 
   it("shows vote bar width proportional to votes", () => {
     render(<PollView {...defaultProps} />);
-    const barA = screen.getByRole("progressbar", { name: "A" });
-    const barC = screen.getByRole("progressbar", { name: "C" });
+    const btnA = screen.getByRole("button", { name: /^A/ });
+    const btnC = screen.getByRole("button", { name: /^C/ });
+    const barA = btnA.querySelector("[aria-hidden]") as HTMLElement;
+    const barC = btnC.querySelector("[aria-hidden]") as HTMLElement;
     expect(parseFloat(barA.style.width)).toBeCloseTo(66.6667, 3);
     expect(barC.style.width).toBe("0%");
   });
@@ -78,7 +80,8 @@ describe("PollView", () => {
 
   it("handles zero total votes without division error", () => {
     render(<PollView {...defaultProps} votes={{ A: 0, B: 0, C: 0 }} />);
-    const bar = screen.getByRole("progressbar", { name: "A" });
+    const btnA = screen.getByRole("button", { name: /^A/ });
+    const bar = btnA.querySelector("[aria-hidden]") as HTMLElement;
     expect(bar.style.width).toBe("0%");
   });
 
@@ -90,7 +93,8 @@ describe("PollView", () => {
 
   it("ignores votes for keys not in options when computing bar width", () => {
     render(<PollView {...defaultProps} options={["A", "B"]} votes={{ A: 10, B: 10, Z: 80 }} />);
-    const barA = screen.getByRole("progressbar", { name: "A" });
+    const btnA = screen.getByRole("button", { name: /^A/ });
+    const barA = btnA.querySelector("[aria-hidden]") as HTMLElement;
     expect(parseFloat(barA.style.width)).toBeCloseTo(50, 0);
   });
 
