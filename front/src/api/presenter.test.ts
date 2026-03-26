@@ -1,21 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { MessageType, parsePresenterMessage } from "./presenter";
+import { ServerMessageType, parsePresenterMessage } from "./presenter";
 
 describe("parsePresenterMessage", () => {
   it("parses slide_sync message", () => {
-    expect(parsePresenterMessage(JSON.stringify({ type: MessageType.SlideSync, page: 3 }))).toEqual(
-      { type: "slide_sync", page: 3 },
-    );
+    expect(
+      parsePresenterMessage(JSON.stringify({ type: ServerMessageType.SlideSync, page: 3 })),
+    ).toEqual({ type: "slide_sync", page: 3 });
   });
 
   it("parses hands_on message", () => {
-    const msg = { type: MessageType.HandsOn, instruction: "run echo", placeholder: "$ echo hi" };
+    const msg = {
+      type: ServerMessageType.HandsOn,
+      instruction: "run echo",
+      placeholder: "$ echo hi",
+    };
     expect(parsePresenterMessage(JSON.stringify(msg))).toEqual(msg);
   });
 
   it("parses viewer_count message", () => {
     expect(
-      parsePresenterMessage(JSON.stringify({ type: MessageType.ViewerCount, count: 42 })),
+      parsePresenterMessage(JSON.stringify({ type: ServerMessageType.ViewerCount, count: 42 })),
     ).toEqual({ type: "viewer_count", count: 42 });
   });
 
@@ -39,27 +43,27 @@ describe("parsePresenterMessage", () => {
 
   it("returns null for invalid slide_sync payload shape", () => {
     expect(
-      parsePresenterMessage(JSON.stringify({ type: MessageType.SlideSync, page: "3" })),
+      parsePresenterMessage(JSON.stringify({ type: ServerMessageType.SlideSync, page: "3" })),
     ).toBeNull();
   });
 
   it("returns null for invalid viewer_count payload shape", () => {
     expect(
-      parsePresenterMessage(JSON.stringify({ type: MessageType.ViewerCount, count: "42" })),
+      parsePresenterMessage(JSON.stringify({ type: ServerMessageType.ViewerCount, count: "42" })),
     ).toBeNull();
   });
 
   it("returns null for invalid hands_on payload shape", () => {
     expect(
       parsePresenterMessage(
-        JSON.stringify({ type: MessageType.HandsOn, instruction: 123, placeholder: null }),
+        JSON.stringify({ type: ServerMessageType.HandsOn, instruction: 123, placeholder: null }),
       ),
     ).toBeNull();
   });
 
   it("parses poll_state message", () => {
     const msg = {
-      type: MessageType.PollState,
+      type: ServerMessageType.PollState,
       pollId: "q1",
       options: ["A", "B"],
       maxChoices: 1,
@@ -71,7 +75,7 @@ describe("parsePresenterMessage", () => {
 
   it("parses poll_error message", () => {
     const msg = {
-      type: MessageType.PollError,
+      type: ServerMessageType.PollError,
       pollId: "q1",
       error: "duplicate vote",
       votes: { A: 10 },
@@ -82,7 +86,7 @@ describe("parsePresenterMessage", () => {
 
   it("returns null for poll_state with missing fields", () => {
     expect(
-      parsePresenterMessage(JSON.stringify({ type: MessageType.PollState, pollId: "q1" })),
+      parsePresenterMessage(JSON.stringify({ type: ServerMessageType.PollState, pollId: "q1" })),
     ).toBeNull();
   });
 
@@ -90,7 +94,7 @@ describe("parsePresenterMessage", () => {
     expect(
       parsePresenterMessage(
         JSON.stringify({
-          type: MessageType.PollState,
+          type: ServerMessageType.PollState,
           pollId: 123,
           options: ["A"],
           maxChoices: 1,
@@ -105,7 +109,7 @@ describe("parsePresenterMessage", () => {
     expect(
       parsePresenterMessage(
         JSON.stringify({
-          type: MessageType.PollState,
+          type: ServerMessageType.PollState,
           pollId: "q1",
           options: [1, 2],
           maxChoices: 1,
@@ -120,7 +124,7 @@ describe("parsePresenterMessage", () => {
     expect(
       parsePresenterMessage(
         JSON.stringify({
-          type: MessageType.PollState,
+          type: ServerMessageType.PollState,
           pollId: "q1",
           options: ["A"],
           maxChoices: 1,
@@ -135,7 +139,7 @@ describe("parsePresenterMessage", () => {
     expect(
       parsePresenterMessage(
         JSON.stringify({
-          type: MessageType.PollState,
+          type: ServerMessageType.PollState,
           pollId: "q1",
           options: ["A"],
           maxChoices: 1,
@@ -150,7 +154,7 @@ describe("parsePresenterMessage", () => {
     expect(
       parsePresenterMessage(
         JSON.stringify({
-          type: MessageType.PollState,
+          type: ServerMessageType.PollState,
           pollId: "q1",
           options: ["A"],
           maxChoices: 1.5,
@@ -165,7 +169,7 @@ describe("parsePresenterMessage", () => {
     expect(
       parsePresenterMessage(
         JSON.stringify({
-          type: MessageType.PollState,
+          type: ServerMessageType.PollState,
           pollId: "q1",
           options: ["A"],
           maxChoices: 1,
@@ -180,7 +184,7 @@ describe("parsePresenterMessage", () => {
     expect(
       parsePresenterMessage(
         JSON.stringify({
-          type: MessageType.PollError,
+          type: ServerMessageType.PollError,
           pollId: "q1",
           error: "err",
           votes: { A: 0.5 },
@@ -194,7 +198,7 @@ describe("parsePresenterMessage", () => {
     expect(
       parsePresenterMessage(
         JSON.stringify({
-          type: MessageType.PollError,
+          type: ServerMessageType.PollError,
           pollId: "q1",
           votes: {},
           myChoices: [],
@@ -207,7 +211,7 @@ describe("parsePresenterMessage", () => {
     expect(
       parsePresenterMessage(
         JSON.stringify({
-          type: MessageType.PollError,
+          type: ServerMessageType.PollError,
           pollId: "q1",
           error: "err",
           votes: { A: "1" },
@@ -221,7 +225,7 @@ describe("parsePresenterMessage", () => {
     expect(
       parsePresenterMessage(
         JSON.stringify({
-          type: MessageType.PollError,
+          type: ServerMessageType.PollError,
           pollId: "q1",
           error: "err",
           votes: {},
@@ -235,7 +239,7 @@ describe("parsePresenterMessage", () => {
     expect(
       parsePresenterMessage(
         JSON.stringify({
-          type: MessageType.PollError,
+          type: ServerMessageType.PollError,
           error: "err",
           votes: {},
           myChoices: [],
@@ -246,7 +250,7 @@ describe("parsePresenterMessage", () => {
 
   it("parses poll_state with empty collections", () => {
     const msg = {
-      type: MessageType.PollState,
+      type: ServerMessageType.PollState,
       pollId: "q1",
       options: [],
       maxChoices: 0,

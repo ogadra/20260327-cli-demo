@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ClientMessageType,
-  MessageType,
+  ServerMessageType,
   parsePresenterMessage,
   type PresenterMode,
 } from "../api/presenter";
@@ -50,7 +50,7 @@ export const usePresenter = (
   deps?: Partial<UsePresenterDeps>,
 ): UsePresenterResult => {
   const [page, setPage] = useState(0);
-  const [mode, setMode] = useState<PresenterMode>(MessageType.SlideSync);
+  const [mode, setMode] = useState<PresenterMode>(ServerMessageType.SlideSync);
   const [instruction, setInstruction] = useState("");
   const [placeholder, setPlaceholder] = useState("");
   const [viewerCount, setViewerCount] = useState(0);
@@ -75,19 +75,19 @@ export const usePresenter = (
         const msg = parsePresenterMessage(String(event.data));
         if (!msg) return;
         switch (msg.type) {
-          case MessageType.SlideSync:
+          case ServerMessageType.SlideSync:
             setPage(msg.page);
-            setMode(MessageType.SlideSync);
+            setMode(ServerMessageType.SlideSync);
             break;
-          case MessageType.HandsOn:
+          case ServerMessageType.HandsOn:
             setInstruction(msg.instruction);
             setPlaceholder(msg.placeholder);
-            setMode(MessageType.HandsOn);
+            setMode(ServerMessageType.HandsOn);
             break;
-          case MessageType.ViewerCount:
+          case ServerMessageType.ViewerCount:
             setViewerCount(msg.count);
             break;
-          case MessageType.PollState:
+          case ServerMessageType.PollState:
             setPollStates((prev) => ({
               ...prev,
               [msg.pollId]: {
@@ -98,7 +98,7 @@ export const usePresenter = (
               },
             }));
             break;
-          case MessageType.PollError:
+          case ServerMessageType.PollError:
             setPollStates((prev) => {
               const existing = prev[msg.pollId];
               if (!existing) return prev;
@@ -134,7 +134,7 @@ export const usePresenter = (
 
   const sendSlideSync = useCallback((p: number): void => {
     wsRef.current?.send(
-      JSON.stringify({ action: "message", type: MessageType.SlideSync, page: p }),
+      JSON.stringify({ action: "message", type: ServerMessageType.SlideSync, page: p }),
     );
   }, []);
 
@@ -142,7 +142,7 @@ export const usePresenter = (
     wsRef.current?.send(
       JSON.stringify({
         action: "message",
-        type: MessageType.HandsOn,
+        type: ServerMessageType.HandsOn,
         instruction: inst,
         placeholder: ph,
       }),

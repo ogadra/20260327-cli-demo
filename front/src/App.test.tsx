@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import App from "./App";
-import { MessageType, type PresenterMode } from "./api/presenter";
+import { ServerMessageType, type PresenterMode } from "./api/presenter";
 
 vi.mock("./hooks/useSession", () => ({
   useSession: () => true,
@@ -14,7 +14,7 @@ vi.mock("./hooks/useExecute", () => ({
 /** Default presenter state restored before each test. */
 const defaultPresenter = {
   page: 0,
-  mode: MessageType.SlideSync as PresenterMode,
+  mode: ServerMessageType.SlideSync as PresenterMode,
   instruction: "",
   placeholder: "",
   viewerCount: 0,
@@ -81,7 +81,7 @@ beforeEach(() => {
 
 describe("App", () => {
   it("renders command input in hands-on mode", () => {
-    mockPresenter.mode = MessageType.HandsOn;
+    mockPresenter.mode = ServerMessageType.HandsOn;
     render(<App />);
     expect(screen.getByPlaceholderText("Enter command...")).toBeInTheDocument();
   });
@@ -117,13 +117,13 @@ describe("App", () => {
 
   it("passes placeholder to command input", () => {
     mockPresenter.placeholder = "$ echo hello";
-    mockPresenter.mode = MessageType.HandsOn;
+    mockPresenter.mode = ServerMessageType.HandsOn;
     render(<App />);
     expect(screen.getByPlaceholderText("$ echo hello")).toBeInTheDocument();
   });
 
   it("shows hands-on mode when mode is hands_on", () => {
-    mockPresenter.mode = MessageType.HandsOn;
+    mockPresenter.mode = ServerMessageType.HandsOn;
     render(<App />);
     const slideMode = screen.getByTestId("slide-mode");
     expect(slideMode.style.display).toBe("none");
@@ -138,7 +138,7 @@ describe("App", () => {
   });
 
   it("places input as first child in hands-on mode", () => {
-    mockPresenter.mode = MessageType.HandsOn;
+    mockPresenter.mode = ServerMessageType.HandsOn;
     render(<App />);
     const handsOnMode = screen.getByTestId("hands-on-mode");
     const firstChild = handsOnMode.children[0] as HTMLElement;
@@ -154,7 +154,7 @@ describe("App", () => {
     vi.doMock("./hooks/useExecute", () => ({
       useExecute: () => ({ run: vi.fn(), running: false }),
     }));
-    mockPresenter.mode = MessageType.HandsOn;
+    mockPresenter.mode = ServerMessageType.HandsOn;
     vi.doMock("./hooks/usePresenter", () => ({
       usePresenter: () => mockPresenter,
     }));
@@ -171,7 +171,7 @@ describe("App", () => {
     vi.doMock("./hooks/useExecute", () => ({
       useExecute: () => ({ run: vi.fn(), running: true }),
     }));
-    mockPresenter.mode = MessageType.HandsOn;
+    mockPresenter.mode = ServerMessageType.HandsOn;
     vi.doMock("./hooks/usePresenter", () => ({
       usePresenter: () => mockPresenter,
     }));

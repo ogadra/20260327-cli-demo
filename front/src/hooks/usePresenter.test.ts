@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { usePresenter } from "./usePresenter";
-import { ClientMessageType, MessageType } from "../api/presenter";
+import { ClientMessageType, ServerMessageType } from "../api/presenter";
 
 /** Minimal mock WebSocket instances tracker. */
 const instances: MockWebSocket[] = [];
@@ -81,7 +81,7 @@ describe("usePresenter", () => {
   it("returns initial state", () => {
     const { result } = renderPresenter();
     expect(result.current.page).toBe(0);
-    expect(result.current.mode).toBe(MessageType.SlideSync);
+    expect(result.current.mode).toBe(ServerMessageType.SlideSync);
     expect(result.current.instruction).toBe("");
     expect(result.current.placeholder).toBe("");
     expect(result.current.viewerCount).toBe(0);
@@ -91,10 +91,10 @@ describe("usePresenter", () => {
     const { result } = renderPresenter();
     simulateOpen();
     act(() => {
-      simulateMessage(JSON.stringify({ type: MessageType.SlideSync, page: 5 }));
+      simulateMessage(JSON.stringify({ type: ServerMessageType.SlideSync, page: 5 }));
     });
     expect(result.current.page).toBe(5);
-    expect(result.current.mode).toBe(MessageType.SlideSync);
+    expect(result.current.mode).toBe(ServerMessageType.SlideSync);
   });
 
   it("updates instruction, placeholder, and sets mode to hands_on on hands_on message", () => {
@@ -103,13 +103,13 @@ describe("usePresenter", () => {
     act(() => {
       simulateMessage(
         JSON.stringify({
-          type: MessageType.HandsOn,
+          type: ServerMessageType.HandsOn,
           instruction: "run echo",
           placeholder: "$ echo hi",
         }),
       );
     });
-    expect(result.current.mode).toBe(MessageType.HandsOn);
+    expect(result.current.mode).toBe(ServerMessageType.HandsOn);
     expect(result.current.instruction).toBe("run echo");
     expect(result.current.placeholder).toBe("$ echo hi");
   });
@@ -118,7 +118,7 @@ describe("usePresenter", () => {
     const { result } = renderPresenter();
     simulateOpen();
     act(() => {
-      simulateMessage(JSON.stringify({ type: MessageType.ViewerCount, count: 42 }));
+      simulateMessage(JSON.stringify({ type: ServerMessageType.ViewerCount, count: 42 }));
     });
     expect(result.current.viewerCount).toBe(42);
   });
@@ -129,18 +129,18 @@ describe("usePresenter", () => {
     act(() => {
       simulateMessage(
         JSON.stringify({
-          type: MessageType.HandsOn,
+          type: ServerMessageType.HandsOn,
           instruction: "do something",
           placeholder: "$ ...",
         }),
       );
     });
-    expect(result.current.mode).toBe(MessageType.HandsOn);
+    expect(result.current.mode).toBe(ServerMessageType.HandsOn);
 
     act(() => {
-      simulateMessage(JSON.stringify({ type: MessageType.SlideSync, page: 3 }));
+      simulateMessage(JSON.stringify({ type: ServerMessageType.SlideSync, page: 3 }));
     });
-    expect(result.current.mode).toBe(MessageType.SlideSync);
+    expect(result.current.mode).toBe(ServerMessageType.SlideSync);
     expect(result.current.page).toBe(3);
   });
 
@@ -151,7 +151,7 @@ describe("usePresenter", () => {
       simulateMessage(JSON.stringify({ type: "unknown" }));
     });
     expect(result.current.page).toBe(0);
-    expect(result.current.mode).toBe(MessageType.SlideSync);
+    expect(result.current.mode).toBe(ServerMessageType.SlideSync);
   });
 
   it("ignores malformed JSON messages", () => {
@@ -170,7 +170,7 @@ describe("usePresenter", () => {
       result.current.sendSlideSync(7);
     });
     expect(latest().sent).toEqual([
-      JSON.stringify({ action: "message", type: MessageType.SlideSync, page: 7 }),
+      JSON.stringify({ action: "message", type: ServerMessageType.SlideSync, page: 7 }),
     ]);
   });
 
@@ -183,7 +183,7 @@ describe("usePresenter", () => {
     expect(latest().sent).toEqual([
       JSON.stringify({
         action: "message",
-        type: MessageType.HandsOn,
+        type: ServerMessageType.HandsOn,
         instruction: "try this",
         placeholder: "$ try",
       }),
@@ -325,7 +325,7 @@ describe("usePresenter", () => {
     act(() => {
       simulateMessage(
         JSON.stringify({
-          type: MessageType.PollState,
+          type: ServerMessageType.PollState,
           pollId: "q1",
           options: ["A", "B"],
           maxChoices: 1,
@@ -348,7 +348,7 @@ describe("usePresenter", () => {
     act(() => {
       simulateMessage(
         JSON.stringify({
-          type: MessageType.PollState,
+          type: ServerMessageType.PollState,
           pollId: "q1",
           options: ["A", "B"],
           maxChoices: 1,
@@ -360,7 +360,7 @@ describe("usePresenter", () => {
     act(() => {
       simulateMessage(
         JSON.stringify({
-          type: MessageType.PollState,
+          type: ServerMessageType.PollState,
           pollId: "q2",
           options: ["X", "Y", "Z"],
           maxChoices: 2,
@@ -389,7 +389,7 @@ describe("usePresenter", () => {
     act(() => {
       simulateMessage(
         JSON.stringify({
-          type: MessageType.PollState,
+          type: ServerMessageType.PollState,
           pollId: "q1",
           options: ["A"],
           maxChoices: 1,
@@ -398,7 +398,7 @@ describe("usePresenter", () => {
         }),
       );
     });
-    expect(result.current.mode).toBe(MessageType.SlideSync);
+    expect(result.current.mode).toBe(ServerMessageType.SlideSync);
   });
 
   it("updates pollStates votes and myChoices on poll_error message", () => {
@@ -407,7 +407,7 @@ describe("usePresenter", () => {
     act(() => {
       simulateMessage(
         JSON.stringify({
-          type: MessageType.PollState,
+          type: ServerMessageType.PollState,
           pollId: "q1",
           options: ["A", "B"],
           maxChoices: 1,
@@ -419,7 +419,7 @@ describe("usePresenter", () => {
     act(() => {
       simulateMessage(
         JSON.stringify({
-          type: MessageType.PollError,
+          type: ServerMessageType.PollError,
           pollId: "q1",
           error: "duplicate vote",
           votes: { A: 6 },
@@ -437,7 +437,7 @@ describe("usePresenter", () => {
     act(() => {
       simulateMessage(
         JSON.stringify({
-          type: MessageType.PollError,
+          type: ServerMessageType.PollError,
           pollId: "q1",
           error: "not found",
           votes: {},

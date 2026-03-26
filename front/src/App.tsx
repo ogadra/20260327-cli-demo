@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import Terminal, { type TerminalHandle } from "./components/Terminal";
 import CommandInput from "./components/CommandInput";
 import SlideView from "./components/SlideView";
-import { MessageType } from "./api/presenter";
+import { ServerMessageType } from "./api/presenter";
 import { useSession } from "./hooks/useSession";
 import { useExecute } from "./hooks/useExecute";
 import { usePresenter } from "./hooks/usePresenter";
@@ -54,7 +54,7 @@ const App = (): ReactNode => {
       <div
         data-testid="slide-mode"
         style={{
-          display: mode === MessageType.SlideSync ? "flex" : "none",
+          display: mode === ServerMessageType.SlideSync ? "flex" : "none",
           flexDirection: "column",
           height: "100%",
         }}
@@ -88,12 +88,12 @@ const App = (): ReactNode => {
       <div
         data-testid="hands-on-mode"
         style={{
-          display: mode === MessageType.HandsOn ? "flex" : "none",
+          display: mode === ServerMessageType.HandsOn ? "flex" : "none",
           flexDirection: "column",
           height: "100%",
         }}
       >
-        {mode === MessageType.HandsOn && (
+        {mode === ServerMessageType.HandsOn && (
           <CommandInput
             onSubmit={run}
             disabled={!ready || running}
