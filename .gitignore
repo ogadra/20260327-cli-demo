@@ -6,3 +6,4 @@ terraform/*.tfstate
 terraform/*.tfstate.backup
 terraform/*_override.tf
 terraform/environments/*.tfvars
+k6-output.log

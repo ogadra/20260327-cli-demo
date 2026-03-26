@@ -20,6 +20,7 @@
           gitleaks
           just
           go_1_26
+          k6
           lefthook
           nodejs_24
           playwright-driver.browsers
