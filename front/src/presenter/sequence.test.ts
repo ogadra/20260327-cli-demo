@@ -56,8 +56,8 @@ describe("PresenterStep discriminated union", () => {
     }
   });
 
-  /** Verify that the type field correctly narrows the union via switch. */
-  it("narrows correctly via switch on type", () => {
+  /** Verify that all step types are present in the expected order. */
+  it("collects expected ordered types", () => {
     const steps: PresenterStep[] = [
       { type: Action.SlideSync, page: 1 },
       { type: Action.HandsOn, instruction: "do it", placeholder: "cmd" },

@@ -1,4 +1,4 @@
-/** Direction-independent action identifiers shared across server and client messages. */
+/** Direction-independent action identifiers shared across presenter protocol and presenter-step modeling. */
 export const Action = {
   SlideSync: "slide_sync",
   HandsOn: "hands_on",
