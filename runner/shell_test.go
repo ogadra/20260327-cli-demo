@@ -751,6 +751,77 @@ func TestStreamInvalidExitCode(t *testing.T) {
 	}
 }
 
+// TestStreamReSourcesHmSessionVars verifies that the script written to stdin
+// contains a source command for hm-session-vars.sh after capturing the exit code.
+func TestStreamReSourcesHmSessionVars(t *testing.T) {
+	stdinCapture := &markerCapturingWriter{}
+	stdoutR, stdoutW := io.Pipe()
+
+	s := &bashShell{
+		stdin:  stdinCapture,
+		stdout: bufio.NewScanner(stdoutR),
+		cmd:    &fakeCommander{},
+	}
+
+	ch := make(chan string, 10)
+	errCh := make(chan error, 1)
+	go func() {
+		_, _, err := s.ExecuteStream(context.Background(), "echo hello", ch)
+		errCh <- err
+	}()
+
+	go func() {
+		timeout := time.After(5 * time.Second)
+		for {
+			select {
+			case <-timeout:
+				stdoutW.Close()
+				return
+			default:
+			}
+			marker := extractMarker(stdinCapture.String())
+			if marker != "" {
+				// Close stderrDone so ExecuteStream does not block waiting for stderr marker.
+				s.stderrMu.Lock()
+				if s.stderrDone != nil {
+					select {
+					case <-s.stderrDone:
+					default:
+						close(s.stderrDone)
+					}
+				}
+				s.stderrMu.Unlock()
+				stdoutW.Write([]byte("\n" + marker + "0\n"))
+				stdoutW.Close()
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}()
+
+	select {
+	case <-errCh:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timeout waiting for ExecuteStream to return")
+	}
+
+	written := stdinCapture.String()
+	if !strings.Contains(written, `unset __HM_SESS_VARS_SOURCED`) {
+		t.Errorf("stdin script does not unset __HM_SESS_VARS_SOURCED.\ngot: %s", written)
+	}
+	if !strings.Contains(written, `. "$HOME/.nix-profile/etc/profile.d/hm-session-vars.sh" 2>/dev/null`) {
+		t.Errorf("stdin script does not contain hm-session-vars.sh re-source.\ngot: %s", written)
+	}
+
+	// Verify ordering: __ec=$? -> unset -> source.
+	ecIdx := strings.Index(written, "__ec=$?")
+	unsetIdx := strings.Index(written, "unset __HM_SESS_VARS_SOURCED")
+	sourceIdx := strings.Index(written, `hm-session-vars.sh`)
+	if ecIdx < 0 || unsetIdx < 0 || sourceIdx < 0 || ecIdx >= unsetIdx || unsetIdx >= sourceIdx {
+		t.Errorf("expected __ec=$? before unset before hm-session-vars.sh source.\ngot: %s", written)
+	}
+}
+
 // TestStreamDrainMarkerOnContextCancel verifies that when a context is canceled
 // mid-stream, ExecuteStream drains stdout until the marker before returning,
 // keeping the session usable for subsequent calls.
