@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Action,
   ClientMessageType,
   ServerMessageType,
   parsePresenterMessage,
@@ -133,16 +134,14 @@ export const usePresenter = (
   }, [wsUrl, deps?.WebSocket]);
 
   const sendSlideSync = useCallback((p: number): void => {
-    wsRef.current?.send(
-      JSON.stringify({ action: "message", type: ServerMessageType.SlideSync, page: p }),
-    );
+    wsRef.current?.send(JSON.stringify({ action: "message", type: Action.SlideSync, page: p }));
   }, []);
 
   const sendHandsOn = useCallback((inst: string, ph: string): void => {
     wsRef.current?.send(
       JSON.stringify({
         action: "message",
-        type: ServerMessageType.HandsOn,
+        type: Action.HandsOn,
         instruction: inst,
         placeholder: ph,
       }),

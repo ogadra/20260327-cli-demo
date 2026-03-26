@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { usePresenter } from "./usePresenter";
-import { ClientMessageType, ServerMessageType } from "../api/presenter";
+import { Action, ClientMessageType, ServerMessageType } from "../api/presenter";
 
 /** Minimal mock WebSocket instances tracker. */
 const instances: MockWebSocket[] = [];
@@ -170,7 +170,7 @@ describe("usePresenter", () => {
       result.current.sendSlideSync(7);
     });
     expect(latest().sent).toEqual([
-      JSON.stringify({ action: "message", type: ServerMessageType.SlideSync, page: 7 }),
+      JSON.stringify({ action: "message", type: Action.SlideSync, page: 7 }),
     ]);
   });
 
@@ -183,7 +183,7 @@ describe("usePresenter", () => {
     expect(latest().sent).toEqual([
       JSON.stringify({
         action: "message",
-        type: ServerMessageType.HandsOn,
+        type: Action.HandsOn,
         instruction: "try this",
         placeholder: "$ try",
       }),
