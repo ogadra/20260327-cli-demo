@@ -24,7 +24,7 @@ export interface UsePresenterResult {
   instruction: string;
   placeholder: string;
   viewerCount: number;
-  pollStates: Record<string, PollStateData>;
+  pollStates: Partial<Record<string, PollStateData>>;
   sendSlideSync: (page: number) => void;
   sendHandsOn: (instruction: string, placeholder: string) => void;
   sendPollGet: (pollId: string, options: string[], maxChoices: number) => void;
