@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Action } from "../api/presenter";
-import { defaultSequence, type PresenterStep } from "./sequence";
+import { defaultPolls, defaultSequence, type PresenterStep } from "./sequence";
 
 describe("defaultSequence", () => {
   /** Verify that the default sequence is a non-empty array. */
@@ -40,31 +40,21 @@ describe("PresenterStep discriminated union", () => {
     }
   });
 
-  /** Verify that a poll_open step carries pollId, options, and maxChoices properties. */
-  it("allows poll_open with pollId, options, and maxChoices", () => {
-    const step: PresenterStep = {
-      type: Action.PollOpen,
-      pollId: "poll-1",
-      options: ["Yes", "No"],
-      maxChoices: 1,
-    };
-    expect(step.type).toBe(Action.PollOpen);
-    if (step.type === Action.PollOpen) {
-      expect(step.pollId).toBe("poll-1");
-      expect(step.options).toEqual(["Yes", "No"]);
-      expect(step.maxChoices).toBe(1);
-    }
-  });
-
   /** Verify that all step types are present in the expected order. */
   it("collects expected ordered types", () => {
     const steps: PresenterStep[] = [
       { type: Action.SlideSync, page: 1 },
       { type: Action.HandsOn, instruction: "do it", placeholder: "cmd" },
-      { type: Action.PollOpen, pollId: "p1", options: ["A"], maxChoices: 1 },
     ];
 
     const types = steps.map((s) => s.type);
-    expect(types).toEqual([Action.SlideSync, Action.HandsOn, Action.PollOpen]);
+    expect(types).toEqual([Action.SlideSync, Action.HandsOn]);
+  });
+});
+
+describe("defaultPolls", () => {
+  /** Verify that the default polls list is an empty array. */
+  it("is an empty array", () => {
+    expect(defaultPolls).toEqual([]);
   });
 });

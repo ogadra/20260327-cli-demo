@@ -1,7 +1,8 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Action } from "../api/presenter";
 import type { PollStateData } from "../hooks/usePresenter";
-import { defaultSequence, type PresenterStep } from "./sequence";
+import { defaultPolls, defaultSequence, type PresenterStep } from "./sequence";
+import type { PollOpenPayload } from "./sequence";
 
 /** Props for the PresenterPanel component. */
 export interface PresenterPanelProps {
@@ -9,8 +10,6 @@ export interface PresenterPanelProps {
   sendSlideSync: (page: number) => void;
   /** Sends a hands_on message with instruction and placeholder text. */
   sendHandsOn: (instruction: string, placeholder: string) => void;
-  /** Sends a poll_get message to initialize or retrieve a poll. */
-  sendPollGet: (pollId: string, options: string[], maxChoices: number) => void;
   /** Number of currently connected viewers. */
   viewerCount: number;
   /** Poll states keyed by pollId. */
@@ -24,8 +23,6 @@ const describeStep = (step: PresenterStep): string => {
       return `Slide ${step.page}`;
     case Action.HandsOn:
       return `Hands-on: ${step.instruction}`;
-    case Action.PollOpen:
-      return `Poll: ${step.pollId}`;
   }
 };
 
@@ -33,7 +30,6 @@ const describeStep = (step: PresenterStep): string => {
 export const PresenterPanel = ({
   sendSlideSync,
   sendHandsOn,
-  sendPollGet,
   viewerCount,
   pollStates,
 }: PresenterPanelProps): ReactNode => {
@@ -51,12 +47,9 @@ export const PresenterPanel = ({
         case Action.HandsOn:
           sendHandsOn(step.instruction, step.placeholder);
           break;
-        case Action.PollOpen:
-          sendPollGet(step.pollId, step.options, step.maxChoices);
-          break;
       }
     },
-    [sendSlideSync, sendHandsOn, sendPollGet],
+    [sendSlideSync, sendHandsOn],
   );
 
   /** Navigates to a specific step index. */
@@ -101,8 +94,8 @@ export const PresenterPanel = ({
   }, [sequence.length]);
 
   const currentStep = sequence[stepIndex];
-  const pollState =
-    currentStep.type === Action.PollOpen ? pollStates[currentStep.pollId] : undefined;
+  const activePoll = defaultPolls.find((p: PollOpenPayload) => pollStates[p.pollId] !== undefined);
+  const pollState = activePoll ? pollStates[activePoll.pollId] : undefined;
 
   return (
     <div

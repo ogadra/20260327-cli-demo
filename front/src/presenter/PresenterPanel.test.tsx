@@ -8,9 +8,9 @@ vi.mock("./sequence", async () => {
     defaultSequence: [
       { type: Action.SlideSync, page: 0 },
       { type: Action.HandsOn, instruction: "Run echo", placeholder: "echo hello" },
-      { type: Action.PollOpen, pollId: "q1", options: ["Yes", "No"], maxChoices: 1 },
       { type: Action.SlideSync, page: 1 },
     ],
+    defaultPolls: [{ type: Action.PollOpen, pollId: "q1", options: ["Yes", "No"], maxChoices: 1 }],
   };
 });
 
@@ -18,11 +18,9 @@ vi.mock("./sequence", async () => {
 const createProps = (): PresenterPanelProps & {
   sendSlideSync: Mock;
   sendHandsOn: Mock;
-  sendPollGet: Mock;
 } => ({
   sendSlideSync: vi.fn(),
   sendHandsOn: vi.fn(),
-  sendPollGet: vi.fn(),
   viewerCount: 0,
   pollStates: {},
 });
@@ -40,116 +38,113 @@ describe("PresenterPanel", () => {
     render(<PresenterPanel {...props} />);
   };
 
+  /** Verify that the step counter renders with the correct total. */
   it("renders step counter", async () => {
     await renderPanel();
     const status = screen.getByRole("status");
-    expect(within(status).getByText(/Step 1 \/ 4/)).toBeTruthy();
+    expect(within(status).getByText(/Step 1 \/ 3/)).toBeTruthy();
   });
 
+  /** Verify that the viewer count is displayed. */
   it("shows viewer count", async () => {
     props.viewerCount = 42;
     await renderPanel();
     expect(screen.getByText("42 viewers")).toBeTruthy();
   });
 
+  /** Verify that the prev button is disabled at step 0. */
   it("disables prev button at step 0", async () => {
     await renderPanel();
     expect(screen.getByRole("button", { name: "Prev" }).hasAttribute("disabled")).toBe(true);
   });
 
+  /** Verify that the next button is enabled at step 0. */
   it("enables next button at step 0", async () => {
     await renderPanel();
     expect(screen.getByRole("button", { name: "Next" }).hasAttribute("disabled")).toBe(false);
   });
 
+  /** Verify that advancing calls sendHandsOn for the hands_on step. */
   it("advances step and calls sendHandsOn on next", async () => {
     await renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(props.sendHandsOn).toHaveBeenCalledWith("Run echo", "echo hello");
     expect(props.sendHandsOn).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/Step 2 \/ 4/)).toBeTruthy();
+    expect(screen.getByText(/Step 2 \/ 3/)).toBeTruthy();
   });
 
-  it("calls sendPollGet when navigating to poll step", async () => {
-    await renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(props.sendPollGet).toHaveBeenCalledWith("q1", ["Yes", "No"], 1);
-    expect(props.sendPollGet).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/Step 3 \/ 4/)).toBeTruthy();
-  });
-
+  /** Verify that the prev button navigates back. */
   it("goes back with prev button", async () => {
     await renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.click(screen.getByRole("button", { name: "Prev" }));
-    expect(screen.getByText(/Step 1 \/ 4/)).toBeTruthy();
+    expect(screen.getByText(/Step 1 \/ 3/)).toBeTruthy();
   });
 
+  /** Verify that the next button is disabled at the last step. */
   it("disables next button at last step", async () => {
     await renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByRole("button", { name: "Next" }).hasAttribute("disabled")).toBe(true);
-    expect(screen.getByText(/Step 4 \/ 4/)).toBeTruthy();
+    expect(screen.getByText(/Step 3 \/ 3/)).toBeTruthy();
   });
 
+  /** Verify that ArrowRight advances the step. */
   it("advances step on ArrowRight key", async () => {
     await renderPanel();
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(props.sendHandsOn).toHaveBeenCalledWith("Run echo", "echo hello");
     expect(props.sendHandsOn).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/Step 2 \/ 4/)).toBeTruthy();
+    expect(screen.getByText(/Step 2 \/ 3/)).toBeTruthy();
   });
 
+  /** Verify that ArrowLeft navigates back. */
   it("goes back on ArrowLeft key", async () => {
     await renderPanel();
     fireEvent.keyDown(window, { key: "ArrowRight" });
     fireEvent.keyDown(window, { key: "ArrowLeft" });
-    expect(screen.getByText(/Step 1 \/ 4/)).toBeTruthy();
+    expect(screen.getByText(/Step 1 \/ 3/)).toBeTruthy();
   });
 
+  /** Verify that ArrowLeft does not go below step 0. */
   it("does not go below step 0 on ArrowLeft", async () => {
     await renderPanel();
     fireEvent.keyDown(window, { key: "ArrowLeft" });
-    expect(screen.getByText(/Step 1 \/ 4/)).toBeTruthy();
+    expect(screen.getByText(/Step 1 \/ 3/)).toBeTruthy();
   });
 
+  /** Verify that ArrowRight does not go beyond the last step. */
   it("does not go beyond last step on ArrowRight", async () => {
     await renderPanel();
     fireEvent.keyDown(window, { key: "ArrowRight" });
     fireEvent.keyDown(window, { key: "ArrowRight" });
     fireEvent.keyDown(window, { key: "ArrowRight" });
-    fireEvent.keyDown(window, { key: "ArrowRight" });
-    expect(screen.getByText(/Step 4 \/ 4/)).toBeTruthy();
+    expect(screen.getByText(/Step 3 \/ 3/)).toBeTruthy();
   });
 
+  /** Verify that step 0 is executed on mount. */
   it("executes step 0 on mount", async () => {
     await renderPanel();
     expect(props.sendSlideSync).toHaveBeenCalledWith(0);
     expect(props.sendSlideSync).toHaveBeenCalledTimes(1);
   });
 
+  /** Verify that slide_sync step shows the correct description. */
   it("displays step description for slide_sync step", async () => {
     await renderPanel();
     expect(screen.getByText("Slide 0")).toBeTruthy();
   });
 
+  /** Verify that hands_on step shows the correct description. */
   it("displays step description for hands_on step", async () => {
     await renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByText("Hands-on: Run echo")).toBeTruthy();
   });
 
-  it("displays step description for poll_open step", async () => {
-    await renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByText("Poll: q1")).toBeTruthy();
-  });
-
-  it("shows poll results when available for poll_open step", async () => {
+  /** Verify that poll results are shown when pollStates has data for a defaultPoll. */
+  it("shows poll results when pollStates has data for a defaultPoll", async () => {
     props.pollStates = {
       q1: {
         options: ["Yes", "No"],
@@ -159,8 +154,6 @@ describe("PresenterPanel", () => {
       },
     };
     await renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     const results = screen.getByRole("region", { name: "poll results" });
     expect(results).toBeTruthy();
     expect(results.textContent).toContain("Yes");
@@ -169,15 +162,9 @@ describe("PresenterPanel", () => {
     expect(results.textContent).toContain("5");
   });
 
-  it("does not show poll results on non-poll steps", async () => {
+  /** Verify that poll results are not shown when pollStates is empty. */
+  it("does not show poll results when pollStates is empty", async () => {
     await renderPanel();
-    expect(screen.queryByRole("region", { name: "poll results" })).toBeNull();
-  });
-
-  it("does not show poll results when pollStates has no data for the poll", async () => {
-    await renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.queryByRole("region", { name: "poll results" })).toBeNull();
   });
 });

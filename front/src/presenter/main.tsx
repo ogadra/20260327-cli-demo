@@ -1,10 +1,9 @@
 import { StrictMode, useCallback, useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { Action } from "../api/presenter";
 import { usePresenter } from "../hooks/usePresenter";
 import { LoginForm } from "./LoginForm";
 import { PresenterPanel } from "./PresenterPanel";
-import { defaultSequence } from "./sequence";
+import { defaultPolls } from "./sequence";
 
 /** WebSocket URL derived from the current page origin. */
 const wsUrl = (): string => location.origin.replace(/^http/, "ws") + "/ws";
@@ -48,12 +47,10 @@ const PresenterAppInner = (): ReactNode => {
   const { viewerCount, pollStates, sendSlideSync, sendHandsOn, sendPollGet } =
     usePresenter(wsUrl());
 
-  /** Send all poll_open steps on mount to initialize polls. */
+  /** Send all poll definitions on mount to initialize polls. */
   useEffect((): void => {
-    for (const step of defaultSequence) {
-      if (step.type === Action.PollOpen) {
-        sendPollGet(step.pollId, step.options, step.maxChoices);
-      }
+    for (const poll of defaultPolls) {
+      sendPollGet(poll.pollId, poll.options, poll.maxChoices);
     }
   }, [sendPollGet]);
 
@@ -61,7 +58,6 @@ const PresenterAppInner = (): ReactNode => {
     <PresenterPanel
       sendSlideSync={sendSlideSync}
       sendHandsOn={sendHandsOn}
-      sendPollGet={sendPollGet}
       viewerCount={viewerCount}
       pollStates={pollStates}
     />

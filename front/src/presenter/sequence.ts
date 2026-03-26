@@ -9,11 +9,13 @@ export type PollOpenPayload = {
 };
 
 /**
- * Discriminated union type representing a single step in the presentation sequence.
+ * Discriminated union type representing a single display-mode step in the presentation sequence.
  * SlideSyncPayload and HandsOnPayload are shared with server-to-client message types.
- * PollOpenPayload is specific to presenter steps.
  */
-export type PresenterStep = SlideSyncPayload | HandsOnPayload | PollOpenPayload;
+export type PresenterStep = SlideSyncPayload | HandsOnPayload;
 
 /** Default presentation sequence used by the presenter control panel. */
 export const defaultSequence: PresenterStep[] = [{ type: Action.SlideSync, page: 0 }];
+
+/** Default poll list reserved for future use. */
+export const defaultPolls: PollOpenPayload[] = [];
