@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/connection"
 	"github.com/ogadra/20260327-cli-demo/presenter/internal/poll"
@@ -125,6 +126,40 @@ func newRequest(connectionID, body string) events.APIGatewayWebsocketProxyReques
 	}
 }
 
+// testHandlerOpts はテスト用 messageHandler 構築オプション。
+type testHandlerOpts struct {
+	slideSync    slideSyncDispatcher
+	handsOn      handsOnDispatcher
+	viewerCount  viewerCountDispatcher
+	pollGet      pollGetter
+	pollVote     pollVoter
+	pollUnvote   pollUnvoter
+	pollSwitch   pollSwitcher
+	connGetter   connectionGetter
+	broadcaster  messageBroadcaster
+	singleSender singleSender
+}
+
+// newTestHandler はテスト用の messageHandler を生成する。
+func newTestHandler(opts testHandlerOpts) *messageHandler {
+	return &messageHandler{
+		pollGet:    opts.pollGet,
+		pollVote:   opts.pollVote,
+		pollUnvote: opts.pollUnvote,
+		pollSwitch: opts.pollSwitch,
+		connGetter: opts.connGetter,
+		newDeps: func(_, _ string) handleDeps {
+			return handleDeps{
+				slideSync:    opts.slideSync,
+				handsOn:      opts.handsOn,
+				viewerCount:  opts.viewerCount,
+				broadcaster:  opts.broadcaster,
+				singleSender: opts.singleSender,
+			}
+		},
+	}
+}
+
 // defaultPollState はテスト用のデフォルト PollState を返す。
 func defaultPollState() *poll.PollState {
 	return &poll.PollState{
@@ -140,14 +175,14 @@ func defaultPollState() *poll.PollState {
 func TestHandle_SlideSync(t *testing.T) {
 	t.Parallel()
 	var capturedPage int
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		slideSync: &mockSlideSyncDispatcher{
 			handleFn: func(_ context.Context, _, _ string, page int) error {
 				capturedPage = page
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"slide_sync","page":3}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -165,7 +200,7 @@ func TestHandle_SlideSync(t *testing.T) {
 func TestHandle_SlideSyncError(t *testing.T) {
 	t.Parallel()
 	var sentPayload []byte
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		slideSync: &mockSlideSyncDispatcher{
 			handleFn: func(_ context.Context, _, _ string, _ int) error {
 				return fmt.Errorf("not presenter")
@@ -177,7 +212,7 @@ func TestHandle_SlideSyncError(t *testing.T) {
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"slide_sync","page":1}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -199,7 +234,7 @@ func TestHandle_SlideSyncError(t *testing.T) {
 func TestHandle_HandsOn(t *testing.T) {
 	t.Parallel()
 	var capturedRoom, capturedConnID, capturedInstruction, capturedPlaceholder string
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		handsOn: &mockHandsOnDispatcher{
 			handleFn: func(_ context.Context, room, connectionID, instruction, placeholder string) error {
 				capturedRoom = room
@@ -209,7 +244,7 @@ func TestHandle_HandsOn(t *testing.T) {
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"hands_on","instruction":"Write hello world","placeholder":"your code here"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -236,7 +271,7 @@ func TestHandle_HandsOn(t *testing.T) {
 func TestHandle_HandsOnError(t *testing.T) {
 	t.Parallel()
 	var sentPayload []byte
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		handsOn: &mockHandsOnDispatcher{
 			handleFn: func(_ context.Context, _, _, _, _ string) error {
 				return fmt.Errorf("not presenter")
@@ -248,7 +283,7 @@ func TestHandle_HandsOnError(t *testing.T) {
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"hands_on","instruction":"test","placeholder":"test"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -270,14 +305,14 @@ func TestHandle_HandsOnError(t *testing.T) {
 func TestHandle_ViewerCount(t *testing.T) {
 	t.Parallel()
 	called := false
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		viewerCount: &mockViewerCountDispatcher{
 			handleFn: func(_ context.Context, _, _ string) error {
 				called = true
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"viewer_count"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -294,13 +329,13 @@ func TestHandle_ViewerCount(t *testing.T) {
 // TestHandle_ViewerCountError は接続数通知エラーを検証する。
 func TestHandle_ViewerCountError(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		viewerCount: &mockViewerCountDispatcher{
 			handleFn: func(_ context.Context, _, _ string) error {
 				return fmt.Errorf("count error")
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"viewer_count"}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -312,7 +347,7 @@ func TestHandle_ViewerCountError(t *testing.T) {
 func TestHandle_PollGet(t *testing.T) {
 	t.Parallel()
 	var sentPayload []byte
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		connGetter: &mockConnectionGetter{
 			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
 				return &connection.Connection{Role: "presenter"}, nil
@@ -332,7 +367,7 @@ func TestHandle_PollGet(t *testing.T) {
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_get","pollId":"q1","options":["A","B"],"maxChoices":1}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -353,7 +388,7 @@ func TestHandle_PollGet(t *testing.T) {
 // TestHandle_PollGetViewer はビューアーからのアンケート取得を検証する。
 func TestHandle_PollGetViewer(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		connGetter: &mockConnectionGetter{
 			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
 				return &connection.Connection{Role: "viewer"}, nil
@@ -372,7 +407,7 @@ func TestHandle_PollGetViewer(t *testing.T) {
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_get","pollId":"q1"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -386,13 +421,13 @@ func TestHandle_PollGetViewer(t *testing.T) {
 // TestHandle_PollGetConnError は接続情報取得エラーを検証する。
 func TestHandle_PollGetConnError(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		connGetter: &mockConnectionGetter{
 			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
 				return nil, fmt.Errorf("conn error")
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_get","pollId":"q1"}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -403,7 +438,7 @@ func TestHandle_PollGetConnError(t *testing.T) {
 // TestHandle_PollGetError はアンケート取得の内部エラーを検証する。
 func TestHandle_PollGetError(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		connGetter: &mockConnectionGetter{
 			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
 				return &connection.Connection{Role: "viewer"}, nil
@@ -414,7 +449,7 @@ func TestHandle_PollGetError(t *testing.T) {
 				return nil, fmt.Errorf("get error")
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_get","pollId":"q1","visitorId":"v1"}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -426,7 +461,7 @@ func TestHandle_PollGetError(t *testing.T) {
 func TestHandle_PollGetNotFound(t *testing.T) {
 	t.Parallel()
 	var sentPayload []byte
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		connGetter: &mockConnectionGetter{
 			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
 				return &connection.Connection{Role: "viewer"}, nil
@@ -443,7 +478,7 @@ func TestHandle_PollGetNotFound(t *testing.T) {
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_get","pollId":"q1"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -468,7 +503,7 @@ func TestHandle_PollGetNotFound(t *testing.T) {
 func TestHandle_PollVoteInvalidChoice(t *testing.T) {
 	t.Parallel()
 	var sentPayload []byte
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollVote: &mockPollVoter{
 			voteFn: func(_ context.Context, _, _, _ string) error {
 				return poll.ErrInvalidChoice
@@ -485,7 +520,7 @@ func TestHandle_PollVoteInvalidChoice(t *testing.T) {
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_vote","pollId":"q1","choice":"C"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -507,7 +542,7 @@ func TestHandle_PollVoteInvalidChoice(t *testing.T) {
 func TestHandle_PollVotePollNotFound(t *testing.T) {
 	t.Parallel()
 	var sentPayload []byte
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollVote: &mockPollVoter{
 			voteFn: func(_ context.Context, _, _, _ string) error {
 				return poll.ErrPollNotFound
@@ -519,7 +554,7 @@ func TestHandle_PollVotePollNotFound(t *testing.T) {
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_vote","pollId":"q1","choice":"A"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -544,7 +579,7 @@ func TestHandle_PollVotePollNotFound(t *testing.T) {
 func TestHandle_PollSwitchInvalidChoice(t *testing.T) {
 	t.Parallel()
 	var sentPayload []byte
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollSwitch: &mockPollSwitcher{
 			switchFn: func(_ context.Context, _, _, _, _ string) error {
 				return poll.ErrInvalidChoice
@@ -561,7 +596,7 @@ func TestHandle_PollSwitchInvalidChoice(t *testing.T) {
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_switch","pollId":"q1","from":"A","to":"C"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -583,7 +618,7 @@ func TestHandle_PollSwitchInvalidChoice(t *testing.T) {
 func TestHandle_PollVote(t *testing.T) {
 	t.Parallel()
 	var broadcastCalled bool
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollVote: &mockPollVoter{
 			voteFn: func(_ context.Context, _, _, _ string) error {
 				return nil
@@ -600,7 +635,7 @@ func TestHandle_PollVote(t *testing.T) {
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_vote","pollId":"q1","visitorId":"v1","choice":"A"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -618,7 +653,7 @@ func TestHandle_PollVote(t *testing.T) {
 func TestHandle_PollVoteDuplicate(t *testing.T) {
 	t.Parallel()
 	var sentPayload []byte
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollVote: &mockPollVoter{
 			voteFn: func(_ context.Context, _, _, _ string) error {
 				return poll.ErrDuplicateVote
@@ -635,7 +670,7 @@ func TestHandle_PollVoteDuplicate(t *testing.T) {
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_vote","pollId":"q1","visitorId":"v1","choice":"A"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -656,7 +691,7 @@ func TestHandle_PollVoteDuplicate(t *testing.T) {
 // TestHandle_PollVoteMaxExceeded は最大選択数超過時の poll_error レスポンスを検証する。
 func TestHandle_PollVoteMaxExceeded(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollVote: &mockPollVoter{
 			voteFn: func(_ context.Context, _, _, _ string) error {
 				return poll.ErrMaxChoicesExceeded
@@ -672,7 +707,7 @@ func TestHandle_PollVoteMaxExceeded(t *testing.T) {
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_vote","pollId":"q1","visitorId":"v1","choice":"C"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -686,13 +721,13 @@ func TestHandle_PollVoteMaxExceeded(t *testing.T) {
 // TestHandle_PollVoteInternalError は投票の内部エラーを検証する。
 func TestHandle_PollVoteInternalError(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollVote: &mockPollVoter{
 			voteFn: func(_ context.Context, _, _, _ string) error {
 				return fmt.Errorf("internal error")
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_vote","pollId":"q1","visitorId":"v1","choice":"A"}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -703,7 +738,7 @@ func TestHandle_PollVoteInternalError(t *testing.T) {
 // TestHandle_PollUnvote は投票取消の正常処理を検証する。
 func TestHandle_PollUnvote(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollUnvote: &mockPollUnvoter{
 			unvoteFn: func(_ context.Context, _, _, _ string) error {
 				return nil
@@ -719,7 +754,7 @@ func TestHandle_PollUnvote(t *testing.T) {
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_unvote","pollId":"q1","visitorId":"v1","choice":"A"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -733,7 +768,7 @@ func TestHandle_PollUnvote(t *testing.T) {
 // TestHandle_PollUnvoteNotFound は投票取消の ErrVoteNotFound を検証する。
 func TestHandle_PollUnvoteNotFound(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollUnvote: &mockPollUnvoter{
 			unvoteFn: func(_ context.Context, _, _, _ string) error {
 				return poll.ErrVoteNotFound
@@ -749,7 +784,7 @@ func TestHandle_PollUnvoteNotFound(t *testing.T) {
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_unvote","pollId":"q1","visitorId":"v1","choice":"A"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -763,13 +798,13 @@ func TestHandle_PollUnvoteNotFound(t *testing.T) {
 // TestHandle_PollUnvoteInternalError は投票取消の内部エラーを検証する。
 func TestHandle_PollUnvoteInternalError(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollUnvote: &mockPollUnvoter{
 			unvoteFn: func(_ context.Context, _, _, _ string) error {
 				return fmt.Errorf("internal error")
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_unvote","pollId":"q1","visitorId":"v1","choice":"A"}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -780,7 +815,7 @@ func TestHandle_PollUnvoteInternalError(t *testing.T) {
 // TestHandle_PollSwitch は投票変更の正常処理を検証する。
 func TestHandle_PollSwitch(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollSwitch: &mockPollSwitcher{
 			switchFn: func(_ context.Context, _, _, _, _ string) error {
 				return nil
@@ -796,7 +831,7 @@ func TestHandle_PollSwitch(t *testing.T) {
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_switch","pollId":"q1","visitorId":"v1","from":"A","to":"B"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -810,7 +845,7 @@ func TestHandle_PollSwitch(t *testing.T) {
 // TestHandle_PollSwitchVoteNotFound は投票変更の ErrVoteNotFound を検証する。
 func TestHandle_PollSwitchVoteNotFound(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollSwitch: &mockPollSwitcher{
 			switchFn: func(_ context.Context, _, _, _, _ string) error {
 				return poll.ErrVoteNotFound
@@ -826,7 +861,7 @@ func TestHandle_PollSwitchVoteNotFound(t *testing.T) {
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_switch","pollId":"q1","visitorId":"v1","from":"A","to":"B"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -840,13 +875,13 @@ func TestHandle_PollSwitchVoteNotFound(t *testing.T) {
 // TestHandle_PollSwitchInternalError は投票変更の内部エラーを検証する。
 func TestHandle_PollSwitchInternalError(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollSwitch: &mockPollSwitcher{
 			switchFn: func(_ context.Context, _, _, _, _ string) error {
 				return fmt.Errorf("internal error")
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_switch","pollId":"q1","visitorId":"v1","from":"A","to":"B"}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -858,14 +893,14 @@ func TestHandle_PollSwitchInternalError(t *testing.T) {
 func TestHandle_UnknownType(t *testing.T) {
 	t.Parallel()
 	var sentPayload []byte
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		singleSender: &mockSingleSender{
 			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
 				sentPayload = payload
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"unknown"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -886,7 +921,7 @@ func TestHandle_UnknownType(t *testing.T) {
 // TestHandle_InvalidJSON は不正 JSON のエラーを検証する。
 func TestHandle_InvalidJSON(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{}
+	h := newTestHandler(testHandlerOpts{})
 	req := newRequest("conn1", `invalid json`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -897,7 +932,7 @@ func TestHandle_InvalidJSON(t *testing.T) {
 // TestHandle_PollVoteRefreshError は投票後の状態取得エラーを検証する。
 func TestHandle_PollVoteRefreshError(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollVote: &mockPollVoter{
 			voteFn: func(_ context.Context, _, _, _ string) error {
 				return nil
@@ -908,7 +943,7 @@ func TestHandle_PollVoteRefreshError(t *testing.T) {
 				return nil, fmt.Errorf("get error")
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_vote","pollId":"q1","visitorId":"v1","choice":"A"}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -919,7 +954,7 @@ func TestHandle_PollVoteRefreshError(t *testing.T) {
 // TestHandle_PollVoteBroadcastError は投票後のブロードキャストエラーを検証する。
 func TestHandle_PollVoteBroadcastError(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollVote: &mockPollVoter{
 			voteFn: func(_ context.Context, _, _, _ string) error {
 				return nil
@@ -935,7 +970,7 @@ func TestHandle_PollVoteBroadcastError(t *testing.T) {
 				return fmt.Errorf("broadcast error")
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_vote","pollId":"q1","visitorId":"v1","choice":"A"}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -946,7 +981,7 @@ func TestHandle_PollVoteBroadcastError(t *testing.T) {
 // TestHandle_PollErrorGetStateError は業務エラー後の状態取得失敗を検証する。
 func TestHandle_PollErrorGetStateError(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollVote: &mockPollVoter{
 			voteFn: func(_ context.Context, _, _, _ string) error {
 				return poll.ErrDuplicateVote
@@ -957,7 +992,7 @@ func TestHandle_PollErrorGetStateError(t *testing.T) {
 				return nil, fmt.Errorf("get error")
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_vote","pollId":"q1","visitorId":"v1","choice":"A"}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -968,7 +1003,7 @@ func TestHandle_PollErrorGetStateError(t *testing.T) {
 // TestHandle_PollErrorSendError は poll_error 送信失敗を検証する。
 func TestHandle_PollErrorSendError(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollVote: &mockPollVoter{
 			voteFn: func(_ context.Context, _, _, _ string) error {
 				return poll.ErrDuplicateVote
@@ -984,7 +1019,7 @@ func TestHandle_PollErrorSendError(t *testing.T) {
 				return fmt.Errorf("send error")
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_vote","pollId":"q1","visitorId":"v1","choice":"A"}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -1000,13 +1035,13 @@ func TestHandle_SendErrorMarshalError(t *testing.T) {
 	jsonMarshal = func(_ any) ([]byte, error) {
 		return nil, fmt.Errorf("marshal error")
 	}
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		slideSync: &mockSlideSyncDispatcher{
 			handleFn: func(_ context.Context, _, _ string, _ int) error {
 				return fmt.Errorf("slide error")
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"slide_sync","page":1}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -1022,7 +1057,7 @@ func TestHandle_PollErrorMarshalError(t *testing.T) {
 	jsonMarshal = func(_ any) ([]byte, error) {
 		return nil, fmt.Errorf("marshal error")
 	}
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollVote: &mockPollVoter{
 			voteFn: func(_ context.Context, _, _, _ string) error {
 				return poll.ErrDuplicateVote
@@ -1033,7 +1068,7 @@ func TestHandle_PollErrorMarshalError(t *testing.T) {
 				return defaultPollState(), nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_vote","pollId":"q1","visitorId":"v1","choice":"A"}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -1049,7 +1084,7 @@ func TestHandle_PollGetMarshalError(t *testing.T) {
 	jsonMarshal = func(_ any) ([]byte, error) {
 		return nil, fmt.Errorf("marshal error")
 	}
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		connGetter: &mockConnectionGetter{
 			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
 				return &connection.Connection{Role: "viewer"}, nil
@@ -1060,7 +1095,7 @@ func TestHandle_PollGetMarshalError(t *testing.T) {
 				return defaultPollState(), nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_get","pollId":"q1"}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -1076,7 +1111,7 @@ func TestHandle_PollStateMarshalError(t *testing.T) {
 	jsonMarshal = func(_ any) ([]byte, error) {
 		return nil, fmt.Errorf("marshal error")
 	}
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		pollVote: &mockPollVoter{
 			voteFn: func(_ context.Context, _, _, _ string) error {
 				return nil
@@ -1087,7 +1122,7 @@ func TestHandle_PollStateMarshalError(t *testing.T) {
 				return defaultPollState(), nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_vote","pollId":"q1","visitorId":"v1","choice":"A"}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -1098,7 +1133,7 @@ func TestHandle_PollStateMarshalError(t *testing.T) {
 // TestHandle_SendErrorSendToOneError はエラーレスポンスの SendToOne 失敗を検証する。
 func TestHandle_SendErrorSendToOneError(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		slideSync: &mockSlideSyncDispatcher{
 			handleFn: func(_ context.Context, _, _ string, _ int) error {
 				return fmt.Errorf("slide error")
@@ -1109,7 +1144,7 @@ func TestHandle_SendErrorSendToOneError(t *testing.T) {
 				return fmt.Errorf("send error")
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"slide_sync","page":1}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -1120,7 +1155,7 @@ func TestHandle_SendErrorSendToOneError(t *testing.T) {
 // TestHandle_PollGetSendError はアンケート取得後の送信エラーを検証する。
 func TestHandle_PollGetSendError(t *testing.T) {
 	t.Parallel()
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		connGetter: &mockConnectionGetter{
 			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
 				return &connection.Connection{Role: "viewer"}, nil
@@ -1136,7 +1171,7 @@ func TestHandle_PollGetSendError(t *testing.T) {
 				return fmt.Errorf("send error")
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_get","pollId":"q1"}`)
 	_, err := h.handle(context.Background(), req)
 	if err == nil {
@@ -1185,15 +1220,14 @@ func TestRun_Success(t *testing.T) {
 
 	t.Setenv("CONNECTIONS_TABLE", "conn-table")
 	t.Setenv("POLL_VOTES_TABLE", "poll-table")
-	t.Setenv("APIGW_ENDPOINT", "")
 
 	if err := run(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-// TestRun_SuccessWithEndpoint は APIGW_ENDPOINT 設定時の run 関数を検証する。
-func TestRun_SuccessWithEndpoint(t *testing.T) {
+// TestRun_DepsFactory は run で生成される newDeps が依存を返すことを検証する。
+func TestRun_DepsFactory(t *testing.T) {
 	origLoadConfig := loadConfig
 	origStartLambda := startLambda
 	defer func() {
@@ -1204,14 +1238,52 @@ func TestRun_SuccessWithEndpoint(t *testing.T) {
 	loadConfig = func(_ context.Context, _ ...func(*config.LoadOptions) error) (aws.Config, error) {
 		return aws.Config{}, nil
 	}
-	startLambda = func(_ interface{}) {}
 
 	t.Setenv("CONNECTIONS_TABLE", "conn-table")
 	t.Setenv("POLL_VOTES_TABLE", "poll-table")
-	t.Setenv("APIGW_ENDPOINT", "https://example.com")
+
+	var capturedHandler any
+	startLambda = func(handler any) { capturedHandler = handler }
 
 	if err := run(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedHandler == nil {
+		t.Fatal("expected handler to be registered")
+	}
+}
+
+// TestNewHandleDepsFactory は newHandleDepsFactory が依存を返すことを検証する。
+func TestNewHandleDepsFactory(t *testing.T) {
+	t.Parallel()
+	cfg := aws.Config{}
+	connStore := connection.NewStore(dynamodb.NewFromConfig(cfg), "test-table")
+	factory := newHandleDepsFactory(cfg, connStore)
+	deps := factory("example.execute-api.ap-northeast-1.amazonaws.com", "ws")
+	if deps.slideSync == nil {
+		t.Fatal("expected slideSync to be non-nil")
+	}
+	if deps.handsOn == nil {
+		t.Fatal("expected handsOn to be non-nil")
+	}
+	if deps.viewerCount == nil {
+		t.Fatal("expected viewerCount to be non-nil")
+	}
+	if deps.broadcaster == nil {
+		t.Fatal("expected broadcaster to be non-nil")
+	}
+	if deps.singleSender == nil {
+		t.Fatal("expected singleSender to be non-nil")
+	}
+}
+
+// TestNewAPIGWEndpoint は requestContext からエンドポイント URL を構築することを検証する。
+func TestNewAPIGWEndpoint(t *testing.T) {
+	t.Parallel()
+	got := newAPIGWEndpoint("abc123.execute-api.ap-northeast-1.amazonaws.com", "ws")
+	expected := "https://abc123.execute-api.ap-northeast-1.amazonaws.com/ws"
+	if got != expected {
+		t.Errorf("expected %s, got %s", expected, got)
 	}
 }
 
@@ -1286,14 +1358,14 @@ func TestViewerCountAdapter_SendToOneError(t *testing.T) {
 func TestHandlePollGet_MissingPollID(t *testing.T) {
 	t.Parallel()
 	var sentPayload []byte
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		singleSender: &mockSingleSender{
 			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
 				sentPayload = payload
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_get"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -1311,14 +1383,14 @@ func TestHandlePollGet_MissingPollID(t *testing.T) {
 func TestHandlePollVote_MissingFields(t *testing.T) {
 	t.Parallel()
 	var sentPayload []byte
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		singleSender: &mockSingleSender{
 			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
 				sentPayload = payload
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_vote","pollId":"q1"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -1336,14 +1408,14 @@ func TestHandlePollVote_MissingFields(t *testing.T) {
 func TestHandlePollUnvote_MissingFields(t *testing.T) {
 	t.Parallel()
 	var sentPayload []byte
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		singleSender: &mockSingleSender{
 			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
 				sentPayload = payload
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_unvote","pollId":"q1"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -1361,14 +1433,14 @@ func TestHandlePollUnvote_MissingFields(t *testing.T) {
 func TestHandlePollSwitch_MissingFields(t *testing.T) {
 	t.Parallel()
 	var sentPayload []byte
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		singleSender: &mockSingleSender{
 			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
 				sentPayload = payload
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_switch","pollId":"q1","from":"A"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {
@@ -1386,14 +1458,14 @@ func TestHandlePollSwitch_MissingFields(t *testing.T) {
 func TestHandlePollSwitch_FromEqualsTo(t *testing.T) {
 	t.Parallel()
 	var sentPayload []byte
-	h := &messageHandler{
+	h := newTestHandler(testHandlerOpts{
 		singleSender: &mockSingleSender{
 			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
 				sentPayload = payload
 				return nil
 			},
 		},
-	}
+	})
 	req := newRequest("conn1", `{"type":"poll_switch","pollId":"q1","from":"A","to":"A"}`)
 	resp, err := h.handle(context.Background(), req)
 	if err != nil {

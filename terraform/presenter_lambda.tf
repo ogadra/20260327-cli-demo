@@ -60,10 +60,9 @@ resource "aws_lambda_function" "presenter_ws" {
 
   environment {
     variables = {
-      WS_CONNECTIONS_TABLE   = aws_dynamodb_table.presenter_ws_connections.name
-      SESSIONS_TABLE         = aws_dynamodb_table.presenter_sessions.name
-      POLL_VOTES_TABLE       = aws_dynamodb_table.presenter_poll_votes.name
-      WEBSOCKET_API_ENDPOINT = "${aws_apigatewayv2_api.presenter_websocket.id}.execute-api.${data.aws_region.current.id}.amazonaws.com/${aws_apigatewayv2_stage.presenter_websocket.name}"
+      CONNECTIONS_TABLE = aws_dynamodb_table.presenter_ws_connections.name
+      SESSIONS_TABLE    = aws_dynamodb_table.presenter_sessions.name
+      POLL_VOTES_TABLE  = aws_dynamodb_table.presenter_poll_votes.name
     }
   }
 
