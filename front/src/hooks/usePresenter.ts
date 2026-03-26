@@ -70,6 +70,7 @@ export const usePresenter = (
 
       ws.onopen = (): void => {
         delay = 1000;
+        ws.send(JSON.stringify({ action: "message", type: "get_state" }));
       };
 
       ws.onmessage = (event: MessageEvent): void => {
