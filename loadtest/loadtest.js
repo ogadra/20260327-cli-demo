@@ -1,34 +1,50 @@
 import http from "k6/http";
 import { check } from "k6";
+import exec from "k6/execution";
 
 const BASE_URL = __ENV.BASE_URL;
 if (!BASE_URL) {
   throw new Error("BASE_URL environment variable is required");
 }
 
+if (!__ENV.RUNNER_COUNT) {
+  throw new Error("RUNNER_COUNT environment variable is required");
+}
+const RUNNER_COUNT = parseInt(__ENV.RUNNER_COUNT, 10);
+
 export const options = {
   scenarios: {
     session_uniqueness: {
       executor: "shared-iterations",
-      vus: 250,
-      iterations: 250,
+      vus: RUNNER_COUNT,
+      iterations: RUNNER_COUNT,
       maxDuration: "60s",
       gracefulStop: "10s",
     },
     concurrent_execute: {
       executor: "shared-iterations",
-      vus: 250,
-      iterations: 250,
+      vus: RUNNER_COUNT,
+      iterations: RUNNER_COUNT,
       maxDuration: "120s",
       gracefulStop: "10s",
       startTime: "70s",
     },
+    capacity_overflow: {
+      executor: "shared-iterations",
+      vus: RUNNER_COUNT + 10,
+      iterations: RUNNER_COUNT + 10,
+      maxDuration: "120s",
+      gracefulStop: "10s",
+      startTime: "200s",
+    },
   },
   thresholds: {
     checks: ["rate==1.0"],
-    http_req_failed: ["rate==0.0"],
+    "http_req_failed{scenario:session_uniqueness}": ["rate==0.0"],
+    "http_req_failed{scenario:concurrent_execute}": ["rate==0.0"],
     "http_req_duration{scenario:session_uniqueness}": ["p(95)<5000"],
     "http_req_duration{scenario:concurrent_execute}": ["p(95)<10000"],
+    "http_req_duration{scenario:capacity_overflow}": ["p(95)<10000"],
   },
 };
 
@@ -149,4 +165,32 @@ export function concurrent_execute() {
   });
 
   deleteSession(cookies);
+}
+
+/**
+ * Scenario 3: Verify that requests beyond runner capacity are rejected.
+ * The first RUNNER_COUNT VUs occupy all runners, then the remaining VUs
+ * expect 500 errors indicating no idle runner is available.
+ * Sessions created within capacity are logged for external cleanup.
+ */
+export function capacity_overflow() {
+  const iterIndex = exec.scenario.iterationInTest;
+  const res = http.post(`${BASE_URL}/api/session`, null, {
+    redirects: 0,
+  });
+
+  if (iterIndex < RUNNER_COUNT) {
+    check(res, {
+      "overflow: session within capacity returns 204": (r) => r.status === 204,
+    });
+    const runnerId = getCookie(res, "runner_id");
+    const sessionId = getCookie(res, "session_id");
+    if (runnerId && sessionId) {
+      console.log(`CLEANUP:${runnerId}:${sessionId}`);
+    }
+  } else {
+    check(res, {
+      "overflow: session beyond capacity returns 500": (r) => r.status === 500,
+    });
+  }
 }
