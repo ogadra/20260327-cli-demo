@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Action } from "../api/presenter";
 import type { PollStateData } from "../hooks/usePresenter";
 import { defaultSequence, type PresenterStep } from "./sequence";
@@ -39,6 +39,7 @@ export const PresenterPanel = ({
 }: PresenterPanelProps): ReactNode => {
   const sequence = defaultSequence;
   const [stepIndex, setStepIndex] = useState(0);
+  const lastExecutedRef = useRef<number | null>(null);
 
   /** Executes the send function corresponding to a given step. */
   const executeStep = useCallback(
@@ -58,19 +59,21 @@ export const PresenterPanel = ({
     [sendSlideSync, sendHandsOn, sendPollGet],
   );
 
-  /** Navigates to a specific step index and executes that step. */
+  /** Navigates to a specific step index. */
   const goTo = useCallback(
     (index: number): void => {
+      if (index < 0 || index >= sequence.length) return;
       setStepIndex(index);
-      executeStep(sequence[index]);
     },
-    [executeStep, sequence],
+    [sequence.length],
   );
 
-  /** Execute step 0 on mount. */
+  /** Executes the current step exactly once per step transition. */
   useEffect((): void => {
-    executeStep(sequence[0]);
-  }, [executeStep, sequence]);
+    if (lastExecutedRef.current === stepIndex) return;
+    lastExecutedRef.current = stepIndex;
+    executeStep(sequence[stepIndex]);
+  }, [stepIndex, executeStep, sequence]);
 
   /** Listen for keyboard navigation. */
   useEffect((): (() => void) => {
@@ -79,16 +82,12 @@ export const PresenterPanel = ({
       if (e.key === "ArrowRight") {
         setStepIndex((prev) => {
           const next = prev + 1;
-          if (next >= sequence.length) return prev;
-          executeStep(sequence[next]);
-          return next;
+          return next >= sequence.length ? prev : next;
         });
       } else if (e.key === "ArrowLeft") {
         setStepIndex((prev) => {
           const next = prev - 1;
-          if (next < 0) return prev;
-          executeStep(sequence[next]);
-          return next;
+          return next < 0 ? prev : next;
         });
       }
     };
@@ -97,7 +96,7 @@ export const PresenterPanel = ({
     return (): void => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [executeStep, sequence]);
+  }, [sequence.length]);
 
   const currentStep = sequence[stepIndex];
   const pollState =

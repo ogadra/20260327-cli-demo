@@ -66,6 +66,7 @@ describe("PresenterPanel", () => {
     await renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(props.sendHandsOn).toHaveBeenCalledWith("Run echo", "echo hello");
+    expect(props.sendHandsOn).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/Step 2 \/ 4/)).toBeTruthy();
   });
 
@@ -74,6 +75,7 @@ describe("PresenterPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(props.sendPollGet).toHaveBeenCalledWith("q1", ["Yes", "No"], 1);
+    expect(props.sendPollGet).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/Step 3 \/ 4/)).toBeTruthy();
   });
 
@@ -97,6 +99,7 @@ describe("PresenterPanel", () => {
     await renderPanel();
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(props.sendHandsOn).toHaveBeenCalledWith("Run echo", "echo hello");
+    expect(props.sendHandsOn).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/Step 2 \/ 4/)).toBeTruthy();
   });
 
@@ -125,6 +128,7 @@ describe("PresenterPanel", () => {
   it("executes step 0 on mount", async () => {
     await renderPanel();
     expect(props.sendSlideSync).toHaveBeenCalledWith(0);
+    expect(props.sendSlideSync).toHaveBeenCalledTimes(1);
   });
 
   it("displays step description for slide_sync step", async () => {
