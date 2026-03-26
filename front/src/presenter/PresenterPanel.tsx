@@ -77,8 +77,10 @@ export const PresenterPanel = ({
 
   /** Listen for keyboard navigation. */
   useEffect((): (() => void) => {
-    /** Handles keydown events for arrow key navigation. */
+    /** Handles keydown events for arrow key navigation, ignoring events from form elements. */
     const handleKeyDown = (e: KeyboardEvent): void => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if (e.key === "ArrowRight") {
         setStepIndex((prev) => {
           const next = prev + 1;
@@ -112,8 +114,8 @@ export const PresenterPanel = ({
         minHeight: "100vh",
       }}
     >
-      <nav
-        aria-label="status"
+      <header
+        role="status"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -126,7 +128,7 @@ export const PresenterPanel = ({
           Step {stepIndex + 1} / {sequence.length}
         </span>
         <span>{viewerCount} viewers</span>
-      </nav>
+      </header>
 
       <div style={{ fontSize: "20px", marginBottom: "24px" }}>{describeStep(currentStep)}</div>
 

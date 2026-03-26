@@ -42,8 +42,8 @@ describe("PresenterPanel", () => {
 
   it("renders step counter", async () => {
     await renderPanel();
-    const nav = screen.getByRole("navigation", { name: "status" });
-    expect(within(nav).getByText(/Step 1 \/ 4/)).toBeTruthy();
+    const status = screen.getByRole("status");
+    expect(within(status).getByText(/Step 1 \/ 4/)).toBeTruthy();
   });
 
   it("shows viewer count", async () => {
