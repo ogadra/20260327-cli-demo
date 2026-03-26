@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ClientMessageType, MessageType } from "../api/presenter";
 import { defaultSequence, type PresenterStep } from "./sequence";
 
 describe("defaultSequence", () => {
@@ -18,9 +19,9 @@ describe("defaultSequence", () => {
 describe("PresenterStep discriminated union", () => {
   /** Verify that a slide_sync step carries the page property. */
   it("allows slide_sync with page", () => {
-    const step: PresenterStep = { type: "slide_sync", page: 3 };
-    expect(step.type).toBe("slide_sync");
-    if (step.type === "slide_sync") {
+    const step: PresenterStep = { type: MessageType.SlideSync, page: 3 };
+    expect(step.type).toBe(MessageType.SlideSync);
+    if (step.type === MessageType.SlideSync) {
       expect(step.page).toBe(3);
     }
   });
@@ -28,12 +29,12 @@ describe("PresenterStep discriminated union", () => {
   /** Verify that a hands_on step carries instruction and placeholder properties. */
   it("allows hands_on with instruction and placeholder", () => {
     const step: PresenterStep = {
-      type: "hands_on",
+      type: MessageType.HandsOn,
       instruction: "Run the command",
       placeholder: "echo hello",
     };
-    expect(step.type).toBe("hands_on");
-    if (step.type === "hands_on") {
+    expect(step.type).toBe(MessageType.HandsOn);
+    if (step.type === MessageType.HandsOn) {
       expect(step.instruction).toBe("Run the command");
       expect(step.placeholder).toBe("echo hello");
     }
@@ -42,13 +43,13 @@ describe("PresenterStep discriminated union", () => {
   /** Verify that a poll_get step carries pollId, options, and maxChoices properties. */
   it("allows poll_get with pollId, options, and maxChoices", () => {
     const step: PresenterStep = {
-      type: "poll_get",
+      type: ClientMessageType.PollGet,
       pollId: "poll-1",
       options: ["Yes", "No"],
       maxChoices: 1,
     };
-    expect(step.type).toBe("poll_get");
-    if (step.type === "poll_get") {
+    expect(step.type).toBe(ClientMessageType.PollGet);
+    if (step.type === ClientMessageType.PollGet) {
       expect(step.pollId).toBe("poll-1");
       expect(step.options).toEqual(["Yes", "No"]);
       expect(step.maxChoices).toBe(1);
@@ -58,12 +59,12 @@ describe("PresenterStep discriminated union", () => {
   /** Verify that the type field correctly narrows the union via switch. */
   it("narrows correctly via switch on type", () => {
     const steps: PresenterStep[] = [
-      { type: "slide_sync", page: 1 },
-      { type: "hands_on", instruction: "do it", placeholder: "cmd" },
-      { type: "poll_get", pollId: "p1", options: ["A"], maxChoices: 1 },
+      { type: MessageType.SlideSync, page: 1 },
+      { type: MessageType.HandsOn, instruction: "do it", placeholder: "cmd" },
+      { type: ClientMessageType.PollGet, pollId: "p1", options: ["A"], maxChoices: 1 },
     ];
 
     const types = steps.map((s) => s.type);
-    expect(types).toEqual(["slide_sync", "hands_on", "poll_get"]);
+    expect(types).toEqual([MessageType.SlideSync, MessageType.HandsOn, ClientMessageType.PollGet]);
   });
 });
