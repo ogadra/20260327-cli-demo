@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import LoginForm from "./LoginForm";
+import { LoginForm } from "./LoginForm";
 
 describe("LoginForm", () => {
   /** Mock onSuccess callback used across tests. */

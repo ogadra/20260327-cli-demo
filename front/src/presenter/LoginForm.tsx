@@ -112,4 +112,4 @@ const LoginForm = ({ onSuccess }: LoginFormProps): ReactNode => {
   );
 };
 
-export default LoginForm;
+export { LoginForm };
