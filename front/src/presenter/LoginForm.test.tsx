@@ -23,7 +23,8 @@ describe("LoginForm", () => {
     globalThis.fetch = vi.fn().mockResolvedValue({ status: 200 });
 
     render(<LoginForm onSuccess={onSuccess} />);
-    fireEvent.change(screen.getByTestId("password-input"), { target: { value: "secret" } });
+    const input = screen.getByTestId("password-input") as HTMLInputElement;
+    input.value = "secret";
     fireEvent.submit(screen.getByTestId("login-form"));
 
     await waitFor(() => {

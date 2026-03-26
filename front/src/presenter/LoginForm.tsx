@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useCallback, useState } from "react";
+import { type FormEvent, type ReactNode, useCallback, useRef, useState } from "react";
 
 /** Props for the LoginForm component. */
 export interface LoginFormProps {
@@ -10,8 +10,8 @@ export interface LoginFormProps {
  * Login form component for the presenter page.
  * Submits a password to the /login endpoint and calls onSuccess on success.
  */
-const LoginForm = ({ onSuccess }: LoginFormProps): ReactNode => {
-  const [password, setPassword] = useState("");
+export const LoginForm = ({ onSuccess }: LoginFormProps): ReactNode => {
+  const passwordRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -24,7 +24,7 @@ const LoginForm = ({ onSuccess }: LoginFormProps): ReactNode => {
 
       fetch("/login", {
         method: "POST",
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password: passwordRef.current?.value ?? "" }),
         credentials: "include",
         redirect: "manual",
       })
@@ -44,7 +44,7 @@ const LoginForm = ({ onSuccess }: LoginFormProps): ReactNode => {
           setLoading(false);
         });
     },
-    [password, onSuccess],
+    [onSuccess],
   );
 
   return (
@@ -65,10 +65,9 @@ const LoginForm = ({ onSuccess }: LoginFormProps): ReactNode => {
           Presenter Login
         </h1>
         <input
+          ref={passwordRef}
           data-testid="password-input"
           type="password"
-          value={password}
-          onChange={(e): void => setPassword(e.target.value)}
           placeholder="Password"
           style={{
             width: "100%",
@@ -111,5 +110,3 @@ const LoginForm = ({ onSuccess }: LoginFormProps): ReactNode => {
     </div>
   );
 };
-
-export { LoginForm };
