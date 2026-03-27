@@ -395,6 +395,9 @@ func TestIntegrationValidationUnavailableFailOpen(t *testing.T) {
 		t.Fatalf("read body error: %v", err)
 	}
 	events := parseIntegrationSSEEvents(t, buf.String())
+	if len(events) == 0 {
+		t.Fatal("expected at least 1 SSE event, got 0")
+	}
 	last := events[len(events)-1]
 	if last.Type != "complete" || last.ExitCode == nil || *last.ExitCode != 0 {
 		t.Fatalf("last event = %+v, want complete with exitCode=0", last)

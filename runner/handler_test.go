@@ -602,6 +602,9 @@ func TestExecuteValidatorUnavailableSkipsValidation(t *testing.T) {
 	}
 
 	events := parseSSEEvents(t, w.Body.String())
+	if len(events) == 0 {
+		t.Fatal("expected at least 1 SSE event, got 0")
+	}
 	last := events[len(events)-1]
 	if last.Type != "complete" || last.ExitCode == nil || *last.ExitCode != 0 {
 		t.Fatalf("expected complete with exitCode=0, got %+v", last)
