@@ -57,7 +57,7 @@ export const TerminalSlide = ({
             key={`${index}-${cmd}`}
             sessionStatus={sessionStatus}
             placeholder={cmd}
-            height={`calc(95vh / ${commands.length})`}
+            height={`calc((98% - ${(commands.length - 1) * 4}px) / ${commands.length})`}
           />
         ))}
       </div>

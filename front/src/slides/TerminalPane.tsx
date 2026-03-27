@@ -41,7 +41,7 @@ export const TerminalPane = ({
       style={{
         display: "flex",
         flexDirection: "column",
-        height: height ?? undefined,
+        height,
         flex: height ? undefined : 1,
         flexShrink: height ? 0 : undefined,
         minWidth: 0,
