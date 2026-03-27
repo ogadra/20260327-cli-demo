@@ -75,6 +75,22 @@ var toolSchema = document.NewLazyDocument(map[string]interface{}{
 // the response cannot be parsed. Total attempts = 1 + maxRetries.
 const maxRetries = 2
 
+// ValidationUnavailableError indicates that the LLM validation service
+// is temporarily unavailable due to an API or network error.
+type ValidationUnavailableError struct {
+	Cause error
+}
+
+// Error returns a human-readable message describing the unavailable validation.
+func (e *ValidationUnavailableError) Error() string {
+	return fmt.Sprintf("validation unavailable: %v", e.Cause)
+}
+
+// Unwrap returns the underlying cause of the validation unavailability.
+func (e *ValidationUnavailableError) Unwrap() error {
+	return e.Cause
+}
+
 // BedrockValidator validates commands using Bedrock Converse API with tool use.
 type BedrockValidator struct {
 	client  BedrockConverseClient
@@ -121,7 +137,7 @@ func (v *BedrockValidator) Validate(ctx context.Context, command string) (Valida
 	for range maxRetries + 1 {
 		output, err := v.client.Converse(ctx, input)
 		if err != nil {
-			return ValidationResult{}, fmt.Errorf("bedrock converse: %w", err)
+			return ValidationResult{}, &ValidationUnavailableError{Cause: err}
 		}
 
 		var result ValidationResult

@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import App from "./App";
 
+vi.mock("./hooks/useSession", () => ({
+  useSession: () => "ready",
+}));
+
 /** Default presenter state restored before each test. */
 const defaultPresenter = {
   page: 0,

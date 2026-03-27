@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -357,6 +358,49 @@ func TestIntegrationConcurrentExecute(t *testing.T) {
 		if last.Type != "complete" || last.ExitCode == nil || *last.ExitCode != 0 {
 			t.Fatalf("request %d: last event = %+v, want complete with exitCode=0", i, last)
 		}
+	}
+}
+
+// TestIntegrationValidationUnavailableFailOpen verifies that when the validator
+// returns a ValidationUnavailableError the command executes through the full
+// HTTP stack instead of being rejected.
+func TestIntegrationValidationUnavailableFailOpen(t *testing.T) {
+	sm := NewSessionManager()
+	defer sm.CloseAll()
+
+	v := &mockValidator{err: &ValidationUnavailableError{Cause: errors.New("throttling")}}
+	ts := httptest.NewServer(newHandler(sm, v))
+	defer ts.Close()
+
+	sid := createSession(t, ts)
+
+	body := marshalCommand(t, "echo hello")
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/execute", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: sid})
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api/execute error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	var buf strings.Builder
+	if _, err := io.Copy(&buf, resp.Body); err != nil {
+		t.Fatalf("read body error: %v", err)
+	}
+	events := parseIntegrationSSEEvents(t, buf.String())
+	if len(events) == 0 {
+		t.Fatal("expected at least 1 SSE event, got 0")
+	}
+	last := events[len(events)-1]
+	if last.Type != "complete" || last.ExitCode == nil || *last.ExitCode != 0 {
+		t.Fatalf("last event = %+v, want complete with exitCode=0", last)
 	}
 }
 

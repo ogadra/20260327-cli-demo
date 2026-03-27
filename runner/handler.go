@@ -136,11 +136,15 @@ func handleExecute(sm *SessionManager, v Validator) gin.HandlerFunc {
 			}
 			result, err := v.Validate(c.Request.Context(), req.Command)
 			if err != nil {
-				auditLog(id, remote, class, req.Command, nil, err)
-				c.JSON(http.StatusForbidden, errorResponse{Error: "command not allowed"})
-				return
-			}
-			if !result.Safe {
+				var unavail *ValidationUnavailableError
+				if errors.As(err, &unavail) {
+					auditLog(id, remote, "validation-skipped", req.Command, nil, err)
+				} else {
+					auditLog(id, remote, class, req.Command, nil, err)
+					c.JSON(http.StatusForbidden, errorResponse{Error: "command not allowed"})
+					return
+				}
+			} else if !result.Safe {
 				auditLog(id, remote, "rejected", req.Command, nil, fmt.Errorf("reason: %s", result.Reason))
 				c.JSON(http.StatusForbidden, errorResponse{Error: fmt.Sprintf("command not allowed: %s", result.Reason)})
 				return

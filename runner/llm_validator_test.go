@@ -120,7 +120,7 @@ func TestValidateUnsafe(t *testing.T) {
 }
 
 // TestValidateAPIError verifies that an API error from the Bedrock client
-// is propagated immediately without retry.
+// is propagated as a ValidationUnavailableError immediately without retry.
 func TestValidateAPIError(t *testing.T) {
 	client := &mockBedrockClient{
 		err: errors.New("service unavailable"),
@@ -131,8 +131,12 @@ func TestValidateAPIError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
+	var unavail *ValidationUnavailableError
+	if !errors.As(err, &unavail) {
+		t.Fatalf("error type = %T, want *ValidationUnavailableError", err)
+	}
 	if !errors.Is(err, client.err) {
-		t.Fatalf("error = %v, want wrapping %v", err, client.err)
+		t.Fatalf("Unwrap() = %v, want %v", unavail.Unwrap(), client.err)
 	}
 	if client.calls != 1 {
 		t.Fatalf("calls = %d, want 1 since API errors are not retried", client.calls)
@@ -269,8 +273,8 @@ func TestValidateRetrySucceeds(t *testing.T) {
 }
 
 // TestValidateRetryAPIError verifies that when the first attempt fails to
-// parse but the second attempt returns an API error, the API error is returned
-// immediately.
+// parse but the second attempt returns an API error, a ValidationUnavailableError
+// is returned immediately.
 func TestValidateRetryAPIError(t *testing.T) {
 	client := &mockBedrockClient{
 		outputs: []*bedrockruntime.ConverseOutput{
@@ -284,6 +288,10 @@ func TestValidateRetryAPIError(t *testing.T) {
 	_, err := v.Validate(context.Background(), "ls")
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+	var unavail *ValidationUnavailableError
+	if !errors.As(err, &unavail) {
+		t.Fatalf("error type = %T, want *ValidationUnavailableError", err)
 	}
 	if !strings.Contains(err.Error(), "api down") {
 		t.Fatalf("error = %v, want containing 'api down'", err)
@@ -341,6 +349,21 @@ func TestValidateWrongToolNameIgnored(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "retries exhausted") {
 		t.Fatalf("error = %v, want containing 'retries exhausted'", err)
+	}
+}
+
+// TestValidationUnavailableErrorMessage verifies that ValidationUnavailableError
+// produces the expected error message and correctly unwraps to the cause.
+func TestValidationUnavailableErrorMessage(t *testing.T) {
+	cause := errors.New("connection refused")
+	err := &ValidationUnavailableError{Cause: cause}
+
+	want := "validation unavailable: connection refused"
+	if got := err.Error(); got != want {
+		t.Fatalf("Error() = %q, want %q", got, want)
+	}
+	if err.Unwrap() != cause {
+		t.Fatalf("Unwrap() = %v, want %v", err.Unwrap(), cause)
 	}
 }
 

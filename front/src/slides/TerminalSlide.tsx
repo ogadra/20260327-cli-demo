@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
-import { useSession } from "../hooks/useSession";
+import type { SessionStatus } from "../hooks/useSession";
 import { TerminalPane } from "./TerminalPane";
 
 /** Props for the TerminalSlide component. */
 interface TerminalSlideProps {
+  /** Current session connection status. */
+  sessionStatus: SessionStatus;
   /** Instructional text displayed above the terminals. */
   instruction: string;
   /** Commands shown as placeholder hints, one per terminal pane. */
@@ -11,9 +13,11 @@ interface TerminalSlideProps {
 }
 
 /** Slide component with one or more terminal panes arranged side by side. */
-export const TerminalSlide = ({ instruction, commands }: TerminalSlideProps): ReactNode => {
-  const ready = useSession();
-
+export const TerminalSlide = ({
+  sessionStatus,
+  instruction,
+  commands,
+}: TerminalSlideProps): ReactNode => {
   return (
     <div
       style={{
@@ -46,7 +50,7 @@ export const TerminalSlide = ({ instruction, commands }: TerminalSlideProps): Re
         }}
       >
         {commands.map((cmd) => (
-          <TerminalPane key={cmd} ready={ready} placeholder={cmd} />
+          <TerminalPane key={cmd} sessionStatus={sessionStatus} placeholder={cmd} />
         ))}
       </div>
     </div>
