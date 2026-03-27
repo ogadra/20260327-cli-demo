@@ -190,6 +190,8 @@ func (h *messageHandler) handle(ctx context.Context, req events.APIGatewayWebsoc
 		return h.handleViewerCount(ctx, connectionID, deps)
 	case "get_state":
 		return h.handleGetState(ctx, connectionID, deps)
+	case "poll_open":
+		return h.handlePollOpen(ctx, connectionID, msg, deps)
 	case "poll_get":
 		return h.handlePollGet(ctx, connectionID, msg, deps)
 	case "poll_vote":
@@ -251,6 +253,29 @@ func (h *messageHandler) handleGetState(ctx context.Context, connectionID string
 	}
 
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+}
+
+// handlePollOpen はアンケート開始メッセージを処理する。presenter のみ実行可能。
+// アンケートを初期化し全接続に poll_state をブロードキャストする。
+func (h *messageHandler) handlePollOpen(ctx context.Context, connectionID string, msg incomingMessage, deps handleDeps) (events.APIGatewayProxyResponse, error) {
+	if msg.PollID == "" || len(msg.Options) == 0 || msg.MaxChoices == 0 {
+		return h.sendError(ctx, connectionID, "pollId, options, and maxChoices are required", deps)
+	}
+
+	conn, err := h.connGetter.Get(ctx, room, connectionID)
+	if err != nil {
+		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("get connection: %w", err)
+	}
+	if conn.Role != "presenter" {
+		return h.sendError(ctx, connectionID, "only presenter can open a poll", deps)
+	}
+
+	state, err := h.pollGet.Get(ctx, msg.PollID, connectionID, msg.Options, msg.MaxChoices, true)
+	if err != nil {
+		return events.APIGatewayProxyResponse{StatusCode: 500}, fmt.Errorf("poll_open: %w", err)
+	}
+
+	return h.broadcastPollState(ctx, state, deps)
 }
 
 // handlePollGet はアンケート状態取得メッセージを処理する。

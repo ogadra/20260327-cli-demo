@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 import { usePresenter } from "../hooks/usePresenter";
 import { LoginForm } from "./LoginForm";
 import { PresenterPanel } from "./PresenterPanel";
-import { defaultPolls } from "./sequence";
 
 /** WebSocket URL derived from the current page origin. */
 const wsUrl = (): string => location.origin.replace(/^http/, "ws") + "/ws";
@@ -44,19 +43,13 @@ const PresenterApp = (): ReactNode => {
 
 /** Inner component rendered after login that connects the usePresenter hook to the PresenterPanel. */
 const PresenterAppInner = (): ReactNode => {
-  const { viewerCount, sendSlideSync, sendHandsOn, sendPollGet } = usePresenter(wsUrl());
-
-  /** Send all poll definitions on mount to initialize polls. */
-  useEffect((): void => {
-    for (const poll of defaultPolls) {
-      sendPollGet(poll.pollId, poll.options, poll.maxChoices);
-    }
-  }, [sendPollGet]);
+  const { viewerCount, sendSlideSync, sendHandsOn, sendPollOpen } = usePresenter(wsUrl());
 
   return (
     <PresenterPanel
       sendSlideSync={sendSlideSync}
       sendHandsOn={sendHandsOn}
+      sendPollOpen={sendPollOpen}
       viewerCount={viewerCount}
     />
   );

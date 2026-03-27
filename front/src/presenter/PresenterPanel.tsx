@@ -8,6 +8,8 @@ export interface PresenterPanelProps {
   sendSlideSync: (page: number) => void;
   /** Sends a hands_on message with instruction and placeholder text. */
   sendHandsOn: (instruction: string, placeholder: string) => void;
+  /** Sends a poll_open message to start a poll for viewers. */
+  sendPollOpen: (pollId: string, options: string[], maxChoices: number) => void;
   /** Number of currently connected viewers. */
   viewerCount: number;
 }
@@ -19,6 +21,8 @@ const describeStep = (step: PresenterStep): string => {
       return `Slide ${step.page}`;
     case Action.HandsOn:
       return `Hands-on: ${step.instruction}`;
+    case Action.PollOpen:
+      return `Poll: ${step.pollId}`;
   }
 };
 
@@ -26,6 +30,7 @@ const describeStep = (step: PresenterStep): string => {
 export const PresenterPanel = ({
   sendSlideSync,
   sendHandsOn,
+  sendPollOpen,
   viewerCount,
 }: PresenterPanelProps): ReactNode => {
   const sequence = defaultSequence;
@@ -42,9 +47,12 @@ export const PresenterPanel = ({
         case Action.HandsOn:
           sendHandsOn(step.instruction, step.placeholder);
           break;
+        case Action.PollOpen:
+          sendPollOpen(step.pollId, step.options, step.maxChoices);
+          break;
       }
     },
-    [sendSlideSync, sendHandsOn],
+    [sendSlideSync, sendHandsOn, sendPollOpen],
   );
 
   /** Navigates to a specific step index. */

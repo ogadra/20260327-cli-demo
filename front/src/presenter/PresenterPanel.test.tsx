@@ -10,7 +10,6 @@ vi.mock("./sequence", async () => {
       { type: Action.HandsOn, instruction: "Run echo", placeholder: "echo hello" },
       { type: Action.SlideSync, page: 1 },
     ],
-    defaultPolls: [],
   };
 });
 
@@ -18,9 +17,11 @@ vi.mock("./sequence", async () => {
 const createProps = (): PresenterPanelProps & {
   sendSlideSync: Mock;
   sendHandsOn: Mock;
+  sendPollOpen: Mock;
 } => ({
   sendSlideSync: vi.fn(),
   sendHandsOn: vi.fn(),
+  sendPollOpen: vi.fn(),
   viewerCount: 0,
 });
 

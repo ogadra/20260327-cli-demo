@@ -23,6 +23,7 @@ export const ServerMessageType = {
 
 /** Discriminant values for client-to-server presenter messages. */
 export const ClientMessageType = {
+  PollOpen: Action.PollOpen,
   PollGet: Action.PollGet,
   PollVote: Action.PollVote,
   PollUnvote: Action.PollUnvote,

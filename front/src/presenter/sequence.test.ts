@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Action } from "../api/presenter";
-import { buildSequence, defaultPolls, defaultSequence, type PresenterStep } from "./sequence";
+import { buildSequence, defaultSequence, type PresenterStep } from "./sequence";
 import { slideData } from "../slides/slideData";
 
 describe("buildSequence", () => {
@@ -9,13 +9,36 @@ describe("buildSequence", () => {
     expect(buildSequence([])).toEqual([]);
   });
 
-  /** Verify that non-terminal slides produce only SlideSync steps. */
+  /** Verify that non-terminal, non-poll slides produce only SlideSync steps. */
   it("generates SlideSync for non-terminal slides", () => {
-    const data = [{ type: "title" }, { type: "text" }, { type: "poll" }];
+    const data = [{ type: "title" }, { type: "text" }];
     expect(buildSequence(data)).toEqual([
       { type: Action.SlideSync, page: 0 },
       { type: Action.SlideSync, page: 1 },
+    ]);
+  });
+
+  /** Verify that poll slides produce SlideSync followed by PollOpen. */
+  it("inserts PollOpen step after poll slides", () => {
+    const data = [
+      { type: "text" },
+      { type: "poll", pollId: "q1", options: ["A", "B"] },
+      { type: "text" },
+    ];
+    expect(buildSequence(data)).toEqual([
+      { type: Action.SlideSync, page: 0 },
+      { type: Action.SlideSync, page: 1 },
+      { type: Action.PollOpen, pollId: "q1", options: ["A", "B"], maxChoices: 1 },
       { type: Action.SlideSync, page: 2 },
+    ]);
+  });
+
+  /** Verify that poll slides without pollId or options are skipped. */
+  it("skips PollOpen for poll slides missing pollId or options", () => {
+    const data = [{ type: "poll" }, { type: "poll", pollId: "q1" }];
+    expect(buildSequence(data)).toEqual([
+      { type: Action.SlideSync, page: 0 },
+      { type: Action.SlideSync, page: 1 },
     ]);
   });
 
@@ -66,10 +89,11 @@ describe("defaultSequence", () => {
     expect(first).toEqual({ type: Action.SlideSync, page: 0 });
   });
 
-  /** Verify that the sequence length matches slideData count plus HandsOn steps for terminal slides. */
+  /** Verify that the sequence length matches slideData count plus HandsOn and PollOpen steps. */
   it("has correct length based on slideData", () => {
     const terminalCount = slideData.filter((s) => s.type === "terminal").length;
-    expect(defaultSequence).toHaveLength(slideData.length + terminalCount);
+    const pollCount = slideData.filter((s) => s.type === "poll").length;
+    expect(defaultSequence).toHaveLength(slideData.length + terminalCount + pollCount);
   });
 
   /** Verify that every slide page index appears as a SlideSync step. */
@@ -108,21 +132,31 @@ describe("PresenterStep discriminated union", () => {
     }
   });
 
+  /** Verify that a poll_open step carries pollId, options, and maxChoices properties. */
+  it("allows poll_open with pollId, options, and maxChoices", () => {
+    const step: PresenterStep = {
+      type: Action.PollOpen,
+      pollId: "q1",
+      options: ["A", "B"],
+      maxChoices: 1,
+    };
+    expect(step.type).toBe(Action.PollOpen);
+    if (step.type === Action.PollOpen) {
+      expect(step.pollId).toBe("q1");
+      expect(step.options).toEqual(["A", "B"]);
+      expect(step.maxChoices).toBe(1);
+    }
+  });
+
   /** Verify that all step types are present in the expected order. */
   it("collects expected ordered types", () => {
     const steps: PresenterStep[] = [
       { type: Action.SlideSync, page: 1 },
       { type: Action.HandsOn, instruction: "do it", placeholder: "cmd" },
+      { type: Action.PollOpen, pollId: "q1", options: ["A"], maxChoices: 1 },
     ];
 
     const types = steps.map((s) => s.type);
-    expect(types).toEqual([Action.SlideSync, Action.HandsOn]);
-  });
-});
-
-describe("defaultPolls", () => {
-  /** Verify that the default polls list is an empty array. */
-  it("is an empty array", () => {
-    expect(defaultPolls).toEqual([]);
+    expect(types).toEqual([Action.SlideSync, Action.HandsOn, Action.PollOpen]);
   });
 });
