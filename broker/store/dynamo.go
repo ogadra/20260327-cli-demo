@@ -84,8 +84,12 @@ func (r *DynamoRepository) BucketCount() int {
 	return bucketCount
 }
 
+// idleQueryLimit はバケットクエリで一度に取得する idle runner の最大数。
+// 複数件取得してランダムに選ぶことで同一 runner への競合を分散する。
+const idleQueryLimit = 20
+
 // AcquireIdle は指定バケットから idle runner を1台確保し session を紐づける。
-// バケット内で競合した場合は同じバケット内で再試行する。
+// バケット内の候補を最大 idleQueryLimit 件取得しランダムな順序で試行する。
 // GSI は eventually consistent なため、assignSession 済みの runner が再度返される場合がある。
 // tried 集合で同一 runner の無限リトライを防止する。
 // sessionID の一意性は呼び出し側が保証する。
@@ -93,32 +97,42 @@ func (r *DynamoRepository) AcquireIdle(ctx context.Context, sessionID string, bu
 	bucketKey := fmt.Sprintf("bucket-%d", bucket)
 	tried := map[string]struct{}{}
 	for {
-		runner, err := r.queryIdleBucket(ctx, bucketKey)
+		runners, err := r.queryIdleBucket(ctx, bucketKey)
 		if err != nil {
 			return nil, err
 		}
-		if runner == nil {
+		if len(runners) == 0 {
 			return nil, ErrNoIdleRunner
 		}
-		if _, seen := tried[runner.RunnerID]; seen {
+		rand.Shuffle(len(runners), func(i, j int) {
+			runners[i], runners[j] = runners[j], runners[i]
+		})
+		progressed := false
+		for i := range runners {
+			runner := &runners[i]
+			if _, seen := tried[runner.RunnerID]; seen {
+				continue
+			}
+			tried[runner.RunnerID] = struct{}{}
+			progressed = true
+			err = r.assignSession(ctx, runner.RunnerID, sessionID)
+			if err == nil {
+				runner.CurrentSessionID = sessionID
+				runner.IdleBucket = ""
+				return runner, nil
+			}
+			if !errors.Is(err, ErrConditionFailed) {
+				return nil, err
+			}
+		}
+		if !progressed {
 			return nil, ErrNoIdleRunner
 		}
-		tried[runner.RunnerID] = struct{}{}
-		err = r.assignSession(ctx, runner.RunnerID, sessionID)
-		if err == nil {
-			runner.CurrentSessionID = sessionID
-			runner.IdleBucket = ""
-			return runner, nil
-		}
-		if errors.Is(err, ErrConditionFailed) {
-			continue
-		}
-		return nil, err
 	}
 }
 
-// queryIdleBucket は指定バケットから idle runner を1台取得する。
-func (r *DynamoRepository) queryIdleBucket(ctx context.Context, bucket string) (*model.Runner, error) {
+// queryIdleBucket は指定バケットから idle runner を最大 idleQueryLimit 件取得する。
+func (r *DynamoRepository) queryIdleBucket(ctx context.Context, bucket string) ([]model.Runner, error) {
 	out, err := r.client.Query(ctx, &dynamodb.QueryInput{
 		TableName:              &r.tableName,
 		IndexName:              aws.String("idle-index"),
@@ -126,19 +140,20 @@ func (r *DynamoRepository) queryIdleBucket(ctx context.Context, bucket string) (
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":b": &types.AttributeValueMemberS{Value: bucket},
 		},
-		Limit: aws.Int32(1),
+		Limit: aws.Int32(idleQueryLimit),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("query idle-index: %w", err)
 	}
-	if len(out.Items) == 0 {
-		return nil, nil
+	runners := make([]model.Runner, 0, len(out.Items))
+	for _, item := range out.Items {
+		var runner model.Runner
+		if err := attributevalue.UnmarshalMap(item, &runner); err != nil {
+			return nil, fmt.Errorf("unmarshal runner: %w", err)
+		}
+		runners = append(runners, runner)
 	}
-	var runner model.Runner
-	if err := attributevalue.UnmarshalMap(out.Items[0], &runner); err != nil {
-		return nil, fmt.Errorf("unmarshal runner: %w", err)
-	}
-	return &runner, nil
+	return runners, nil
 }
 
 // assignSession は runner に session を紐づけ idle から busy に遷移させる。idleBucket が存在する場合のみ成功する。
