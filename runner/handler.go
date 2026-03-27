@@ -48,6 +48,7 @@ type sseEvent struct {
 func newHandler(sm *SessionManager, v Validator) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
+	r.SetTrustedProxies([]string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"})
 	r.HandleMethodNotAllowed = true
 	r.GET("/health", handleHealth())
 	r.POST("/api/session", handleCreateSession(sm))
@@ -126,7 +127,7 @@ func handleExecute(sm *SessionManager, v Validator) gin.HandlerFunc {
 		}
 
 		class := classifyCommand(req.Command)
-		remote := c.ClientIP() + ":" + c.GetHeader("X-Forwarded-Port")
+		remote := c.ClientIP()
 		auditLog(id, remote, class, req.Command, nil, nil)
 
 		if class == "validated" {
