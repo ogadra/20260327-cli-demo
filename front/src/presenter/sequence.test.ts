@@ -1,6 +1,57 @@
 import { describe, expect, it } from "vitest";
 import { Action } from "../api/presenter";
-import { defaultPolls, defaultSequence, type PresenterStep } from "./sequence";
+import { buildSequence, defaultPolls, defaultSequence, type PresenterStep } from "./sequence";
+import { slideData } from "../slides/slideData";
+
+describe("buildSequence", () => {
+  /** Verify that an empty input produces an empty sequence. */
+  it("returns empty array for empty input", () => {
+    expect(buildSequence([])).toEqual([]);
+  });
+
+  /** Verify that non-terminal slides produce only SlideSync steps. */
+  it("generates SlideSync for non-terminal slides", () => {
+    const data = [{ type: "title" }, { type: "text" }, { type: "poll" }];
+    expect(buildSequence(data)).toEqual([
+      { type: Action.SlideSync, page: 0 },
+      { type: Action.SlideSync, page: 1 },
+      { type: Action.SlideSync, page: 2 },
+    ]);
+  });
+
+  /** Verify that terminal slides produce SlideSync followed by HandsOn. */
+  it("inserts HandsOn step after terminal slides", () => {
+    const data = [
+      { type: "text" },
+      { type: "terminal", instruction: "Run it", commands: ["echo hello", "date"] },
+      { type: "text" },
+    ];
+    expect(buildSequence(data)).toEqual([
+      { type: Action.SlideSync, page: 0 },
+      { type: Action.SlideSync, page: 1 },
+      { type: Action.HandsOn, instruction: "Run it", placeholder: "echo hello\ndate" },
+      { type: Action.SlideSync, page: 2 },
+    ]);
+  });
+
+  /** Verify that terminal slides with empty instruction and commands produce correct defaults. */
+  it("handles terminal slide with empty instruction and commands", () => {
+    const data = [{ type: "terminal", instruction: "", commands: [] }];
+    expect(buildSequence(data)).toEqual([
+      { type: Action.SlideSync, page: 0 },
+      { type: Action.HandsOn, instruction: "", placeholder: "" },
+    ]);
+  });
+
+  /** Verify that terminal slides without optional fields default gracefully. */
+  it("handles terminal slide with missing optional fields", () => {
+    const data = [{ type: "terminal" }];
+    expect(buildSequence(data)).toEqual([
+      { type: Action.SlideSync, page: 0 },
+      { type: Action.HandsOn, instruction: "", placeholder: "" },
+    ]);
+  });
+});
 
 describe("defaultSequence", () => {
   /** Verify that the default sequence is a non-empty array. */
@@ -15,14 +66,21 @@ describe("defaultSequence", () => {
     expect(first).toEqual({ type: Action.SlideSync, page: 0 });
   });
 
-  /** Verify that the default sequence contains 3 slide_sync steps. */
-  it("contains 3 steps in the expected order", () => {
-    expect(defaultSequence).toHaveLength(3);
-    expect(defaultSequence).toEqual([
-      { type: Action.SlideSync, page: 0 },
-      { type: Action.SlideSync, page: 1 },
-      { type: Action.SlideSync, page: 2 },
-    ]);
+  /** Verify that the sequence length matches slideData count plus HandsOn steps for terminal slides. */
+  it("has correct length based on slideData", () => {
+    const terminalCount = slideData.filter((s) => s.type === "terminal").length;
+    expect(defaultSequence).toHaveLength(slideData.length + terminalCount);
+  });
+
+  /** Verify that every slide page index appears as a SlideSync step. */
+  it("contains a SlideSync step for every slide", () => {
+    const slideSyncPages = defaultSequence
+      .filter(
+        (s): s is { type: typeof Action.SlideSync; page: number } => s.type === Action.SlideSync,
+      )
+      .map((s) => s.page);
+    const expectedPages = slideData.map((_, i) => i);
+    expect(slideSyncPages).toEqual(expectedPages);
   });
 });
 
