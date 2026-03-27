@@ -806,7 +806,7 @@ func TestStreamReSourcesHmSessionVars(t *testing.T) {
 	}
 
 	written := stdinCapture.String()
-	reloadSnippet := `unset __HM_SESS_VARS_SOURCED; . "$HOME/.nix-profile/etc/profile.d/hm-session-vars.sh" 2>/dev/null`
+	reloadSnippet := `unset __HM_SESS_VARS_SOURCED; . "$HOME/.nix-profile/etc/profile.d/hm-session-vars.sh" 2>/dev/null || true`
 	// The reload snippet must appear both before the command and after __ec=$?.
 	count := strings.Count(written, reloadSnippet)
 	if count < 2 {
