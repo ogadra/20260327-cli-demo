@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef } from "react";
 import SlideView from "./components/SlideView";
 import { usePresenter } from "./hooks/usePresenter";
+import { useSession } from "./hooks/useSession";
 import { slides } from "./slides/index";
 
 /** WebSocket URL derived from the current page origin. */
@@ -9,6 +10,7 @@ const wsUrl = (): string => location.origin.replace(/^http/, "ws") + "/ws";
 
 /** Root application component that renders all slides vertically and scrolls to the active page. */
 const App = (): ReactNode => {
+  const sessionStatus = useSession();
   const { page, viewerCount, pollStates, sendPollVote, sendPollUnvote, sendPollSwitch } =
     usePresenter(wsUrl());
 
@@ -67,6 +69,7 @@ const App = (): ReactNode => {
         >
           <SlideView
             page={i}
+            sessionStatus={sessionStatus}
             pollStates={pollStates}
             onPollVote={sendPollVote}
             onPollUnvote={sendPollUnvote}

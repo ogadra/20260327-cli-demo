@@ -10,6 +10,7 @@ vi.mock("../slides/index", () => {
 
 /** Default poll props for SlideView tests. */
 const pollProps = {
+  sessionStatus: "ready" as const,
   pollStates: {},
   onPollVote: vi.fn(),
   onPollUnvote: vi.fn(),

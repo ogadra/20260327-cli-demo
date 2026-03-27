@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import { slides } from "../slides/index";
 import type { PollStateData } from "../hooks/usePresenter";
+import type { SessionStatus } from "../hooks/useSession";
 
-/** Props passed to each slide component providing access to all poll states and poll actions. */
+/** Props passed to each slide component providing access to session status, poll states, and poll actions. */
 export interface SlideProps {
+  sessionStatus: SessionStatus;
   pollStates: Partial<Record<string, PollStateData>>;
   onPollVote: (pollId: string, choice: string) => void;
   onPollUnvote: (pollId: string, choice: string) => void;
@@ -18,6 +20,7 @@ interface SlideViewProps extends SlideProps {
 /** Renders the slide component corresponding to the given page number. */
 const SlideView = ({
   page,
+  sessionStatus,
   pollStates,
   onPollVote,
   onPollUnvote,
@@ -45,6 +48,7 @@ const SlideView = ({
   return (
     <div role="region" aria-label="slide content" style={{ width: "100%", height: "100%" }}>
       <Slide
+        sessionStatus={sessionStatus}
         pollStates={pollStates}
         onPollVote={onPollVote}
         onPollUnvote={onPollUnvote}

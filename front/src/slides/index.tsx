@@ -14,7 +14,13 @@ const buildSlide = (data: (typeof slideData)[number]): ComponentType<SlideProps>
     case "text":
       return () => <TextSlide lines={data.lines} />;
     case "terminal":
-      return () => <TerminalSlide instruction={data.instruction} commands={data.commands} />;
+      return (props: SlideProps) => (
+        <TerminalSlide
+          sessionStatus={props.sessionStatus}
+          instruction={data.instruction}
+          commands={data.commands}
+        />
+      );
     case "poll":
       return (props: SlideProps) => (
         <PollSlide
