@@ -73,7 +73,7 @@ const handleEvent = (event: SseEvent, terminalRef: RefObject<TerminalHandle | nu
       terminalRef.current?.write(event.data);
       break;
     case SseEventType.STDERR:
-      terminalRef.current?.write(`\x1b[90m${event.data}\x1b[0m`);
+      terminalRef.current?.write(`\x1b[38;5;252m${event.data}\x1b[0m`);
       break;
     case SseEventType.COMPLETE:
       if (event.exitCode !== 0) {
