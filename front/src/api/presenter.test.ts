@@ -8,15 +8,6 @@ describe("parsePresenterMessage", () => {
     ).toEqual({ type: "slide_sync", page: 3 });
   });
 
-  it("parses hands_on message", () => {
-    const msg = {
-      type: ServerMessageType.HandsOn,
-      instruction: "run echo",
-      placeholder: "$ echo hi",
-    };
-    expect(parsePresenterMessage(JSON.stringify(msg))).toEqual(msg);
-  });
-
   it("parses viewer_count message", () => {
     expect(
       parsePresenterMessage(JSON.stringify({ type: ServerMessageType.ViewerCount, count: 42 })),
@@ -50,14 +41,6 @@ describe("parsePresenterMessage", () => {
   it("returns null for invalid viewer_count payload shape", () => {
     expect(
       parsePresenterMessage(JSON.stringify({ type: ServerMessageType.ViewerCount, count: "42" })),
-    ).toBeNull();
-  });
-
-  it("returns null for invalid hands_on payload shape", () => {
-    expect(
-      parsePresenterMessage(
-        JSON.stringify({ type: ServerMessageType.HandsOn, instruction: 123, placeholder: null }),
-      ),
     ).toBeNull();
   });
 

@@ -44,7 +44,7 @@ const PresenterApp = (): ReactNode => {
 
 /** Inner component rendered after login that connects the usePresenter hook to the PresenterPanel. */
 const PresenterAppInner = (): ReactNode => {
-  const { viewerCount, sendSlideSync, sendHandsOn, sendPollGet } = usePresenter(wsUrl());
+  const { viewerCount, sendSlideSync, sendPollGet } = usePresenter(wsUrl());
 
   /** Send all poll definitions on mount to initialize polls. */
   useEffect((): void => {
@@ -53,13 +53,7 @@ const PresenterAppInner = (): ReactNode => {
     }
   }, [sendPollGet]);
 
-  return (
-    <PresenterPanel
-      sendSlideSync={sendSlideSync}
-      sendHandsOn={sendHandsOn}
-      viewerCount={viewerCount}
-    />
-  );
+  return <PresenterPanel sendSlideSync={sendSlideSync} viewerCount={viewerCount} />;
 };
 
 const root = document.getElementById("presenter-root");

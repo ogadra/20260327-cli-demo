@@ -4,7 +4,6 @@ import {
   ClientMessageType,
   ServerMessageType,
   parsePresenterMessage,
-  type PresenterMode,
 } from "../api/presenter";
 
 /** Maximum reconnection delay in milliseconds. */
@@ -21,13 +20,9 @@ export interface PollStateData {
 /** Return value of the usePresenter hook. */
 export interface UsePresenterResult {
   page: number;
-  mode: PresenterMode;
-  instruction: string;
-  placeholder: string;
   viewerCount: number;
   pollStates: Partial<Record<string, PollStateData>>;
   sendSlideSync: (page: number) => void;
-  sendHandsOn: (instruction: string, placeholder: string) => void;
   sendPollGet: (pollId: string, options: string[], maxChoices: number) => void;
   sendPollVote: (pollId: string, choice: string) => void;
   sendPollUnvote: (pollId: string, choice: string) => void;
@@ -40,7 +35,7 @@ export interface UsePresenterDeps {
 }
 
 /**
- * Hook that manages a presenter WebSocket connection including page, mode, viewer count, and poll states keyed by pollId.
+ * Hook that manages a presenter WebSocket connection including page, viewer count, and poll states keyed by pollId.
  * Connects on mount with auto-reconnect and disconnects on unmount.
  * @param wsUrl - WebSocket URL to connect to.
  * @param deps - Optional dependency overrides for testing.
@@ -51,9 +46,6 @@ export const usePresenter = (
   deps?: Partial<UsePresenterDeps>,
 ): UsePresenterResult => {
   const [page, setPage] = useState(0);
-  const [mode, setMode] = useState<PresenterMode>(ServerMessageType.SlideSync);
-  const [instruction, setInstruction] = useState("");
-  const [placeholder, setPlaceholder] = useState("");
   const [viewerCount, setViewerCount] = useState(0);
   const [pollStates, setPollStates] = useState<Record<string, PollStateData>>({});
   const wsRef = useRef<WebSocket | null>(null);
@@ -79,12 +71,6 @@ export const usePresenter = (
         switch (msg.type) {
           case ServerMessageType.SlideSync:
             setPage(msg.page);
-            setMode(ServerMessageType.SlideSync);
-            break;
-          case ServerMessageType.HandsOn:
-            setInstruction(msg.instruction);
-            setPlaceholder(msg.placeholder);
-            setMode(ServerMessageType.HandsOn);
             break;
           case ServerMessageType.ViewerCount:
             setViewerCount(msg.count);
@@ -134,19 +120,9 @@ export const usePresenter = (
     };
   }, [wsUrl, deps?.WebSocket]);
 
+  /** Send a slide_sync message to synchronize viewers to a given page. */
   const sendSlideSync = useCallback((p: number): void => {
     wsRef.current?.send(JSON.stringify({ action: "message", type: Action.SlideSync, page: p }));
-  }, []);
-
-  const sendHandsOn = useCallback((inst: string, ph: string): void => {
-    wsRef.current?.send(
-      JSON.stringify({
-        action: "message",
-        type: Action.HandsOn,
-        instruction: inst,
-        placeholder: ph,
-      }),
-    );
   }, []);
 
   /** Send a poll_get message to initialize or retrieve a poll. */
@@ -185,13 +161,9 @@ export const usePresenter = (
 
   return {
     page,
-    mode,
-    instruction,
-    placeholder,
     viewerCount,
     pollStates,
     sendSlideSync,
-    sendHandsOn,
     sendPollGet,
     sendPollVote,
     sendPollUnvote,

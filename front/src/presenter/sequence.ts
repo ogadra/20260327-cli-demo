@@ -1,4 +1,4 @@
-import { Action, type HandsOnPayload, type SlideSyncPayload } from "../api/presenter";
+import { Action, type SlideSyncPayload } from "../api/presenter";
 
 /** Poll open payload used only in presenter steps to initialize a poll for viewers. */
 export type PollOpenPayload = {
@@ -8,11 +8,8 @@ export type PollOpenPayload = {
   maxChoices: number;
 };
 
-/**
- * Discriminated union type representing a single display-mode step in the presentation sequence.
- * SlideSyncPayload and HandsOnPayload are shared with server-to-client message types.
- */
-export type PresenterStep = SlideSyncPayload | HandsOnPayload;
+/** A single step in the presentation sequence. All steps are slide_sync. */
+export type PresenterStep = SlideSyncPayload;
 
 /** Default presentation sequence used by the presenter control panel. */
 export const defaultSequence: PresenterStep[] = [
