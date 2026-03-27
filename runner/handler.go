@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -48,6 +49,7 @@ type sseEvent struct {
 func newHandler(sm *SessionManager, v Validator) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
+	r.SetTrustedProxies([]string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"})
 	r.HandleMethodNotAllowed = true
 	r.GET("/health", handleHealth())
 	r.POST("/api/session", handleCreateSession(sm))
@@ -126,7 +128,7 @@ func handleExecute(sm *SessionManager, v Validator) gin.HandlerFunc {
 		}
 
 		class := classifyCommand(req.Command)
-		remote := c.ClientIP() + ":" + c.GetHeader("X-Forwarded-Port")
+		remote := clientIP(c)
 		auditLog(id, remote, class, req.Command, nil, nil)
 
 		if class == "validated" {
@@ -198,4 +200,19 @@ func auditLog(session, remote, class, command string, exitCode *int, err error) 
 func writeSSE(w http.ResponseWriter, event sseEvent) {
 	data, _ := json.Marshal(event)
 	fmt.Fprintf(w, "data: %s\n\n", data)
+}
+
+// clientIP extracts the client IP address from the request.
+// It prefers the CloudFront-Viewer-Address header set by CloudFront,
+// stripping the port suffix if present. If the header is absent,
+// it falls back to Gin's c.ClientIP which parses X-Forwarded-For.
+func clientIP(c *gin.Context) string {
+	if addr := c.GetHeader("CloudFront-Viewer-Address"); addr != "" {
+		host, _, err := net.SplitHostPort(addr)
+		if err != nil {
+			return addr
+		}
+		return host
+	}
+	return c.ClientIP()
 }

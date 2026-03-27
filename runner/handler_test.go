@@ -2,11 +2,14 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -656,6 +659,114 @@ func TestHealth(t *testing.T) {
 	}
 	if got := w.Body.String(); got != "ok\n" {
 		t.Fatalf("body = %q, want %q", got, "ok\n")
+	}
+}
+
+// TestExecuteCloudFrontViewerAddress verifies that when the CloudFront-Viewer-Address
+// header is present, handleExecute uses it as the remote IP in audit logs instead of c.ClientIP.
+func TestExecuteCloudFrontViewerAddress(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	sm := NewSessionManager()
+	defer sm.CloseAll()
+	sm.newShell = func() (Shell, error) {
+		return &mockShell{exitCode: 0}, nil
+	}
+	handler := newHandler(sm, nil)
+
+	id, _, err := sm.Create()
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	body := strings.NewReader(`{"command":"ls"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: id})
+	req.Header.Set("CloudFront-Viewer-Address", "203.0.113.50:12345")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "remote=203.0.113.50") {
+		t.Fatalf("expected audit log to contain remote=203.0.113.50, got:\n%s", logOutput)
+	}
+}
+
+// TestExecuteCloudFrontViewerAddressWithoutPort verifies that when the
+// CloudFront-Viewer-Address header contains only an IP without port,
+// it is used as-is for the remote field in audit logs.
+func TestExecuteCloudFrontViewerAddressWithoutPort(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	sm := NewSessionManager()
+	defer sm.CloseAll()
+	sm.newShell = func() (Shell, error) {
+		return &mockShell{exitCode: 0}, nil
+	}
+	handler := newHandler(sm, nil)
+
+	id, _, err := sm.Create()
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	body := strings.NewReader(`{"command":"ls"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: id})
+	req.Header.Set("CloudFront-Viewer-Address", "203.0.113.99")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "remote=203.0.113.99") {
+		t.Fatalf("expected audit log to contain remote=203.0.113.99, got:\n%s", logOutput)
+	}
+}
+
+// TestExecuteFallbackClientIP verifies that when the CloudFront-Viewer-Address
+// header is absent, handleExecute falls back to c.ClientIP for the remote field.
+func TestExecuteFallbackClientIP(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	sm := NewSessionManager()
+	defer sm.CloseAll()
+	sm.newShell = func() (Shell, error) {
+		return &mockShell{exitCode: 0}, nil
+	}
+	handler := newHandler(sm, nil)
+
+	id, _, err := sm.Create()
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	body := strings.NewReader(`{"command":"ls"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: id})
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "remote=192.0.2.1") {
+		t.Fatalf("expected audit log to contain remote=192.0.2.1, got:\n%s", logOutput)
 	}
 }
 
