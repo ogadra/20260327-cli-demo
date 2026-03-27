@@ -1,16 +1,19 @@
 import { expect, test } from "@playwright/test";
 import { Page } from "@playwright/test";
 
+/** CSS selector for the command input field used in Slide0. */
+const COMMAND_INPUT_SELECTOR = 'input[placeholder="echo hello"]';
+
 /** Wait for the command input to be enabled, indicating the session is ready. */
 async function waitForReady(page: Page): Promise<void> {
-  await expect(page.locator('input[placeholder="echo hello"]')).toBeEnabled({
+  await expect(page.locator(COMMAND_INPUT_SELECTOR)).toBeEnabled({
     timeout: 30_000,
   });
 }
 
 /** Execute a command and wait for the input to be re-enabled after completion. */
 async function executeCommand(page: Page, command: string): Promise<void> {
-  const input = page.locator('input[placeholder="echo hello"]');
+  const input = page.locator(COMMAND_INPUT_SELECTOR);
   await input.fill(command);
   await input.press("Enter");
   await expect(input).toBeEnabled({ timeout: 30_000 });
