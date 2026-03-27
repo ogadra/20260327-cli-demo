@@ -74,7 +74,7 @@ describe("useExecute", () => {
       await result.current.run("bad");
     });
 
-    expect(write).toHaveBeenCalledWith("\x1b[31merr\n\x1b[0m");
+    expect(write).toHaveBeenCalledWith("\x1b[90merr\n\x1b[0m");
     expect(writeln).toHaveBeenCalledWith("\x1b[31mexit code: 1\x1b[0m");
     expect(write).toHaveBeenCalledWith("$ ");
   });

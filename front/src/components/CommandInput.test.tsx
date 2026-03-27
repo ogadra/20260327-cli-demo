@@ -123,4 +123,30 @@ describe("CommandInput", () => {
     rerender(<CommandInput onSubmit={vi.fn()} disabled={false} />);
     expect(input).toHaveValue("");
   });
+
+  it("submits via Run button click", () => {
+    const onSubmit = vi.fn();
+    render(<CommandInput onSubmit={onSubmit} disabled={false} />);
+
+    const input = screen.getByPlaceholderText("Enter command...");
+    fireEvent.change(input, { target: { value: "pwd" } });
+
+    const button = screen.getByRole("button", { name: "Run" });
+    fireEvent.click(button);
+
+    expect(onSubmit).toHaveBeenCalledWith("pwd");
+    expect(input).toHaveValue("");
+  });
+
+  it("disables Run button when input is empty", () => {
+    render(<CommandInput onSubmit={vi.fn()} disabled={false} />);
+    const button = screen.getByRole("button", { name: "Run" });
+    expect(button).toBeDisabled();
+  });
+
+  it("disables Run button when component is disabled", () => {
+    render(<CommandInput onSubmit={vi.fn()} disabled={true} />);
+    const button = screen.getByRole("button", { name: "Run" });
+    expect(button).toBeDisabled();
+  });
 });
