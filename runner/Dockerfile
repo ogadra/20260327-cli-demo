@@ -38,40 +38,36 @@ RUN nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs && \
     nix-channel --add https://github.com/nix-community/home-manager/archive/release-25.11.tar.gz home-manager && \
     nix-channel --update
 
-RUN nix-env -q || true
 RUN nix-env -e man man-db || true
 
 RUN nix-shell '<home-manager>' -A install
-
-RUN echo '--- nix-env -q before cleanup ---' && \
-    nix-env -q || true
 
 RUN command -v home-manager && \
     HM_REAL="$(readlink -f "$(command -v home-manager)")" && \
     mkdir -p /usr/local/bin && \
     printf '%s\n' '#!/bin/sh' "exec \"$HM_REAL\" \"\$@\"" > /usr/local/bin/home-manager && \
-    chmod +x /usr/local/bin/home-manager && \
-    /usr/local/bin/home-manager --version
+    chmod +x /usr/local/bin/home-manager
 
 RUN nix-env -e bash-interactive bash || true
 
 RUN mkdir -p /root/.config/home-manager
 COPY ./nix/home.nix /root/.config/home-manager/home.nix
 
-RUN /usr/local/bin/home-manager switch && /usr/local/bin/home-manager generations
+RUN home-manager switch
 
 RUN nix shell nixpkgs#gnused --command sh -c '\
-    sed -i '\''s|TZ = "Asia/Tokyo";|TZ = "America/New_York";|g'\'' /root/.config/home-manager/home.nix && \
+    sed -i '\''s|TZ = "Asia/Tokyo";|TZ = "Pacific/Honolulu";|g'\'' /root/.config/home-manager/home.nix && \
     sed -i '\''s|LANG = "ja_JP.UTF-8";|LANG = "en_US.UTF-8";|g'\'' /root/.config/home-manager/home.nix && \
     sed -i '\''s|LC_ALL = "ja_JP.UTF-8";|LC_ALL = "en_US.UTF-8";|g'\'' /root/.config/home-manager/home.nix && \
-    /usr/local/bin/home-manager switch && \
-    /usr/local/bin/home-manager generations'
+    home-manager switch'
 
-RUN nix build --impure --no-link --print-out-paths -f '<nixpkgs>' cowsay pokemonsay > /tmp/prebuilt-tools-paths.txt
+RUN nix build --impure --no-link --print-out-paths -f '<nixpkgs>' cowsay pokemonsay lolcat figlet > /tmp/prebuilt-tools-paths.txt
 
 RUN mkdir -p /app
 COPY ./app/* /app/
 WORKDIR /app
+
+RUN nix flake archive
 
 COPY --from=binary /server /server
 EXPOSE 3000
