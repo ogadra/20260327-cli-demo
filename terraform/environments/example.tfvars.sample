@@ -1,5 +1,4 @@
 domain_name          = "example.bunshin.dev"
-hosted_zone_name     = "bunshin.dev"
 acm_certificate_arn  = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 aws_profile          = "bunshin-dev"
 runner_desired_count = 300
