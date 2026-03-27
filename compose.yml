@@ -5,6 +5,10 @@ services:
       args:
         NGINX_RESOLVER: 127.0.0.11
         BROKER_HOST: broker
+      cache_from:
+        - type=gha,scope=nginx
+      cache_to:
+        - type=gha,scope=nginx,mode=max
     profiles:
       - nginx
       - integration
@@ -12,7 +16,12 @@ services:
       - "${NGINX_PORT}:8080"
 
   broker:
-    build: broker/
+    build:
+      context: broker/
+      cache_from:
+        - type=gha,scope=broker
+      cache_to:
+        - type=gha,scope=broker,mode=max
     ports:
       - "${BROKER_PORT}:8080"
     env_file:
@@ -28,6 +37,10 @@ services:
     build:
       context: broker/
       target: test-integration
+      cache_from:
+        - type=gha,scope=broker
+      cache_to:
+        - type=gha,scope=broker,mode=max
     env_file:
       - broker/.env.example
     depends_on:
@@ -40,6 +53,10 @@ services:
     build:
       context: front/
       target: dev
+      cache_from:
+        - type=gha,scope=front
+      cache_to:
+        - type=gha,scope=front,mode=max
     ports:
       - "${FRONT_PORT}:5173"
     volumes:
@@ -52,7 +69,12 @@ services:
       - front
 
   runner-1:
-    build: runner/
+    build:
+      context: runner/
+      cache_from:
+        - type=gha,scope=runner
+      cache_to:
+        - type=gha,scope=runner,mode=max
     env_file:
       - runner/.env.example
     profiles:
@@ -60,7 +82,10 @@ services:
       - integration
 
   runner-2:
-    build: runner/
+    build:
+      context: runner/
+      cache_from:
+        - type=gha,scope=runner
     env_file:
       - runner/.env.example
     profiles:
@@ -94,7 +119,12 @@ services:
       - integration
 
   integration-test:
-    build: integration/
+    build:
+      context: integration/
+      cache_from:
+        - type=gha,scope=integration
+      cache_to:
+        - type=gha,scope=integration,mode=max
     environment:
       NGINX_URL: "http://nginx:8080"
       BROKER_URL: "http://broker:8080"
