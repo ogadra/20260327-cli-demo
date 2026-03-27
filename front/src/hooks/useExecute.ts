@@ -30,6 +30,12 @@ export const useExecute = (
     };
   }, []);
 
+  useEffect(() => {
+    if (ready) {
+      terminalRef.current?.write("$ ");
+    }
+  }, [ready, terminalRef]);
+
   const run = useCallback(
     async (command: string) => {
       if (!ready || runningRef.current) return;
