@@ -1,8 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { Page } from "@playwright/test";
 
-/** CSS selector for the command input field used in Slide0. */
-const COMMAND_INPUT_SELECTOR = 'input[placeholder="echo hello"]';
+/** Index of the first terminal slide in slideData. */
+const TERMINAL_SLIDE_PAGE = 26;
+
+/** CSS selector for the command input field on terminal slides. */
+const COMMAND_INPUT_SELECTOR = 'input[placeholder="date"]';
 
 /** Wait for the command input to be enabled, indicating the session is ready. */
 async function waitForReady(page: Page): Promise<void> {
@@ -44,13 +47,13 @@ async function waitForPromptCount(page: Page, count: number): Promise<string> {
   return text;
 }
 
-/** Mock the presenter WebSocket to immediately send a hands_on message so CommandInput renders. */
+/** Mock the presenter WebSocket to navigate to the first terminal slide so CommandInput renders. */
 async function mockPresenterWs(page: Page): Promise<void> {
   await page.routeWebSocket(/\/ws$/, (ws) => {
     ws.onMessage(() => {
       /* ignore outgoing messages */
     });
-    ws.send(JSON.stringify({ type: "hands_on", instruction: "", placeholder: "" }));
+    ws.send(JSON.stringify({ type: "slide_sync", page: TERMINAL_SLIDE_PAGE }));
   });
 }
 
