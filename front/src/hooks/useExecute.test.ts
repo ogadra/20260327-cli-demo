@@ -160,4 +160,47 @@ describe("useExecute", () => {
     expect(writeln).toHaveBeenCalledWith("\x1b[31mError: connection refused\x1b[0m");
     expect(write).toHaveBeenCalledWith("$ ");
   });
+
+  it("aborts running command on unmount", async () => {
+    const { ref } = makeTerminalRef();
+
+    let resolveExecution!: () => void;
+    const executionPromise = new Promise<void>((resolve) => {
+      resolveExecution = resolve;
+    });
+
+    let receivedSignal: AbortSignal | undefined;
+
+    mockExecute.mockImplementation(
+      (_command: string, _onReassigned?: () => void, signal?: AbortSignal) => {
+        receivedSignal = signal;
+        return (async function* () {
+          await executionPromise;
+          yield { type: "complete" as const, exitCode: 0 };
+        })();
+      },
+    );
+
+    const { result, unmount } = renderHook(() => useExecute(true, ref));
+
+    act(() => {
+      void result.current.run("long-running");
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(receivedSignal).toBeDefined();
+    expect(receivedSignal!.aborted).toBe(false);
+
+    unmount();
+
+    expect(receivedSignal!.aborted).toBe(true);
+
+    resolveExecution();
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+  });
 });
