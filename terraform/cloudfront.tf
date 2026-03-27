@@ -31,7 +31,10 @@ resource "aws_cloudfront_origin_request_policy" "api_all_viewer" {
     cookie_behavior = "all"
   }
   headers_config {
-    header_behavior = "allViewer"
+    header_behavior = "allViewerAndWhitelistCloudFront"
+    headers {
+      items = ["CloudFront-Viewer-Address"]
+    }
   }
   query_strings_config {
     query_string_behavior = "all"

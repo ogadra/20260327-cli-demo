@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -127,7 +128,7 @@ func handleExecute(sm *SessionManager, v Validator) gin.HandlerFunc {
 		}
 
 		class := classifyCommand(req.Command)
-		remote := c.ClientIP()
+		remote := clientIP(c)
 		auditLog(id, remote, class, req.Command, nil, nil)
 
 		if class == "validated" {
@@ -199,4 +200,19 @@ func auditLog(session, remote, class, command string, exitCode *int, err error) 
 func writeSSE(w http.ResponseWriter, event sseEvent) {
 	data, _ := json.Marshal(event)
 	fmt.Fprintf(w, "data: %s\n\n", data)
+}
+
+// clientIP extracts the client IP address from the request.
+// It prefers the CloudFront-Viewer-Address header set by CloudFront,
+// stripping the port suffix if present. If the header is absent,
+// it falls back to Gin's c.ClientIP which parses X-Forwarded-For.
+func clientIP(c *gin.Context) string {
+	if addr := c.GetHeader("CloudFront-Viewer-Address"); addr != "" {
+		host, _, err := net.SplitHostPort(addr)
+		if err != nil {
+			return addr
+		}
+		return host
+	}
+	return c.ClientIP()
 }
