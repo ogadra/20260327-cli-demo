@@ -550,12 +550,12 @@ func TestExecuteValidatedUnsafe(t *testing.T) {
 	}
 }
 
-// TestExecuteValidatorError verifies that a validator error results in
-// 403 fail-closed behavior.
+// TestExecuteValidatorError verifies that a non-API validator error such as
+// a parse failure results in 403 fail-closed behavior.
 func TestExecuteValidatorError(t *testing.T) {
 	sm := NewSessionManager()
 	defer sm.CloseAll()
-	v := &mockValidator{err: errors.New("LLM unavailable")}
+	v := &mockValidator{err: errors.New("retries exhausted: no expected tool use block in response")}
 	handler := newHandler(sm, v)
 
 	id, _, err := sm.Create()
@@ -571,6 +571,43 @@ func TestExecuteValidatorError(t *testing.T) {
 
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+// TestExecuteValidatorUnavailableSkipsValidation verifies that when the
+// validator returns a ValidationUnavailableError the command executes
+// instead of being rejected with 403.
+func TestExecuteValidatorUnavailableSkipsValidation(t *testing.T) {
+	sm := NewSessionManager()
+	defer sm.CloseAll()
+	sm.newShell = func() (Shell, error) {
+		return &mockShell{exitCode: 0}, nil
+	}
+	v := &mockValidator{err: &ValidationUnavailableError{Cause: errors.New("429")}}
+	handler := newHandler(sm, v)
+
+	id, _, err := sm.Create()
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	body := strings.NewReader(`{"command":"echo hello"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: id})
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	events := parseSSEEvents(t, w.Body.String())
+	if len(events) == 0 {
+		t.Fatal("expected at least 1 SSE event, got 0")
+	}
+	last := events[len(events)-1]
+	if last.Type != "complete" || last.ExitCode == nil || *last.ExitCode != 0 {
+		t.Fatalf("expected complete with exitCode=0, got %+v", last)
 	}
 }
 
