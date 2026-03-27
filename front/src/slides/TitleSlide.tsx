@@ -24,6 +24,6 @@ export const TitleSlide = ({ text }: TitleSlideProps): ReactNode => (
       boxSizing: "border-box",
     }}
   >
-    {text}
+    {text.split("\n").flatMap((part, i) => (i === 0 ? [part] : [<br key={i} />, part]))}
   </div>
 );

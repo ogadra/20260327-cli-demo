@@ -26,7 +26,11 @@ const parseInline = (text: string): ReactNode[] => {
 
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
+      const mid = text.slice(lastIndex, match.index);
+      mid.split("\n").forEach((seg, i) => {
+        if (i > 0) parts.push(<br key={`br-${lastIndex}-${i}`} />);
+        if (seg) parts.push(seg);
+      });
     }
     if (match[2] !== undefined) {
       parts.push(<strong key={match.index}>{match[2]}</strong>);
@@ -43,7 +47,11 @@ const parseInline = (text: string): ReactNode[] => {
     lastIndex = regex.lastIndex;
   }
   if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
+    const tail = text.slice(lastIndex);
+    tail.split("\n").forEach((seg, i) => {
+      if (i > 0) parts.push(<br key={`br-${lastIndex}-${i}`} />);
+      if (seg) parts.push(seg);
+    });
   }
   return parts;
 };
