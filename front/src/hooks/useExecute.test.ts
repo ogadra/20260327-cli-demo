@@ -59,7 +59,7 @@ describe("useExecute", () => {
     expect(write).toHaveBeenCalledWith("$ ");
   });
 
-  it("writes stderr in red", async () => {
+  it("writes stderr in gray", async () => {
     const { ref, write, writeln } = makeTerminalRef();
 
     async function* fakeExecute() {

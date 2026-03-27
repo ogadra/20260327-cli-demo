@@ -144,6 +144,14 @@ describe("CommandInput", () => {
     expect(button).toBeDisabled();
   });
 
+  it("disables Run button when input is whitespace only", () => {
+    render(<CommandInput onSubmit={vi.fn()} disabled={false} />);
+    const input = screen.getByPlaceholderText("Enter command...");
+    fireEvent.change(input, { target: { value: "   " } });
+    const button = screen.getByRole("button", { name: "Run" });
+    expect(button).toBeDisabled();
+  });
+
   it("disables Run button when component is disabled", () => {
     render(<CommandInput onSubmit={vi.fn()} disabled={true} />);
     const button = screen.getByRole("button", { name: "Run" });

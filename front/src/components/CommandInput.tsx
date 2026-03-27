@@ -77,7 +77,7 @@ const CommandInput = ({ onSubmit, disabled, placeholder }: Props): ReactNode => 
           flex: 1,
           padding: "8px",
           fontFamily: "monospace",
-          fontSize: "min(4vw, 16px)",
+          fontSize: "clamp(14px, 4vw, 16px)",
           boxSizing: "border-box",
           minWidth: 0,
         }}
@@ -90,7 +90,7 @@ const CommandInput = ({ onSubmit, disabled, placeholder }: Props): ReactNode => 
         style={{
           padding: "8px 16px",
           fontFamily: "monospace",
-          fontSize: "min(4vw, 16px)",
+          fontSize: "clamp(14px, 4vw, 16px)",
           cursor: disabled || !value.trim() ? "default" : "pointer",
           whiteSpace: "nowrap",
         }}
