@@ -11,10 +11,16 @@ interface TerminalPaneProps {
   sessionStatus: SessionStatus;
   /** Placeholder text shown in the command input. */
   placeholder: string;
+  /** Explicit height for the pane. When omitted the pane stretches via flex. */
+  height?: string;
 }
 
 /** Single terminal with command input, used as a pane inside TerminalSlide. */
-export const TerminalPane = ({ sessionStatus, placeholder }: TerminalPaneProps): ReactNode => {
+export const TerminalPane = ({
+  sessionStatus,
+  placeholder,
+  height,
+}: TerminalPaneProps): ReactNode => {
   const ready = sessionStatus === "ready";
   const terminalRef = useRef<TerminalHandle>(null);
   const { run, running } = useExecute(ready, terminalRef);
@@ -35,7 +41,9 @@ export const TerminalPane = ({ sessionStatus, placeholder }: TerminalPaneProps):
       style={{
         display: "flex",
         flexDirection: "column",
-        flex: 1,
+        height,
+        flex: height ? undefined : 1,
+        flexShrink: height ? 0 : undefined,
         minWidth: 0,
       }}
     >

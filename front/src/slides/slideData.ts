@@ -72,7 +72,7 @@ export const slideData: ReadonlyArray<SlideData> = [
     lines: ["まず、1から。", "お手元の画面で、実行ボタンを押すと`date`コマンドが実行できます。"],
   },
   { type: "terminal", instruction: "", commands: ["date"] },
-  { type: "text", lines: ["HST？\nホノルルは午前1時らしいです。\n大変ですね。"] },
+  { type: "text", lines: ["HST？\nホノルルは午前2時らしいです。\n大変ですね。"] },
   { type: "text", lines: ["事前に\nずらしておきました。"] },
   { type: "text", lines: ["設定を戻してくれや"] },
   { type: "terminal", instruction: "", commands: ["home-manager switch --rollback", "date"] },
