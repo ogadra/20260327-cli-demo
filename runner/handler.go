@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -202,17 +201,16 @@ func writeSSE(w http.ResponseWriter, event sseEvent) {
 	fmt.Fprintf(w, "data: %s\n\n", data)
 }
 
-// clientIP extracts the client IP address from the request.
+// clientIP extracts the client address from the request.
 // It prefers the CloudFront-Viewer-Address header set by CloudFront,
-// stripping the port suffix if present. If the header is absent,
-// it falls back to Gin's c.ClientIP which parses X-Forwarded-For.
+// which contains the viewer IP and source port in ip:port format.
+// The source port is preserved because it helps identify clients
+// behind MAP-E or DS-Lite where multiple households share a single
+// global IP and are distinguished by port ranges.
+// If the header is absent, it falls back to Gin's c.ClientIP.
 func clientIP(c *gin.Context) string {
 	if addr := c.GetHeader("CloudFront-Viewer-Address"); addr != "" {
-		host, _, err := net.SplitHostPort(addr)
-		if err != nil {
-			return addr
-		}
-		return host
+		return addr
 	}
 	return c.ClientIP()
 }
