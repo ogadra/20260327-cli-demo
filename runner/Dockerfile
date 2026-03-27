@@ -64,7 +64,7 @@ RUN nix shell nixpkgs#gnused --command sh -c '\
 RUN nix build --impure --no-link --print-out-paths -f '<nixpkgs>' cowsay pokemonsay lolcat figlet > /tmp/prebuilt-tools-paths.txt
 
 RUN mkdir -p /app
-COPY ./app/* /app/
+COPY ./app/ /app/
 WORKDIR /app
 
 RUN nix flake archive

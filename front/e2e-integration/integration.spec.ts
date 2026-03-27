@@ -34,7 +34,7 @@ async function waitForTerminalChange(page: Page, previousText: string): Promise<
 /** Wait until the terminal contains at least the expected number of prompt markers. */
 async function waitForPromptCount(page: Page, count: number): Promise<string> {
   const rows = page.locator(".xterm-rows");
-  await expect(rows).toContainText("$ ".repeat(1), { timeout: 10_000 });
+  await expect(rows).toContainText("$ ", { timeout: 10_000 });
   let text = "";
   for (let i = 0; i < 50; i++) {
     text = (await rows.textContent()) ?? "";

@@ -30,9 +30,12 @@ export const useExecute = (
     };
   }, []);
 
+  const initialPromptWritten = useRef(false);
+
   useEffect(() => {
-    if (ready) {
+    if (ready && !initialPromptWritten.current) {
       terminalRef.current?.write("$ ");
+      initialPromptWritten.current = true;
     }
   }, [ready, terminalRef]);
 
