@@ -343,7 +343,8 @@ func TestAcquireIdle_RetryWithinBatch(t *testing.T) {
 		updateItemFn: func(_ context.Context, params *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
 			updateCount++
 			rid := params.Key["runnerId"].(*types.AttributeValueMemberS).Value
-			if rid == "r1" {
+			// r2 のみ成功可能。シャッフル順序に関係なく r1 は必ず競合する。
+			if rid != "r2" {
 				return nil, &types.ConditionalCheckFailedException{Message: aws.String("conflict")}
 			}
 			return &dynamodb.UpdateItemOutput{}, nil
@@ -361,8 +362,8 @@ func TestAcquireIdle_RetryWithinBatch(t *testing.T) {
 	if queryCount != 1 {
 		t.Errorf("query count = %d, want 1", queryCount)
 	}
-	if updateCount != 2 {
-		t.Errorf("update count = %d, want 2", updateCount)
+	if updateCount < 1 || updateCount > 2 {
+		t.Errorf("update count = %d, want 1 or 2", updateCount)
 	}
 }
 
@@ -485,7 +486,7 @@ func TestAcquireIdle_UnmarshalError(t *testing.T) {
 func TestAcquireIdle_ShuffleDistribution(t *testing.T) {
 	t.Parallel()
 	assigned := map[string]int{}
-	for range 100 {
+	for range 1000 {
 		mock := &mockDynamoDBAPI{
 			queryFn: func(_ context.Context, _ *dynamodb.QueryInput, _ ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
 				return &dynamodb.QueryOutput{
