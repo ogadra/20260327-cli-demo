@@ -12,7 +12,7 @@ interface TerminalSlideProps {
   commands: string[];
 }
 
-/** Slide component with one or more terminal panes arranged side by side. */
+/** Slide component with one or more terminal panes stacked vertically. */
 export const TerminalSlide = ({
   sessionStatus,
   instruction,
@@ -44,8 +44,10 @@ export const TerminalSlide = ({
       <div
         style={{
           display: "flex",
+          flexDirection: "column",
           flex: 1,
           gap: "4px",
+          padding: "0 16px 16px",
           minHeight: 0,
         }}
       >

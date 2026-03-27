@@ -33,7 +33,7 @@ const Terminal = forwardRef<TerminalHandle>((_, ref) => {
     const el = containerRef.current;
     if (!el) return;
 
-    const xterm = new XTerm({ convertEol: true });
+    const xterm = new XTerm({ convertEol: true, fontSize: 18 });
     const fitAddon = new FitAddon();
     xterm.loadAddon(fitAddon);
     xterm.open(el);
