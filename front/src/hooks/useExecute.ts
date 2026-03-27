@@ -30,6 +30,15 @@ export const useExecute = (
     };
   }, []);
 
+  const initialPromptWritten = useRef(false);
+
+  useEffect(() => {
+    if (ready && !initialPromptWritten.current) {
+      terminalRef.current?.write("$ ");
+      initialPromptWritten.current = true;
+    }
+  }, [ready, terminalRef]);
+
   const run = useCallback(
     async (command: string) => {
       if (!ready || runningRef.current) return;

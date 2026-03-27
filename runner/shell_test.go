@@ -751,6 +751,81 @@ func TestStreamInvalidExitCode(t *testing.T) {
 	}
 }
 
+// TestStreamReSourcesHmSessionVars verifies that the script written to stdin
+// contains a source command for hm-session-vars.sh after capturing the exit code.
+func TestStreamReSourcesHmSessionVars(t *testing.T) {
+	stdinCapture := &markerCapturingWriter{}
+	stdoutR, stdoutW := io.Pipe()
+
+	s := &bashShell{
+		stdin:  stdinCapture,
+		stdout: bufio.NewScanner(stdoutR),
+		cmd:    &fakeCommander{},
+	}
+
+	ch := make(chan string, 10)
+	errCh := make(chan error, 1)
+	go func() {
+		_, _, err := s.ExecuteStream(context.Background(), "echo hello", ch)
+		errCh <- err
+	}()
+
+	go func() {
+		timeout := time.After(5 * time.Second)
+		for {
+			select {
+			case <-timeout:
+				stdoutW.Close()
+				return
+			default:
+			}
+			marker := extractMarker(stdinCapture.String())
+			if marker != "" {
+				// Close stderrDone so ExecuteStream does not block waiting for stderr marker.
+				s.stderrMu.Lock()
+				if s.stderrDone != nil {
+					select {
+					case <-s.stderrDone:
+					default:
+						close(s.stderrDone)
+					}
+				}
+				s.stderrMu.Unlock()
+				stdoutW.Write([]byte("\n" + marker + "0\n"))
+				stdoutW.Close()
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}()
+
+	select {
+	case <-errCh:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timeout waiting for ExecuteStream to return")
+	}
+
+	written := stdinCapture.String()
+	reloadSnippet := `unset __HM_SESS_VARS_SOURCED; . "$HOME/.nix-profile/etc/profile.d/hm-session-vars.sh" 2>/dev/null || true`
+	// The reload snippet must appear both before the command and after __ec=$?.
+	count := strings.Count(written, reloadSnippet)
+	if count < 2 {
+		t.Errorf("expected reload snippet at least twice (before and after command), got %d.\nscript: %s", count, written)
+	}
+
+	// Verify ordering: reload -> command -> __ec=$? -> reload.
+	firstReload := strings.Index(written, reloadSnippet)
+	cmdIdx := strings.Index(written, "echo hello")
+	ecIdx := strings.Index(written, "__ec=$?")
+	secondReload := strings.Index(written[ecIdx:], reloadSnippet)
+	if firstReload < 0 || cmdIdx < 0 || ecIdx < 0 || secondReload < 0 {
+		t.Errorf("missing expected components in script.\nscript: %s", written)
+	}
+	if firstReload >= cmdIdx || cmdIdx >= ecIdx {
+		t.Errorf("expected reload before command before __ec=$?.\nscript: %s", written)
+	}
+}
+
 // TestStreamDrainMarkerOnContextCancel verifies that when a context is canceled
 // mid-stream, ExecuteStream drains stdout until the marker before returning,
 // keeping the session usable for subsequent calls.

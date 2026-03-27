@@ -106,7 +106,7 @@ func start(addr string) error {
 		return fmt.Errorf("missing required environment variable: BROKER_URL")
 	}
 
-	valCtx, valCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	valCtx, valCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer valCancel()
 	validator, err := newValidatorFn(valCtx)
 	if err != nil {
