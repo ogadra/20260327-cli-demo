@@ -25,6 +25,8 @@ export const TerminalSlide = ({
         flexDirection: "column",
         width: "100%",
         height: "100%",
+        padding: "16px",
+        boxSizing: "border-box",
         background: "#000",
       }}
     >
@@ -47,7 +49,6 @@ export const TerminalSlide = ({
           flexDirection: "column",
           flex: 1,
           gap: "4px",
-          padding: "0 16px 16px",
           minHeight: 0,
         }}
       >
