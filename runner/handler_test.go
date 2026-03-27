@@ -663,7 +663,8 @@ func TestHealth(t *testing.T) {
 }
 
 // TestExecuteCloudFrontViewerAddress verifies that when the CloudFront-Viewer-Address
-// header is present, handleExecute uses it as the remote IP in audit logs instead of c.ClientIP.
+// header is present, handleExecute uses the full ip:port value as the remote field
+// in audit logs to support client identification behind MAP-E or DS-Lite.
 func TestExecuteCloudFrontViewerAddress(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
@@ -693,45 +694,8 @@ func TestExecuteCloudFrontViewerAddress(t *testing.T) {
 	}
 
 	logOutput := buf.String()
-	if !strings.Contains(logOutput, "remote=203.0.113.50") {
-		t.Fatalf("expected audit log to contain remote=203.0.113.50, got:\n%s", logOutput)
-	}
-}
-
-// TestExecuteCloudFrontViewerAddressWithoutPort verifies that when the
-// CloudFront-Viewer-Address header contains only an IP without port,
-// it is used as-is for the remote field in audit logs.
-func TestExecuteCloudFrontViewerAddressWithoutPort(t *testing.T) {
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-	defer log.SetOutput(os.Stderr)
-
-	sm := NewSessionManager()
-	defer sm.CloseAll()
-	sm.newShell = func() (Shell, error) {
-		return &mockShell{exitCode: 0}, nil
-	}
-	handler := newHandler(sm, nil)
-
-	id, _, err := sm.Create()
-	if err != nil {
-		t.Fatalf("Create() error: %v", err)
-	}
-
-	body := strings.NewReader(`{"command":"ls"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/execute", body)
-	req.AddCookie(&http.Cookie{Name: "session_id", Value: id})
-	req.Header.Set("CloudFront-Viewer-Address", "203.0.113.99")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
-	}
-
-	logOutput := buf.String()
-	if !strings.Contains(logOutput, "remote=203.0.113.99") {
-		t.Fatalf("expected audit log to contain remote=203.0.113.99, got:\n%s", logOutput)
+	if !strings.Contains(logOutput, "remote=203.0.113.50:12345") {
+		t.Fatalf("expected audit log to contain remote=203.0.113.50:12345, got:\n%s", logOutput)
 	}
 }
 
