@@ -81,37 +81,17 @@ describe("usePresenter", () => {
   it("returns initial state", () => {
     const { result } = renderPresenter();
     expect(result.current.page).toBe(0);
-    expect(result.current.mode).toBe(ServerMessageType.SlideSync);
-    expect(result.current.instruction).toBe("");
-    expect(result.current.placeholder).toBe("");
+    expect(result.current.viewerCount).toBe(0);
     expect(result.current.viewerCount).toBe(0);
   });
 
-  it("updates page and sets mode to slide_sync on slide_sync message", () => {
+  it("updates page on slide_sync message", () => {
     const { result } = renderPresenter();
     simulateOpen();
     act(() => {
       simulateMessage(JSON.stringify({ type: ServerMessageType.SlideSync, page: 5 }));
     });
     expect(result.current.page).toBe(5);
-    expect(result.current.mode).toBe(ServerMessageType.SlideSync);
-  });
-
-  it("updates instruction, placeholder, and sets mode to hands_on on hands_on message", () => {
-    const { result } = renderPresenter();
-    simulateOpen();
-    act(() => {
-      simulateMessage(
-        JSON.stringify({
-          type: ServerMessageType.HandsOn,
-          instruction: "run echo",
-          placeholder: "$ echo hi",
-        }),
-      );
-    });
-    expect(result.current.mode).toBe(ServerMessageType.HandsOn);
-    expect(result.current.instruction).toBe("run echo");
-    expect(result.current.placeholder).toBe("$ echo hi");
   });
 
   it("updates viewerCount on viewer_count message", () => {
@@ -123,27 +103,6 @@ describe("usePresenter", () => {
     expect(result.current.viewerCount).toBe(42);
   });
 
-  it("switches from hands_on back to slide_sync on slide_sync", () => {
-    const { result } = renderPresenter();
-    simulateOpen();
-    act(() => {
-      simulateMessage(
-        JSON.stringify({
-          type: ServerMessageType.HandsOn,
-          instruction: "do something",
-          placeholder: "$ ...",
-        }),
-      );
-    });
-    expect(result.current.mode).toBe(ServerMessageType.HandsOn);
-
-    act(() => {
-      simulateMessage(JSON.stringify({ type: ServerMessageType.SlideSync, page: 3 }));
-    });
-    expect(result.current.mode).toBe(ServerMessageType.SlideSync);
-    expect(result.current.page).toBe(3);
-  });
-
   it("ignores unknown message types", () => {
     const { result } = renderPresenter();
     simulateOpen();
@@ -151,7 +110,6 @@ describe("usePresenter", () => {
       simulateMessage(JSON.stringify({ type: "unknown" }));
     });
     expect(result.current.page).toBe(0);
-    expect(result.current.mode).toBe(ServerMessageType.SlideSync);
   });
 
   it("ignores malformed JSON messages", () => {
@@ -181,33 +139,10 @@ describe("usePresenter", () => {
     ]);
   });
 
-  it("sends hands_on message via sendHandsOn", () => {
-    const { result } = renderPresenter();
-    simulateOpen();
-    act(() => {
-      result.current.sendHandsOn("try this", "$ try");
-    });
-    expect(latest().sent).toEqual([
-      JSON.stringify({ action: "message", type: "get_state" }),
-      JSON.stringify({
-        action: "message",
-        type: Action.HandsOn,
-        instruction: "try this",
-        placeholder: "$ try",
-      }),
-    ]);
-  });
-
   it("does not throw sendSlideSync after unmount", () => {
     const { result, unmount } = renderPresenter();
     unmount();
     expect(() => result.current.sendSlideSync(1)).not.toThrow();
-  });
-
-  it("does not throw sendHandsOn after unmount", () => {
-    const { result, unmount } = renderPresenter();
-    unmount();
-    expect(() => result.current.sendHandsOn("test", "ph")).not.toThrow();
   });
 
   it("closes WebSocket on unmount", () => {
@@ -391,7 +326,7 @@ describe("usePresenter", () => {
     });
   });
 
-  it("does not change mode on poll_state message", () => {
+  it("does not change page on poll_state message", () => {
     const { result } = renderPresenter();
     simulateOpen();
     act(() => {
@@ -406,7 +341,7 @@ describe("usePresenter", () => {
         }),
       );
     });
-    expect(result.current.mode).toBe(ServerMessageType.SlideSync);
+    expect(result.current.page).toBe(0);
   });
 
   it("updates pollStates votes and myChoices on poll_error message", () => {

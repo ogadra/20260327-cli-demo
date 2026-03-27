@@ -1,7 +1,6 @@
 /** Direction-independent action identifiers shared across presenter protocol and presenter-step modeling. */
 export const Action = {
   SlideSync: "slide_sync",
-  HandsOn: "hands_on",
   ViewerCount: "viewer_count",
   PollState: "poll_state",
   PollError: "poll_error",
@@ -15,7 +14,6 @@ export const Action = {
 /** Discriminant values for server-to-client presenter messages. */
 export const ServerMessageType = {
   SlideSync: Action.SlideSync,
-  HandsOn: Action.HandsOn,
   ViewerCount: Action.ViewerCount,
   PollState: Action.PollState,
   PollError: Action.PollError,
@@ -31,13 +29,6 @@ export const ClientMessageType = {
 
 /** Slide page synchronization payload shared by server messages and presenter steps. */
 export type SlideSyncPayload = { type: typeof Action.SlideSync; page: number };
-
-/** Hands-on mode payload shared by server messages and presenter steps. */
-export type HandsOnPayload = {
-  type: typeof Action.HandsOn;
-  instruction: string;
-  placeholder: string;
-};
 
 /** Viewer count notification payload. */
 export type ViewerCountPayload = { type: typeof Action.ViewerCount; count: number };
@@ -64,13 +55,9 @@ export type PollErrorPayload = {
 /** Discriminated union of all server-to-client presenter messages. */
 export type PresenterMessage =
   | SlideSyncPayload
-  | HandsOnPayload
   | ViewerCountPayload
   | PollStatePayload
   | PollErrorPayload;
-
-/** Display mode driven by the presenter. */
-export type PresenterMode = typeof Action.SlideSync | typeof Action.HandsOn;
 
 /** Check whether a value is a string. */
 const isString = (v: unknown): v is string => typeof v === "string";
@@ -93,10 +80,6 @@ const isVotesRecord = (v: unknown): v is Record<string, number> =>
 
 /** Validate that msg has the shape of a SlideSync payload. */
 const isSlideSyncPayload = (msg: Record<string, unknown>): boolean => isNumber(msg.page);
-
-/** Validate that msg has the shape of a HandsOn payload. */
-const isHandsOnPayload = (msg: Record<string, unknown>): boolean =>
-  isString(msg.instruction) && isString(msg.placeholder);
 
 /** Validate that msg has the shape of a ViewerCount payload. */
 const isViewerCountPayload = (msg: Record<string, unknown>): boolean => isNumber(msg.count);
@@ -131,15 +114,6 @@ export const parsePresenterMessage = (raw: string): PresenterMessage | null => {
     if (msg.type === ServerMessageType.SlideSync) {
       return isSlideSyncPayload(msg)
         ? { type: ServerMessageType.SlideSync, page: msg.page as number }
-        : null;
-    }
-    if (msg.type === ServerMessageType.HandsOn) {
-      return isHandsOnPayload(msg)
-        ? {
-            type: ServerMessageType.HandsOn,
-            instruction: msg.instruction as string,
-            placeholder: msg.placeholder as string,
-          }
         : null;
     }
     if (msg.type === ServerMessageType.ViewerCount) {

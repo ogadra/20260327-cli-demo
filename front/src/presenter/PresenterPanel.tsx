@@ -1,33 +1,19 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { Action } from "../api/presenter";
 import { defaultSequence, type PresenterStep } from "./sequence";
 
 /** Props for the PresenterPanel component. */
 export interface PresenterPanelProps {
   /** Sends a slide_sync message to synchronize viewers to a given page. */
   sendSlideSync: (page: number) => void;
-  /** Sends a hands_on message with instruction and placeholder text. */
-  sendHandsOn: (instruction: string, placeholder: string) => void;
   /** Number of currently connected viewers. */
   viewerCount: number;
 }
 
 /** Derives a human-readable description from a presenter step. */
-const describeStep = (step: PresenterStep): string => {
-  switch (step.type) {
-    case Action.SlideSync:
-      return `Slide ${step.page}`;
-    case Action.HandsOn:
-      return `Hands-on: ${step.instruction}`;
-  }
-};
+const describeStep = (step: PresenterStep): string => `Slide ${step.page}`;
 
 /** Presenter control panel that drives the presentation sequence via step navigation. */
-export const PresenterPanel = ({
-  sendSlideSync,
-  sendHandsOn,
-  viewerCount,
-}: PresenterPanelProps): ReactNode => {
+export const PresenterPanel = ({ sendSlideSync, viewerCount }: PresenterPanelProps): ReactNode => {
   const sequence = defaultSequence;
   const [stepIndex, setStepIndex] = useState(0);
   const lastExecutedRef = useRef<number | null>(null);
@@ -35,16 +21,9 @@ export const PresenterPanel = ({
   /** Executes the send function corresponding to a given step. */
   const executeStep = useCallback(
     (step: PresenterStep): void => {
-      switch (step.type) {
-        case Action.SlideSync:
-          sendSlideSync(step.page);
-          break;
-        case Action.HandsOn:
-          sendHandsOn(step.instruction, step.placeholder);
-          break;
-      }
+      sendSlideSync(step.page);
     },
-    [sendSlideSync, sendHandsOn],
+    [sendSlideSync],
   );
 
   /** Navigates to a specific step index. */

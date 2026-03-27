@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Action } from "../api/presenter";
-import { defaultPolls, defaultSequence, type PresenterStep } from "./sequence";
+import { defaultPolls, defaultSequence } from "./sequence";
 
 describe("defaultSequence", () => {
   /** Verify that the default sequence is a non-empty array. */
@@ -24,41 +24,12 @@ describe("defaultSequence", () => {
       { type: Action.SlideSync, page: 2 },
     ]);
   });
-});
 
-describe("PresenterStep discriminated union", () => {
-  /** Verify that a slide_sync step carries the page property. */
-  it("allows slide_sync with page", () => {
-    const step: PresenterStep = { type: Action.SlideSync, page: 3 };
-    expect(step.type).toBe(Action.SlideSync);
-    if (step.type === Action.SlideSync) {
-      expect(step.page).toBe(3);
+  /** Verify that all steps are slide_sync type. */
+  it("only contains slide_sync steps", () => {
+    for (const step of defaultSequence) {
+      expect(step.type).toBe(Action.SlideSync);
     }
-  });
-
-  /** Verify that a hands_on step carries instruction and placeholder properties. */
-  it("allows hands_on with instruction and placeholder", () => {
-    const step: PresenterStep = {
-      type: Action.HandsOn,
-      instruction: "Run the command",
-      placeholder: "echo hello",
-    };
-    expect(step.type).toBe(Action.HandsOn);
-    if (step.type === Action.HandsOn) {
-      expect(step.instruction).toBe("Run the command");
-      expect(step.placeholder).toBe("echo hello");
-    }
-  });
-
-  /** Verify that all step types are present in the expected order. */
-  it("collects expected ordered types", () => {
-    const steps: PresenterStep[] = [
-      { type: Action.SlideSync, page: 1 },
-      { type: Action.HandsOn, instruction: "do it", placeholder: "cmd" },
-    ];
-
-    const types = steps.map((s) => s.type);
-    expect(types).toEqual([Action.SlideSync, Action.HandsOn]);
   });
 });
 
