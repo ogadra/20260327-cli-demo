@@ -43,7 +43,7 @@ jobs:
         with:
           node-version: 24
       - name: Start services
-        run: docker compose --env-file .env.example --profile integration --profile front up -d --build
+        run: docker compose --env-file .env.example --profile integration --profile front up -d --build --scale integration-test=0
       - name: Install dependencies
         run: cd front && corepack enable && pnpm install --frozen-lockfile
       - name: Install Playwright
