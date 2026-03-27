@@ -53,8 +53,8 @@ describe("TerminalPane", () => {
     expect(mockWriteln).toHaveBeenCalledWith("\x1b[33mConnection failed. Retrying...\x1b[0m");
   });
 
-  it("writes prompt to terminal when status is ready", () => {
+  it("does not write prompt to terminal when status is ready since useExecute handles it", () => {
     renderPane("ready");
-    expect(mockWrite).toHaveBeenCalledWith("$ ");
+    expect(mockWrite).not.toHaveBeenCalledWith("$ ");
   });
 });

@@ -49,8 +49,8 @@ export const TerminalSlide = ({
           minHeight: 0,
         }}
       >
-        {commands.map((cmd) => (
-          <TerminalPane key={cmd} sessionStatus={sessionStatus} placeholder={cmd} />
+        {commands.map((cmd, index) => (
+          <TerminalPane key={`${index}-${cmd}`} sessionStatus={sessionStatus} placeholder={cmd} />
         ))}
       </div>
     </div>

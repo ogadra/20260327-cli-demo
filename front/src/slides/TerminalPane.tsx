@@ -27,8 +27,6 @@ export const TerminalPane = ({ sessionStatus, placeholder }: TerminalPaneProps):
       term.writeln("Connecting to runner...");
     } else if (sessionStatus === "retrying") {
       term.writeln("\x1b[33mConnection failed. Retrying...\x1b[0m");
-    } else if (sessionStatus === "ready") {
-      term.write("$ ");
     }
   }, [sessionStatus]);
 

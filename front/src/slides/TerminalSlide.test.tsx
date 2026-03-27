@@ -46,9 +46,8 @@ describe("TerminalSlide", () => {
     expect(mockWrite).not.toHaveBeenCalled();
   });
 
-  it("writes prompt to terminal when status is ready", () => {
+  it("does not write prompt from TerminalPane when status is ready since useExecute handles it", () => {
     renderSlide("ready");
-    expect(mockWrite).toHaveBeenCalledWith("$ ");
     expect(mockWriteln).not.toHaveBeenCalled();
   });
 
@@ -96,6 +95,6 @@ describe("TerminalSlide", () => {
     mockWriteln.mockClear();
 
     rerender(<TerminalSlide sessionStatus="ready" {...defaultProps} />);
-    expect(mockWrite).toHaveBeenCalledWith("$ ");
+    expect(mockWriteln).not.toHaveBeenCalled();
   });
 });
