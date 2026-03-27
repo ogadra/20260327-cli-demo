@@ -75,14 +75,14 @@ export const useExecute = (
   return { run, running };
 };
 
-/** Write an SSE event to the terminal, colouring stderr and non-zero exit codes red. */
+/** Write an SSE event to the terminal, colouring stderr gray and non-zero exit codes red. */
 const handleEvent = (event: SseEvent, terminalRef: RefObject<TerminalHandle | null>): void => {
   switch (event.type) {
     case SseEventType.STDOUT:
       terminalRef.current?.write(event.data);
       break;
     case SseEventType.STDERR:
-      terminalRef.current?.write(`\x1b[31m${event.data}\x1b[0m`);
+      terminalRef.current?.write(`\x1b[38;5;252m${event.data}\x1b[0m`);
       break;
     case SseEventType.COMPLETE:
       if (event.exitCode !== 0) {

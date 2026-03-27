@@ -26,8 +26,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
       - name: Run integration tests
-        run: docker compose --env-file .env.example --profile integration run --rm integration-test
+        run: docker compose --env-file .env.example --profile integration run --rm --build integration-test
       - name: Cleanup
         if: always()
         run: docker compose --env-file .env.example --profile integration down -v
@@ -37,6 +38,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: 24
@@ -48,20 +50,15 @@ jobs:
         run: cd front && pnpm exec playwright install --with-deps chromium
       - name: Wait for services
         run: |
-          echo "Waiting for frontend..."
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:5173 && break
-            sleep 2
-          done
-          echo "Waiting for backend (session creation via nginx)..."
           for i in $(seq 1 60); do
-            if curl -sf -X POST http://localhost:80/api/session -o /dev/null; then
-              echo "Backend ready"
+            if curl -sf http://localhost:5173 > /dev/null 2>&1 && \
+               curl -sf -X POST http://localhost:80/api/session -o /dev/null 2>&1; then
+              echo "All services ready"
               exit 0
             fi
             sleep 3
           done
-          echo "Backend not ready after 180s"
+          echo "Services did not become ready in time"
           docker compose --env-file .env.example --profile integration --profile front logs
           exit 1
       - name: Run Playwright integration tests

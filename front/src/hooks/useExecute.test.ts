@@ -59,7 +59,7 @@ describe("useExecute", () => {
     expect(write).toHaveBeenCalledWith("$ ");
   });
 
-  it("writes stderr in red", async () => {
+  it("writes stderr in gray", async () => {
     const { ref, write, writeln } = makeTerminalRef();
 
     async function* fakeExecute() {
@@ -74,7 +74,7 @@ describe("useExecute", () => {
       await result.current.run("bad");
     });
 
-    expect(write).toHaveBeenCalledWith("\x1b[31merr\n\x1b[0m");
+    expect(write).toHaveBeenCalledWith("\x1b[38;5;252merr\n\x1b[0m");
     expect(writeln).toHaveBeenCalledWith("\x1b[31mexit code: 1\x1b[0m");
     expect(write).toHaveBeenCalledWith("$ ");
   });

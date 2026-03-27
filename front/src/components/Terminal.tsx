@@ -50,7 +50,19 @@ const Terminal = forwardRef<TerminalHandle>((_, ref) => {
     };
   }, []);
 
-  return <div ref={containerRef} style={{ width: "100%", flexGrow: 1 }} />;
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        width: "100%",
+        flexGrow: 1,
+        border: "1px solid #444",
+        borderRadius: "4px",
+        overflow: "auto",
+        boxSizing: "border-box",
+      }}
+    />
+  );
 });
 
 Terminal.displayName = "Terminal";
