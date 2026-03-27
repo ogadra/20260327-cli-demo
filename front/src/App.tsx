@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef } from "react";
 import SlideView from "./components/SlideView";
-import { useSession } from "./hooks/useSession";
 import { usePresenter } from "./hooks/usePresenter";
 import { slides } from "./slides/index";
 
@@ -10,7 +9,6 @@ const wsUrl = (): string => location.origin.replace(/^http/, "ws") + "/ws";
 
 /** Root application component that renders all slides vertically and scrolls to the active page. */
 const App = (): ReactNode => {
-  useSession();
   const { page, viewerCount, pollStates, sendPollVote, sendPollUnvote, sendPollSwitch } =
     usePresenter(wsUrl());
 
