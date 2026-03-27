@@ -48,10 +48,21 @@ jobs:
         run: cd front && pnpm exec playwright install --with-deps chromium
       - name: Wait for services
         run: |
+          echo "Waiting for frontend..."
           for i in $(seq 1 30); do
-            curl -sf http://localhost:5173 && exit 0
+            curl -sf http://localhost:5173 && break
             sleep 2
           done
+          echo "Waiting for backend (session creation via nginx)..."
+          for i in $(seq 1 60); do
+            if curl -sf -X POST http://localhost:80/api/session -o /dev/null; then
+              echo "Backend ready"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Backend not ready after 180s"
+          docker compose --env-file .env.example --profile integration --profile front logs
           exit 1
       - name: Run Playwright integration tests
         run: cd front && pnpm exec playwright test --config playwright.integration.config.ts
