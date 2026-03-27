@@ -1,16 +1,19 @@
 import { expect, test } from "@playwright/test";
 import { Page } from "@playwright/test";
 
+/** CSS selector for the command input field used in Slide0. */
+const COMMAND_INPUT_SELECTOR = 'input[placeholder="echo hello"]';
+
 /** Wait for the command input to be enabled, indicating the session is ready. */
 async function waitForReady(page: Page): Promise<void> {
-  await expect(page.locator('input[placeholder="Enter command..."]')).toBeEnabled({
+  await expect(page.locator(COMMAND_INPUT_SELECTOR)).toBeEnabled({
     timeout: 30_000,
   });
 }
 
 /** Execute a command and wait for the input to be re-enabled after completion. */
 async function executeCommand(page: Page, command: string): Promise<void> {
-  const input = page.locator('input[placeholder="Enter command..."]');
+  const input = page.locator(COMMAND_INPUT_SELECTOR);
   await input.fill(command);
   await input.press("Enter");
   await expect(input).toBeEnabled({ timeout: 30_000 });
@@ -26,6 +29,19 @@ async function waitForTerminalChange(page: Page, previousText: string): Promise<
   const rows = page.locator(".xterm-rows");
   await expect(rows).not.toHaveText(previousText, { timeout: 10_000 });
   return (await rows.textContent()) ?? "";
+}
+
+/** Wait until the terminal contains at least the expected number of prompt markers. */
+async function waitForPromptCount(page: Page, count: number): Promise<string> {
+  const rows = page.locator(".xterm-rows");
+  await expect(rows).toContainText("$ ".repeat(1), { timeout: 10_000 });
+  let text = "";
+  for (let i = 0; i < 50; i++) {
+    text = (await rows.textContent()) ?? "";
+    if (text.split("$ ").length - 1 >= count) return text;
+    await page.waitForTimeout(200);
+  }
+  return text;
 }
 
 /** Mock the presenter WebSocket to immediately send a hands_on message so CommandInput renders. */
@@ -56,7 +72,8 @@ test.describe.serial("integration", () => {
   test("executes command and shows output", async () => {
     const before1 = await getTerminalText(sharedPage);
     await executeCommand(sharedPage, "pwd");
-    const text1 = await waitForTerminalChange(sharedPage, before1);
+    await waitForTerminalChange(sharedPage, before1);
+    const text1 = await waitForPromptCount(sharedPage, 2);
     expect(text1, "Expected pwd command to display current directory").toMatch(/\//);
 
     const prompts = text1.split("$ ").length - 1;
