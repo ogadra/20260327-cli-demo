@@ -13,7 +13,7 @@ export type PollOpenPayload = {
  * Discriminated union type representing a single display-mode step in the presentation sequence.
  * SlideSyncPayload and HandsOnPayload are shared with server-to-client message types.
  */
-export type PresenterStep = SlideSyncPayload | HandsOnPayload;
+export type PresenterStep = SlideSyncPayload | HandsOnPayload | PollOpenPayload;
 
 /** Generates the presentation sequence from slideData, inserting HandsOn steps after terminal slides. */
 export const buildSequence = (

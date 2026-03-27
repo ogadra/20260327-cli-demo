@@ -994,6 +994,168 @@ func TestHandle_PollSwitchInternalError(t *testing.T) {
 	}
 }
 
+// TestHandle_PollOpen はアンケート開始の正常処理を検証する。
+func TestHandle_PollOpen(t *testing.T) {
+	t.Parallel()
+	var broadcastCalled bool
+	h := newTestHandler(testHandlerOpts{
+		connGetter: &mockConnectionGetter{
+			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
+				return &connection.Connection{Role: "presenter"}, nil
+			},
+		},
+		pollGet: &mockPollGetter{
+			getFn: func(_ context.Context, pollID, _ string, options []string, maxChoices int, isPresenter bool) (*poll.PollState, error) {
+				if !isPresenter {
+					t.Error("expected isPresenter to be true")
+				}
+				if pollID != "q1" {
+					t.Errorf("expected pollID q1, got %s", pollID)
+				}
+				return defaultPollState(), nil
+			},
+		},
+		broadcaster: &mockMessageBroadcaster{
+			sendFn: func(_ context.Context, _ string, _ []byte, _ string) error {
+				broadcastCalled = true
+				return nil
+			},
+		},
+	})
+	req := newRequest("conn1", `{"type":"poll_open","pollId":"q1","options":["A","B"],"maxChoices":1}`)
+	resp, err := h.handle(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if !broadcastCalled {
+		t.Error("expected broadcast to be called")
+	}
+}
+
+// TestHandle_PollOpenMissingFields は poll_open の必須フィールド未指定時のエラーを検証する。
+func TestHandle_PollOpenMissingFields(t *testing.T) {
+	t.Parallel()
+	var sentPayload []byte
+	h := newTestHandler(testHandlerOpts{
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
+				sentPayload = payload
+				return nil
+			},
+		},
+	})
+	req := newRequest("conn1", `{"type":"poll_open","pollId":"q1"}`)
+	resp, err := h.handle(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if !strings.Contains(string(sentPayload), "required") {
+		t.Errorf("expected validation error, got %s", string(sentPayload))
+	}
+}
+
+// TestHandle_PollOpenNotPresenter はビューアーからの poll_open 拒否を検証する。
+func TestHandle_PollOpenNotPresenter(t *testing.T) {
+	t.Parallel()
+	var sentPayload []byte
+	h := newTestHandler(testHandlerOpts{
+		connGetter: &mockConnectionGetter{
+			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
+				return &connection.Connection{Role: "viewer"}, nil
+			},
+		},
+		singleSender: &mockSingleSender{
+			sendToOneFn: func(_ context.Context, _, _ string, payload []byte) error {
+				sentPayload = payload
+				return nil
+			},
+		},
+	})
+	req := newRequest("conn1", `{"type":"poll_open","pollId":"q1","options":["A","B"],"maxChoices":1}`)
+	resp, err := h.handle(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if !strings.Contains(string(sentPayload), "only presenter") {
+		t.Errorf("expected presenter-only error, got %s", string(sentPayload))
+	}
+}
+
+// TestHandle_PollOpenConnError は poll_open の接続情報取得エラーを検証する。
+func TestHandle_PollOpenConnError(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(testHandlerOpts{
+		connGetter: &mockConnectionGetter{
+			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
+				return nil, fmt.Errorf("conn error")
+			},
+		},
+	})
+	req := newRequest("conn1", `{"type":"poll_open","pollId":"q1","options":["A","B"],"maxChoices":1}`)
+	_, err := h.handle(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// TestHandle_PollOpenGetError は poll_open のアンケート初期化エラーを検証する。
+func TestHandle_PollOpenGetError(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(testHandlerOpts{
+		connGetter: &mockConnectionGetter{
+			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
+				return &connection.Connection{Role: "presenter"}, nil
+			},
+		},
+		pollGet: &mockPollGetter{
+			getFn: func(_ context.Context, _, _ string, _ []string, _ int, _ bool) (*poll.PollState, error) {
+				return nil, fmt.Errorf("init error")
+			},
+		},
+	})
+	req := newRequest("conn1", `{"type":"poll_open","pollId":"q1","options":["A","B"],"maxChoices":1}`)
+	_, err := h.handle(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// TestHandle_PollOpenBroadcastError は poll_open のブロードキャストエラーを検証する。
+func TestHandle_PollOpenBroadcastError(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(testHandlerOpts{
+		connGetter: &mockConnectionGetter{
+			getFn: func(_ context.Context, _, _ string) (*connection.Connection, error) {
+				return &connection.Connection{Role: "presenter"}, nil
+			},
+		},
+		pollGet: &mockPollGetter{
+			getFn: func(_ context.Context, _, _ string, _ []string, _ int, _ bool) (*poll.PollState, error) {
+				return defaultPollState(), nil
+			},
+		},
+		broadcaster: &mockMessageBroadcaster{
+			sendFn: func(_ context.Context, _ string, _ []byte, _ string) error {
+				return fmt.Errorf("broadcast error")
+			},
+		},
+	})
+	req := newRequest("conn1", `{"type":"poll_open","pollId":"q1","options":["A","B"],"maxChoices":1}`)
+	_, err := h.handle(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 // TestHandle_UnknownType は不明メッセージタイプ時のエラーレスポンスを検証する。
 func TestHandle_UnknownType(t *testing.T) {
 	t.Parallel()

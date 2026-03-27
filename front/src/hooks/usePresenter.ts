@@ -28,6 +28,7 @@ export interface UsePresenterResult {
   pollStates: Partial<Record<string, PollStateData>>;
   sendSlideSync: (page: number) => void;
   sendHandsOn: (instruction: string, placeholder: string) => void;
+  sendPollOpen: (pollId: string, options: string[], maxChoices: number) => void;
   sendPollGet: (pollId: string, options: string[], maxChoices: number) => void;
   sendPollVote: (pollId: string, choice: string) => void;
   sendPollUnvote: (pollId: string, choice: string) => void;
@@ -149,6 +150,22 @@ export const usePresenter = (
     );
   }, []);
 
+  /** Send a poll_open message to start a poll and broadcast it to all viewers. */
+  const sendPollOpen = useCallback(
+    (pollId: string, options: string[], maxChoices: number): void => {
+      wsRef.current?.send(
+        JSON.stringify({
+          action: "message",
+          type: ClientMessageType.PollOpen,
+          pollId,
+          options,
+          maxChoices,
+        }),
+      );
+    },
+    [],
+  );
+
   /** Send a poll_get message to initialize or retrieve a poll. */
   const sendPollGet = useCallback((pollId: string, options: string[], maxChoices: number): void => {
     wsRef.current?.send(
@@ -192,6 +209,7 @@ export const usePresenter = (
     pollStates,
     sendSlideSync,
     sendHandsOn,
+    sendPollOpen,
     sendPollGet,
     sendPollVote,
     sendPollUnvote,
