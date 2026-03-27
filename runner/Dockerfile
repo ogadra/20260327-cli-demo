@@ -61,7 +61,7 @@ RUN nix shell nixpkgs#gnused --command sh -c '\
     sed -i '\''s|LC_ALL = "ja_JP.UTF-8";|LC_ALL = "en_US.UTF-8";|g'\'' /root/.config/home-manager/home.nix && \
     home-manager switch'
 
-RUN nix build --impure --no-link --print-out-paths -f '<nixpkgs>' cowsay pokemonsay lolcat figlet > /tmp/prebuilt-tools-paths.txt
+RUN nix build --impure --no-link --print-out-paths -f '<nixpkgs>' fastfetch cowsay pokemonsay lolcat figlet > /tmp/prebuilt-tools-paths.txt
 
 RUN mkdir -p /app
 COPY ./app/ /app/
