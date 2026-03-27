@@ -22,21 +22,26 @@ async function executeCommand(page: Page, command: string): Promise<void> {
   await expect(input).toBeEnabled({ timeout: 30_000 });
 }
 
+/** Locate the .xterm-rows element scoped to the active terminal slide container. */
+function terminalRows(page: Page): ReturnType<Page["locator"]> {
+  return page.locator(COMMAND_INPUT_SELECTOR).locator("../..").locator(".xterm-rows").first();
+}
+
 /** Get the text content of the terminal output from xterm.js. */
 async function getTerminalText(page: Page): Promise<string> {
-  return (await page.locator(".xterm-rows").textContent()) ?? "";
+  return (await terminalRows(page).textContent()) ?? "";
 }
 
 /** Wait for the terminal text to change from the previously captured snapshot. */
 async function waitForTerminalChange(page: Page, previousText: string): Promise<string> {
-  const rows = page.locator(".xterm-rows");
+  const rows = terminalRows(page);
   await expect(rows).not.toHaveText(previousText, { timeout: 10_000 });
   return (await rows.textContent()) ?? "";
 }
 
 /** Wait until the terminal contains at least the expected number of prompt markers. */
 async function waitForPromptCount(page: Page, count: number): Promise<string> {
-  const rows = page.locator(".xterm-rows");
+  const rows = terminalRows(page);
   await expect(rows).toContainText("$ ", { timeout: 10_000 });
   let text = "";
   for (let i = 0; i < 50; i++) {
