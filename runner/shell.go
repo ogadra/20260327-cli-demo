@@ -260,7 +260,7 @@ func (s *bashShell) ExecuteStream(ctx context.Context, command string, stdoutCh 
 	s.stderrDone = make(chan struct{})
 	s.stderrMu.Unlock()
 
-	reloadEnv := `unset __HM_SESS_VARS_SOURCED; . "$HOME/.nix-profile/etc/profile.d/hm-session-vars.sh" 2>/dev/null`
+	reloadEnv := `unset __HM_SESS_VARS_SOURCED; . "$HOME/.nix-profile/etc/profile.d/hm-session-vars.sh" 2>/dev/null || true`
 	script := fmt.Sprintf("%s\n%s\n__ec=$?\n%s\nbuiltin echo '%s' >&2\nbuiltin echo ''\nbuiltin echo '%s'${__ec}\n", reloadEnv, command, reloadEnv, marker, marker)
 
 	if err := ctx.Err(); err != nil {

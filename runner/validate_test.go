@@ -27,6 +27,91 @@ func TestClassifyWhitelisted(t *testing.T) {
 	}
 }
 
+// TestClassifyExactWhitelisted verifies that exact command strings including arguments
+// are classified as "whitelisted".
+func TestClassifyExactWhitelisted(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		name string
+	}{
+		{"home-manager switch --rollback", "home-manager rollback"},
+		{"home-manager generations", "home-manager generations"},
+		{`nix develop --command sh -c "figlet 'Nix' | cowsay -n | lolcat -f"`, "nix develop figlet cowsay lolcat"},
+		{"  home-manager switch --rollback  ", "home-manager rollback with spaces"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := classifyCommand(tc.cmd)
+			if got != "whitelisted" {
+				t.Errorf("classifyCommand(%q) = %q, want %q", tc.cmd, got, "whitelisted")
+			}
+		})
+	}
+}
+
+// TestClassifyWhichWhitelisted verifies that which commands with safe arguments
+// are classified as "whitelisted".
+func TestClassifyWhichWhitelisted(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		name string
+	}{
+		{"which pokemonsay", "which pokemonsay"},
+		{"which ls", "which ls"},
+		{"  which cowsay  ", "which cowsay with spaces"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := classifyCommand(tc.cmd)
+			if got != "whitelisted" {
+				t.Errorf("classifyCommand(%q) = %q, want %q", tc.cmd, got, "whitelisted")
+			}
+		})
+	}
+}
+
+// TestClassifyWhichWithMetachars verifies that which commands containing
+// shell metacharacters are classified as "validated".
+func TestClassifyWhichWithMetachars(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		name string
+	}{
+		{"which foo; rm -rf /", "semicolon chaining"},
+		{"which foo && echo pwned", "ampersand chaining"},
+		{"which foo | cat", "pipe operator"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := classifyCommand(tc.cmd)
+			if got != "validated" {
+				t.Errorf("classifyCommand(%q) = %q, want %q", tc.cmd, got, "validated")
+			}
+		})
+	}
+}
+
+// TestClassifyExactWhitelistedVariation verifies that variations of exact whitelisted
+// commands with different arguments are classified as "validated".
+func TestClassifyExactWhitelistedVariation(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		name string
+	}{
+		{"home-manager switch", "home-manager switch without rollback"},
+		{"home-manager switch --rollback; rm -rf /", "rollback with chained command"},
+		{"home-manager generations --json", "generations with extra args"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := classifyCommand(tc.cmd)
+			if got != "validated" {
+				t.Errorf("classifyCommand(%q) = %q, want %q", tc.cmd, got, "validated")
+			}
+		})
+	}
+}
+
 // TestClassifyWhitelistedWithSurroundingSpaces verifies that leading and trailing
 // whitespace is ignored when matching whitelisted commands.
 func TestClassifyWhitelistedWithSurroundingSpaces(t *testing.T) {
@@ -107,6 +192,7 @@ func TestClassifyNixRunWhitelisted(t *testing.T) {
 		{"nix run nixpkgs#hello", "bare nix run nixpkgs"},
 		{"nix run nixpkgs#jq -- --help", "nix run with trailing args"},
 		{"  nix run nixpkgs#hello  ", "nix run with surrounding spaces"},
+		{"nix run nixpkgs#pokemonsay 'Nix'", "nix run pokemonsay with arg"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
