@@ -15,10 +15,17 @@ export type PollOpenPayload = {
  */
 export type PresenterStep = SlideSyncPayload | HandsOnPayload | PollOpenPayload;
 
-/** Generates the presentation sequence from slideData, inserting HandsOn steps after terminal slides. */
-export const buildSequence = (
-  data: ReadonlyArray<{ type: string; instruction?: string; commands?: string[] }>,
-): PresenterStep[] => {
+/** Input shape accepted by buildSequence covering terminal and poll slides. */
+type BuildSequenceInput = ReadonlyArray<{
+  type: string;
+  instruction?: string;
+  commands?: string[];
+  pollId?: string;
+  options?: string[];
+}>;
+
+/** Generates the presentation sequence from slideData, inserting HandsOn steps after terminal slides and PollOpen steps after poll slides. */
+export const buildSequence = (data: BuildSequenceInput): PresenterStep[] => {
   const steps: PresenterStep[] = [];
   for (let i = 0; i < data.length; i++) {
     steps.push({ type: Action.SlideSync, page: i });
@@ -30,12 +37,17 @@ export const buildSequence = (
         placeholder: (slide.commands ?? []).join("\n"),
       });
     }
+    if (slide.type === "poll" && slide.pollId && slide.options) {
+      steps.push({
+        type: Action.PollOpen,
+        pollId: slide.pollId,
+        options: slide.options,
+        maxChoices: 1,
+      });
+    }
   }
   return steps;
 };
 
 /** Default presentation sequence generated from slideData. */
 export const defaultSequence: PresenterStep[] = buildSequence(slideData);
-
-/** Default poll list reserved for future use. */
-export const defaultPolls: PollOpenPayload[] = [];
