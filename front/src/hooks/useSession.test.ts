@@ -12,6 +12,13 @@ import { createSession, deleteSession } from "../api/client";
 const mockCreateSession = vi.mocked(createSession);
 const mockDeleteSession = vi.mocked(deleteSession);
 
+/** Flush all pending microtasks so async effects settle. */
+const flushMicrotasks = async (): Promise<void> => {
+  await act(async () => {
+    await Promise.resolve();
+  });
+};
+
 beforeEach(() => {
   mockCreateSession.mockReset();
   mockDeleteSession.mockReset();
@@ -65,9 +72,8 @@ describe("useSession", () => {
 
     const { result } = renderHook(() => useSession());
 
-    await vi.waitFor(() => {
-      expect(result.current).toBe("retrying");
-    });
+    await flushMicrotasks();
+    expect(result.current).toBe("retrying");
     expect(mockCreateSession).toHaveBeenCalledOnce();
 
     await act(async () => {
@@ -88,9 +94,8 @@ describe("useSession", () => {
 
     renderHook(() => useSession());
 
-    await vi.waitFor(() => {
-      expect(mockCreateSession).toHaveBeenCalledOnce();
-    });
+    await flushMicrotasks();
+    expect(mockCreateSession).toHaveBeenCalledOnce();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);
@@ -185,9 +190,8 @@ describe("useSession", () => {
 
     const { unmount } = renderHook(() => useSession());
 
-    await vi.waitFor(() => {
-      expect(mockCreateSession).toHaveBeenCalledOnce();
-    });
+    await flushMicrotasks();
+    expect(mockCreateSession).toHaveBeenCalledOnce();
 
     unmount();
 
