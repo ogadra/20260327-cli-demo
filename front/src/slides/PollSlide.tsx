@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import PollView from "../components/PollView";
 import type { SlideProps } from "../components/SlideView";
+import { parseInline } from "./parseInline";
 
 /** Props for the PollSlide component. */
 interface PollSlideProps extends SlideProps {
@@ -46,7 +47,7 @@ export const PollSlide = ({
           marginBottom: "32px",
         }}
       >
-        {question}
+        {parseInline(question)}
       </div>
       <div style={{ width: "100%", maxWidth: "600px" }}>
         <PollView
