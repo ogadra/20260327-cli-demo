@@ -105,6 +105,7 @@ describe("execute", () => {
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: '{"command":"echo hello"}',
+      signal: undefined,
     });
   });
 
@@ -206,6 +207,39 @@ describe("execute", () => {
 
     expect(onReassigned).toHaveBeenCalledOnce();
     expect(events).toHaveLength(1);
+  });
+
+  it("forwards AbortSignal to fetch", async () => {
+    const chunks = ['data: {"type":"complete","exitCode":0}\n\n'];
+    const encoder = new TextEncoder();
+    const iterator = chunks[Symbol.iterator]();
+
+    const readable = new ReadableStream({
+      pull(controller) {
+        const { done, value } = iterator.next();
+        if (done) {
+          controller.close();
+        } else {
+          controller.enqueue(encoder.encode(value));
+        }
+      },
+    });
+
+    mockFetch.mockResolvedValue({ ok: true, headers: new Headers(), body: readable });
+
+    const controller = new AbortController();
+    const events = [];
+    for await (const event of execute("ls", undefined, controller.signal)) {
+      events.push(event);
+    }
+
+    expect(mockFetch).toHaveBeenCalledWith("/api/execute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: '{"command":"ls"}',
+      signal: controller.signal,
+    });
   });
 
   it("does not call onReassigned when header is absent", async () => {

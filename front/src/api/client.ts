@@ -41,16 +41,19 @@ export const deleteSession = (): void => {
  * The reader is automatically cancelled if the consumer exits early.
  * @param command - The shell command to execute.
  * @param onReassigned - Optional callback invoked when the session was reassigned due to a dead runner.
+ * @param signal - Optional AbortSignal to cancel the request and stream.
  */
 export async function* execute(
   command: string,
   onReassigned?: () => void,
+  signal?: AbortSignal,
 ): AsyncGenerator<SseEvent> {
   const res = await fetch("/api/execute", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({ command }),
+    signal,
   });
   if (!res.ok) throw new Error(`Failed to execute: ${res.status}`);
   if (!res.body) throw new Error("No response body");

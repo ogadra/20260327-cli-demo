@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { execute, SseEventType, type SseEvent } from "../api/client";
 import type { TerminalHandle } from "../components/Terminal";
 
@@ -22,10 +22,19 @@ export const useExecute = (
 ): UseExecuteResult => {
   const [running, setRunning] = useState(false);
   const runningRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const run = useCallback(
     async (command: string) => {
       if (!ready || runningRef.current) return;
+      const controller = new AbortController();
+      abortRef.current = controller;
       runningRef.current = true;
       setRunning(true);
 
@@ -37,13 +46,15 @@ export const useExecute = (
             "\x1b[33mSession was reassigned. Shell state has been reset.\x1b[0m",
           );
         };
-        for await (const event of execute(command, onReassigned)) {
+        for await (const event of execute(command, onReassigned, controller.signal)) {
           handleEvent(event, terminalRef);
         }
       } catch (error) {
+        if (controller.signal.aborted) return;
         const message = error instanceof Error ? error.message : "Unknown error";
         terminalRef.current?.writeln(`\x1b[31mError: ${message}\x1b[0m`);
       } finally {
+        if (abortRef.current === controller) abortRef.current = null;
         terminalRef.current?.write("$ ");
         runningRef.current = false;
         setRunning(false);
