@@ -28,6 +28,19 @@ async function waitForTerminalChange(page: Page, previousText: string): Promise<
   return (await rows.textContent()) ?? "";
 }
 
+/** Wait until the terminal contains at least the expected number of prompt markers. */
+async function waitForPromptCount(page: Page, count: number): Promise<string> {
+  const rows = page.locator(".xterm-rows");
+  await expect(rows).toContainText("$ ".repeat(1), { timeout: 10_000 });
+  let text = "";
+  for (let i = 0; i < 50; i++) {
+    text = (await rows.textContent()) ?? "";
+    if (text.split("$ ").length - 1 >= count) return text;
+    await page.waitForTimeout(200);
+  }
+  return text;
+}
+
 /** Mock the presenter WebSocket to immediately send a hands_on message so CommandInput renders. */
 async function mockPresenterWs(page: Page): Promise<void> {
   await page.routeWebSocket(/\/ws$/, (ws) => {
@@ -56,7 +69,8 @@ test.describe.serial("integration", () => {
   test("executes command and shows output", async () => {
     const before1 = await getTerminalText(sharedPage);
     await executeCommand(sharedPage, "pwd");
-    const text1 = await waitForTerminalChange(sharedPage, before1);
+    await waitForTerminalChange(sharedPage, before1);
+    const text1 = await waitForPromptCount(sharedPage, 2);
     expect(text1, "Expected pwd command to display current directory").toMatch(/\//);
 
     const prompts = text1.split("$ ").length - 1;
