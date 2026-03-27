@@ -3,14 +3,14 @@ import { Page } from "@playwright/test";
 
 /** Wait for the command input to be enabled, indicating the session is ready. */
 async function waitForReady(page: Page): Promise<void> {
-  await expect(page.locator('input[placeholder="Enter command..."]')).toBeEnabled({
+  await expect(page.locator('input[placeholder="echo hello"]')).toBeEnabled({
     timeout: 30_000,
   });
 }
 
 /** Execute a command and wait for the input to be re-enabled after completion. */
 async function executeCommand(page: Page, command: string): Promise<void> {
-  const input = page.locator('input[placeholder="Enter command..."]');
+  const input = page.locator('input[placeholder="echo hello"]');
   await input.fill(command);
   await input.press("Enter");
   await expect(input).toBeEnabled({ timeout: 30_000 });
