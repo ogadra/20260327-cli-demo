@@ -46,9 +46,8 @@ describe("TerminalSlide", () => {
     expect(mockWrite).not.toHaveBeenCalled();
   });
 
-  it("writes prompt to terminal when status is ready", () => {
+  it("does not write prompt from TerminalPane when status is ready since useExecute handles it", () => {
     renderSlide("ready");
-    expect(mockWrite).toHaveBeenCalledWith("$ ");
     expect(mockWriteln).not.toHaveBeenCalled();
   });
 
@@ -57,16 +56,29 @@ describe("TerminalSlide", () => {
     expect(screen.getByText("Try a command")).toBeDefined();
   });
 
-  it("disables command input when not ready", () => {
-    renderSlide("loading");
-    const input = screen.getByPlaceholderText("echo hello");
-    expect(input).toBeDisabled();
+  it("does not render instruction when empty string", () => {
+    render(<TerminalSlide sessionStatus="loading" instruction="" commands={["echo hi"]} />);
+    expect(screen.queryByText("Try a command")).toBeNull();
   });
 
-  it("enables command input when ready", () => {
+  it("renders one terminal pane for single command", () => {
     renderSlide("ready");
-    const input = screen.getByPlaceholderText("echo hello");
-    expect(input).not.toBeDisabled();
+    const buttons = screen.getAllByRole("button", { name: "Run" });
+    expect(buttons).toHaveLength(1);
+  });
+
+  it("renders multiple terminal panes for multiple commands", () => {
+    render(
+      <TerminalSlide sessionStatus="ready" instruction="" commands={["date", "whoami", "ls"]} />,
+    );
+    const buttons = screen.getAllByRole("button", { name: "Run" });
+    expect(buttons).toHaveLength(3);
+  });
+
+  it("shows correct placeholders for each command", () => {
+    render(<TerminalSlide sessionStatus="ready" instruction="" commands={["date", "whoami"]} />);
+    expect(screen.getByPlaceholderText("date")).toBeDefined();
+    expect(screen.getByPlaceholderText("whoami")).toBeDefined();
   });
 
   it("updates terminal message when status transitions", () => {
@@ -83,6 +95,6 @@ describe("TerminalSlide", () => {
     mockWriteln.mockClear();
 
     rerender(<TerminalSlide sessionStatus="ready" {...defaultProps} />);
-    expect(mockWrite).toHaveBeenCalledWith("$ ");
+    expect(mockWriteln).not.toHaveBeenCalled();
   });
 });

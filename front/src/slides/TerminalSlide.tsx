@@ -1,44 +1,23 @@
 import type { ReactNode } from "react";
-import { useEffect, useRef } from "react";
-import Terminal, { type TerminalHandle } from "../components/Terminal";
-import CommandInput from "../components/CommandInput";
-import { useExecute } from "../hooks/useExecute";
 import type { SessionStatus } from "../hooks/useSession";
+import { TerminalPane } from "./TerminalPane";
 
 /** Props for the TerminalSlide component. */
 interface TerminalSlideProps {
   /** Current session connection status. */
   sessionStatus: SessionStatus;
-  /** Instructional text displayed above the terminal. */
+  /** Instructional text displayed above the terminals. */
   instruction: string;
-  /** Commands shown as placeholder hints in the input field. */
+  /** Commands shown as placeholder hints, one per terminal pane. */
   commands: string[];
 }
 
-/** Slide component with an embedded terminal and command input. */
+/** Slide component with one or more terminal panes arranged side by side. */
 export const TerminalSlide = ({
   sessionStatus,
   instruction,
   commands,
 }: TerminalSlideProps): ReactNode => {
-  const ready = sessionStatus === "ready";
-  const terminalRef = useRef<TerminalHandle>(null);
-  const { run, running } = useExecute(ready, terminalRef);
-  const placeholder = commands[0] ?? "";
-
-  /** Write session status messages to the terminal. */
-  useEffect(() => {
-    const term = terminalRef.current;
-    if (!term) return;
-    if (sessionStatus === "loading") {
-      term.writeln("Connecting to runner...");
-    } else if (sessionStatus === "retrying") {
-      term.writeln("\x1b[33mConnection failed. Retrying...\x1b[0m");
-    } else if (sessionStatus === "ready") {
-      term.write("$ ");
-    }
-  }, [sessionStatus]);
-
   return (
     <div
       style={{
@@ -62,8 +41,18 @@ export const TerminalSlide = ({
           {instruction}
         </div>
       )}
-      <CommandInput onSubmit={run} disabled={!ready || running} placeholder={placeholder} />
-      <Terminal ref={terminalRef} />
+      <div
+        style={{
+          display: "flex",
+          flex: 1,
+          gap: "4px",
+          minHeight: 0,
+        }}
+      >
+        {commands.map((cmd, index) => (
+          <TerminalPane key={`${index}-${cmd}`} sessionStatus={sessionStatus} placeholder={cmd} />
+        ))}
+      </div>
     </div>
   );
 };
