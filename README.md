@@ -32,15 +32,28 @@ docker compose --profile broker --profile runner --profile nginx --profile front
 
 | サービス | ポート | 説明 |
 |---------|--------|------|
-| front | 5173 | Vite dev server |
-| nginx | 80 | リバースプロキシ |
-| broker | 8080 | 制御プレーン (DynamoDB) |
-| runner | 3000 | コマンド実行サーバー |
+| front | 5173 | Vite dev server (React + TypeScript) |
+| nginx | 8080 | リバースプロキシ |
+| broker | 8080 | 制御プレーン |
+| runner | 3000 | コマンド実行サーバ |
 | presenter | — | スライド同期・アンケート (AWS Lambda + API Gateway WebSocket) |
+| dynamodb-local | 8000 | ローカル開発用 DynamoDB |
+
+## アーキテクチャ
+
+```
+Client → CloudFront/ALB → NGINX → Runner
+                            ↓ (auth_request /_resolve)
+                          Broker ←→ DynamoDB
+```
+
+1. NGINX が `auth_request` で Broker に問い合わせ、セッションに対応する Runner を解決
+2. Broker はアイドル状態の Runner を割り当て、`runner_id` cookie を発行
+3. NGINX はリクエストを対応する Runner にプロキシ
 
 ## API
 
-### NGINX 経由
+### Runner
 
 | メソッド | パス | 説明 |
 |---------|------|------|
@@ -56,6 +69,7 @@ SSE イベント種別: `stdout` (リアルタイム), `stderr` (完了時), `co
 
 | メソッド | パス | 説明 |
 |---------|------|------|
+| GET | `/health` | ヘルスチェック |
 | GET | `/resolve` | セッション解決 or 新規作成 |
 | DELETE | `/sessions/{sessionId}` | セッション終了 |
 | POST | `/internal/runners/register` | Runner 登録 |
@@ -73,8 +87,10 @@ API Gateway WebSocket 経由で front と通信する。
 | S→C | `poll_state` | アンケート状態（選択肢・投票数・自分の選択） |
 | S→C | `poll_error` | アンケート操作エラー |
 | C→S | `slide_sync` | スライドページ送信（presenter ロール） |
+| C→S | `get_state` | 現在のスライド位置取得 |
 | C→S | `viewer_count` | 視聴者数取得 |
-| C→S | `poll_get` | アンケート取得・初期化 |
+| C→S | `poll_open` | アンケート開始（presenter ロール） |
+| C→S | `poll_get` | アンケート取得 |
 | C→S | `poll_vote` | 投票 |
 | C→S | `poll_unvote` | 投票取消 |
 | C→S | `poll_switch` | 投票変更 |
