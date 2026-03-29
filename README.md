@@ -41,7 +41,7 @@ docker compose --profile broker --profile runner --profile nginx --profile front
 
 ## アーキテクチャ
 
-```
+```text
 Client → CloudFront/ALB → NGINX → Runner
                             ↓ (auth_request /_resolve)
                           Broker ←→ DynamoDB
@@ -57,6 +57,7 @@ Client → CloudFront/ALB → NGINX → Runner
 
 | メソッド | パス | 説明 |
 |---------|------|------|
+| GET | `/health` | ヘルスチェック |
 | POST | `/api/session` | bash セッション作成。`session_id` cookie を返す |
 | DELETE | `/api/session` | bash セッション削除 |
 | POST | `/api/execute` | コマンド実行 (SSE ストリーム)。`{"command": "..."}` |
