@@ -1,39 +1,45 @@
 import { expect, test } from "@playwright/test";
 import { Page } from "@playwright/test";
 
-/** CSS selector for the command input field used in Slide0. */
-const COMMAND_INPUT_SELECTOR = 'input[placeholder="echo hello"]';
+/** Index of the first terminal slide in slideData. */
+const TERMINAL_SLIDE_PAGE = 26;
+
+/** CSS selector for the command input field in the terminal slide. */
+const COMMAND_INPUT_SELECTOR = 'input[placeholder="date"]';
+
+/** Get the locator for the terminal slide section. */
+const terminalSection = (page: Page): ReturnType<Page["locator"]> =>
+  page.locator(`div[role="region"]`).nth(TERMINAL_SLIDE_PAGE);
 
 /** Wait for the command input to be enabled, indicating the session is ready. */
-async function waitForReady(page: Page): Promise<void> {
-  await expect(page.locator(COMMAND_INPUT_SELECTOR)).toBeEnabled({
+const waitForReady = async (page: Page): Promise<void> => {
+  await expect(terminalSection(page).locator(COMMAND_INPUT_SELECTOR)).toBeEnabled({
     timeout: 30_000,
   });
-}
+};
 
 /** Execute a command and wait for the input to be re-enabled after completion. */
-async function executeCommand(page: Page, command: string): Promise<void> {
-  const input = page.locator(COMMAND_INPUT_SELECTOR);
+const executeCommand = async (page: Page, command: string): Promise<void> => {
+  const input = terminalSection(page).locator(COMMAND_INPUT_SELECTOR);
   await input.fill(command);
   await input.press("Enter");
   await expect(input).toBeEnabled({ timeout: 30_000 });
-}
+};
 
 /** Get the text content of the terminal output from xterm.js. */
-async function getTerminalText(page: Page): Promise<string> {
-  return (await page.locator(".xterm-rows").textContent()) ?? "";
-}
+const getTerminalText = async (page: Page): Promise<string> =>
+  (await terminalSection(page).locator(".xterm-rows").textContent()) ?? "";
 
 /** Wait for the terminal text to change from the previously captured snapshot. */
-async function waitForTerminalChange(page: Page, previousText: string): Promise<string> {
-  const rows = page.locator(".xterm-rows");
+const waitForTerminalChange = async (page: Page, previousText: string): Promise<string> => {
+  const rows = terminalSection(page).locator(".xterm-rows");
   await expect(rows).not.toHaveText(previousText, { timeout: 10_000 });
   return (await rows.textContent()) ?? "";
-}
+};
 
 /** Wait until the terminal contains at least the expected number of prompt markers. */
-async function waitForPromptCount(page: Page, count: number): Promise<string> {
-  const rows = page.locator(".xterm-rows");
+const waitForPromptCount = async (page: Page, count: number): Promise<string> => {
+  const rows = terminalSection(page).locator(".xterm-rows");
   await expect(rows).toContainText("$ ", { timeout: 10_000 });
   let text = "";
   for (let i = 0; i < 50; i++) {
@@ -42,17 +48,17 @@ async function waitForPromptCount(page: Page, count: number): Promise<string> {
     await page.waitForTimeout(200);
   }
   return text;
-}
+};
 
-/** Mock the presenter WebSocket to immediately send a hands_on message so CommandInput renders. */
-async function mockPresenterWs(page: Page): Promise<void> {
+/** Mock the presenter WebSocket to navigate to the first terminal slide so CommandInput renders. */
+const mockPresenterWs = async (page: Page): Promise<void> => {
   await page.routeWebSocket(/\/ws$/, (ws) => {
     ws.onMessage(() => {
       /* ignore outgoing messages */
     });
-    ws.send(JSON.stringify({ type: "hands_on", instruction: "", placeholder: "" }));
+    ws.send(JSON.stringify({ type: "slide_sync", page: TERMINAL_SLIDE_PAGE }));
   });
-}
+};
 
 test.describe.serial("integration", () => {
   let sharedPage: Page;
