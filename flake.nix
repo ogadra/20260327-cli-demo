@@ -28,6 +28,8 @@
           terraform
           tflint
           trivy
+          graphviz
+          uv
         ];
       };
     };

@@ -41,11 +41,7 @@ docker compose --profile broker --profile runner --profile nginx --profile front
 
 ## アーキテクチャ
 
-```text
-Client → CloudFront/ALB → NGINX → Runner
-                            ↓ (auth_request /_resolve)
-                          Broker ←→ DynamoDB
-```
+![AWS Architecture](docs/bunshin_architecture.png)
 
 1. NGINX が `auth_request` で Broker に問い合わせ、セッションに対応する Runner を解決
 2. Broker はアイドル状態の Runner を割り当て、`runner_id` cookie を発行
