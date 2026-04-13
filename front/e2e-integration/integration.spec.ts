@@ -1,8 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { Page } from "@playwright/test";
 
-/** CSS selector for the command input field used in Slide0. */
-const COMMAND_INPUT_SELECTOR = 'input[placeholder="echo hello"]';
+/** Index of the first terminal slide in slideData. */
+const TERMINAL_SLIDE_PAGE = 26;
+
+/** CSS selector for the command input field on terminal slides. */
+const COMMAND_INPUT_SELECTOR = 'input[placeholder="date"]';
 
 /** Wait for the command input to be enabled, indicating the session is ready. */
 async function waitForReady(page: Page): Promise<void> {
@@ -19,21 +22,26 @@ async function executeCommand(page: Page, command: string): Promise<void> {
   await expect(input).toBeEnabled({ timeout: 30_000 });
 }
 
+/** Locate the .xterm-rows element scoped to the active terminal slide container. */
+function terminalRows(page: Page): ReturnType<Page["locator"]> {
+  return page.locator(COMMAND_INPUT_SELECTOR).locator("../..").locator(".xterm-rows").first();
+}
+
 /** Get the text content of the terminal output from xterm.js. */
 async function getTerminalText(page: Page): Promise<string> {
-  return (await page.locator(".xterm-rows").textContent()) ?? "";
+  return (await terminalRows(page).textContent()) ?? "";
 }
 
 /** Wait for the terminal text to change from the previously captured snapshot. */
 async function waitForTerminalChange(page: Page, previousText: string): Promise<string> {
-  const rows = page.locator(".xterm-rows");
+  const rows = terminalRows(page);
   await expect(rows).not.toHaveText(previousText, { timeout: 10_000 });
   return (await rows.textContent()) ?? "";
 }
 
 /** Wait until the terminal contains at least the expected number of prompt markers. */
 async function waitForPromptCount(page: Page, count: number): Promise<string> {
-  const rows = page.locator(".xterm-rows");
+  const rows = terminalRows(page);
   await expect(rows).toContainText("$ ", { timeout: 10_000 });
   let text = "";
   for (let i = 0; i < 50; i++) {
@@ -44,13 +52,13 @@ async function waitForPromptCount(page: Page, count: number): Promise<string> {
   return text;
 }
 
-/** Mock the presenter WebSocket to immediately send a hands_on message so CommandInput renders. */
+/** Mock the presenter WebSocket to navigate to the first terminal slide so CommandInput renders. */
 async function mockPresenterWs(page: Page): Promise<void> {
   await page.routeWebSocket(/\/ws$/, (ws) => {
     ws.onMessage(() => {
       /* ignore outgoing messages */
     });
-    ws.send(JSON.stringify({ type: "hands_on", instruction: "", placeholder: "" }));
+    ws.send(JSON.stringify({ type: "slide_sync", page: TERMINAL_SLIDE_PAGE }));
   });
 }
 
