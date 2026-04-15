@@ -5,6 +5,9 @@ import { slideData } from "../src/slides/slideData";
 
 /** Index of the first terminal slide in slideData, derived at build time. */
 const TERMINAL_SLIDE_PAGE = slideData.findIndex((s) => s.type === "terminal");
+if (TERMINAL_SLIDE_PAGE === -1) {
+  throw new Error("No terminal slide found in slideData");
+}
 
 /** CSS selector for the command input field in the terminal slide. */
 const COMMAND_INPUT_SELECTOR = 'input[placeholder="date"]';

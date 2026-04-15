@@ -31,10 +31,8 @@ broker_ready() {
 }
 
 runners_ready() {
-  local logs count
-  logs=$(docker compose --env-file .env.example --profile integration logs runner-1 runner-2 2>/dev/null)
-  count=$(echo "$logs" | grep -c "server listening on" || true)
-  [ "$count" -ge 2 ]
+  docker compose --env-file .env.example --profile integration logs runner-1 2>/dev/null | grep -q "server listening on" &&
+    docker compose --env-file .env.example --profile integration logs runner-2 2>/dev/null | grep -q "server listening on"
 }
 
 frontend_ready() {
