@@ -85,9 +85,6 @@ services:
         - type=gha,scope=runner,mode=max
     env_file:
       - runner/.env.example
-    depends_on:
-      broker:
-        condition: service_healthy
     profiles:
       - runner
       - integration
@@ -99,9 +96,6 @@ services:
         - type=gha,scope=runner
     env_file:
       - runner/.env.example
-    depends_on:
-      broker:
-        condition: service_healthy
     profiles:
       - integration
 

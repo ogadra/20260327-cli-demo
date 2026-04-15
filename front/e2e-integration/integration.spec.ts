@@ -1,8 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { Page } from "@playwright/test";
 
-/** Index of the first terminal slide in slideData. */
-const TERMINAL_SLIDE_PAGE = 26;
+import { slideData } from "../src/slides/slideData";
+
+/** Index of the first terminal slide in slideData, derived at build time. */
+const TERMINAL_SLIDE_PAGE = slideData.findIndex((s) => s.type === "terminal");
 
 /** CSS selector for the command input field in the terminal slide. */
 const COMMAND_INPUT_SELECTOR = 'input[placeholder="date"]';
