@@ -9,6 +9,9 @@ services:
         - type=gha,scope=nginx
       cache_to:
         - type=gha,scope=nginx,mode=max
+    depends_on:
+      broker:
+        condition: service_healthy
     profiles:
       - nginx
       - integration
@@ -26,6 +29,11 @@ services:
       - "${BROKER_PORT}:8080"
     env_file:
       - broker/.env.example
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080'"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     depends_on:
       dynamodb-init:
         condition: service_completed_successfully
@@ -129,9 +137,13 @@ services:
       NGINX_URL: "http://nginx:8080"
       BROKER_URL: "http://broker:8080"
     depends_on:
-      - nginx
-      - broker
-      - runner-1
-      - runner-2
+      nginx:
+        condition: service_started
+      broker:
+        condition: service_healthy
+      runner-1:
+        condition: service_started
+      runner-2:
+        condition: service_started
     profiles:
       - integration

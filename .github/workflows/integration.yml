@@ -49,18 +49,7 @@ jobs:
       - name: Install Playwright
         run: cd front && pnpm exec playwright install --with-deps chromium
       - name: Wait for services
-        run: |
-          for i in $(seq 1 60); do
-            if curl -sf http://localhost:5173 > /dev/null 2>&1 && \
-               curl -sf -X POST http://localhost:80/api/session -o /dev/null 2>&1; then
-              echo "All services ready"
-              exit 0
-            fi
-            sleep 3
-          done
-          echo "Services did not become ready in time"
-          docker compose --env-file .env.example --profile integration --profile front logs
-          exit 1
+        run: .github/scripts/wait-for-services.sh
       - name: Run Playwright integration tests
         run: cd front && pnpm exec playwright test --config playwright.integration.config.ts
       - name: Cleanup
