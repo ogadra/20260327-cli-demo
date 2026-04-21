@@ -15,17 +15,6 @@ locals {
     ManagedBy = "terraform"
   }
 
-  presenter_ws_handlers = {
-    connect    = { route_key = "$connect" }
-    disconnect = { route_key = "$disconnect" }
-    message    = { route_key = "$default" }
-  }
-
-  presenter_cf_origin_id = {
-    login     = "presenter-login-api"
-    websocket = "presenter-websocket-api"
-  }
-
   # Destination regions for APAC cross-region inference profile from ap-northeast-1
   apac_cris_destination_regions = [
     "ap-northeast-1",

@@ -24,7 +24,7 @@ locals {
 
 # IAM roles for GitHub Actions deployment workflows per service
 resource "aws_iam_role" "github_actions_deploy" {
-  for_each = toset(concat(tolist(local.ecs_deploy_services), ["front", "presenter"]))
+  for_each = local.ecs_deploy_services
 
   name = "bunshin-deploy-${each.key}"
 
@@ -102,59 +102,4 @@ resource "aws_iam_role_policy" "deploy_ecs" {
       Resource = local.ecs_service_ids[each.key]
     }]
   })
-}
-
-# S3 permissions for front deployment
-data "aws_iam_policy_document" "deploy_front_s3" {
-  statement {
-    effect    = "Allow"
-    actions   = ["s3:ListBucket"]
-    resources = [aws_s3_bucket.front.arn]
-  }
-  statement {
-    effect = "Allow"
-    actions = [
-      "s3:PutObject",
-      "s3:DeleteObject",
-    ]
-    resources = ["${aws_s3_bucket.front.arn}/*"]
-  }
-}
-
-resource "aws_iam_role_policy" "deploy_front_s3" {
-  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
-  name   = "bunshin-deploy-front-s3"
-  role   = aws_iam_role.github_actions_deploy["front"].id
-  policy = data.aws_iam_policy_document.deploy_front_s3.json
-}
-
-# Lambda update and S3 upload permissions for presenter deployment
-data "aws_iam_policy_document" "deploy_presenter" {
-  statement {
-    effect = "Allow"
-    actions = [
-      "lambda:UpdateFunctionCode",
-      "lambda:GetFunction",
-      "lambda:GetFunctionConfiguration",
-    ]
-    resources = concat(
-      [for k in keys(local.presenter_ws_handlers) : aws_lambda_function.presenter_ws[k].arn],
-      [aws_lambda_function.presenter_login.arn],
-    )
-  }
-
-  statement {
-    effect = "Allow"
-    actions = [
-      "s3:PutObject",
-    ]
-    resources = ["${aws_s3_bucket.presenter_lambda.arn}/*"]
-  }
-}
-
-resource "aws_iam_role_policy" "deploy_presenter" {
-  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
-  name   = "bunshin-deploy-presenter"
-  role   = aws_iam_role.github_actions_deploy["presenter"].id
-  policy = data.aws_iam_policy_document.deploy_presenter.json
 }
