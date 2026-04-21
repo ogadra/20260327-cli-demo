@@ -13,20 +13,31 @@ resource "aws_security_group" "alb" {
   }
 }
 
-# ALB inbound: HTTP from CloudFront prefix list
-data "aws_ec2_managed_prefix_list" "cloudfront" {
-  name = "com.amazonaws.global.cloudfront.origin-facing"
+# ALB inbound: HTTPS from internet, access controlled by WAF
+# trivy:ignore:AVD-AWS-0107 -- ALB is internet-facing, WAF restricts access via header validation
+resource "aws_security_group_rule" "alb_ingress_https" {
+  # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
+  type              = "ingress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.alb.id
+  description       = "HTTPS from internet, WAF controlled"
 }
 
-resource "aws_security_group_rule" "alb_ingress_cloudfront" {
+# ALB inbound: HTTP from internet for HTTPS redirect
+# trivy:ignore:AVD-AWS-0107 -- HTTP listener redirects to HTTPS
+resource "aws_security_group_rule" "alb_ingress_http" {
   # checkov:skip=CKV_BUNSHIN_1:Resource does not support tags
+  # checkov:skip=CKV_AWS_260:HTTP port 80 is used for HTTPS redirect only
   type              = "ingress"
   from_port         = 80
   to_port           = 80
   protocol          = "tcp"
-  prefix_list_ids   = [data.aws_ec2_managed_prefix_list.cloudfront.id]
+  cidr_blocks       = ["0.0.0.0/0"]
   security_group_id = aws_security_group.alb.id
-  description       = "HTTP from CloudFront"
+  description       = "HTTP from internet for HTTPS redirect"
 }
 
 # ALB outbound: to nginx

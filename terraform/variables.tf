@@ -1,16 +1,17 @@
 variable "domain_name" {
-  description = "Custom domain name for CloudFront distribution"
-  type        = string
-}
-
-variable "acm_certificate_arn" {
-  description = "ARN of ACM certificate in us-east-1 for custom domain"
+  description = "Domain name for ALB ACM certificate lookup"
   type        = string
 }
 
 variable "aws_profile" {
   description = "AWS CLI profile name for the target account"
   type        = string
+}
+
+variable "proxy_secret" {
+  description = "Secret header value for Cloudflare Workers proxy verification via WAF"
+  type        = string
+  sensitive   = true
 }
 
 variable "runner_desired_count" {
