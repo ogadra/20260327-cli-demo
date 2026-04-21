@@ -33,7 +33,7 @@ var registerFn = register
 var deregisterFn = deregister
 
 // defaultModelID is the Bedrock model used when BEDROCK_MODEL_ID is not set.
-const defaultModelID = "apac.anthropic.claude-sonnet-4-20250514-v1:0"
+const defaultModelID = "jp.anthropic.claude-sonnet-4-6"
 
 // newValidatorFn creates a Validator for LLM command safety checks.
 // It defaults to newBedrockValidatorFromEnv and can be replaced in tests.
