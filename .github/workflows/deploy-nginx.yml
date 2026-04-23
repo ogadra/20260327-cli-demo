@@ -28,7 +28,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.DEPLOY_NGINX_ROLE_ARN }}
           aws-region: ap-northeast-1
-      - uses: aws-actions/amazon-ecr-login@183a1442edf41672e66566b7fc560e297a290896 # v2.1.1
+      - uses: aws-actions/amazon-ecr-login@19d944daaa35f0fa1d3f7f8af1d3f2e5de25c5b7 # v2.1.4
         id: ecr-login
       - name: Build and push image
         env:
