@@ -25,7 +25,7 @@ FROM build AS binary
 RUN CGO_ENABLED=0 go build -o /server .
 
 # production image
-FROM nixos/nix:2.34.6
+FROM nixos/nix:2.34.7
 
 ENV PATH="/usr/local/bin:${PATH}"
 
