@@ -43,12 +43,11 @@ const PresenterApp = (): ReactNode => {
 
 /** Inner component rendered after login that connects the usePresenter hook to the PresenterPanel. */
 const PresenterAppInner = (): ReactNode => {
-  const { viewerCount, sendSlideSync, sendHandsOn, sendPollOpen } = usePresenter(wsUrl());
+  const { viewerCount, sendSlideSync, sendPollOpen } = usePresenter(wsUrl());
 
   return (
     <PresenterPanel
       sendSlideSync={sendSlideSync}
-      sendHandsOn={sendHandsOn}
       sendPollOpen={sendPollOpen}
       viewerCount={viewerCount}
     />

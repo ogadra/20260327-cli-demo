@@ -6,8 +6,6 @@ import { defaultSequence, type PresenterStep } from "./sequence";
 export interface PresenterPanelProps {
   /** Sends a slide_sync message to synchronize viewers to a given page. */
   sendSlideSync: (page: number) => void;
-  /** Sends a hands_on message with instruction and placeholder text. */
-  sendHandsOn: (instruction: string, placeholder: string) => void;
   /** Sends a poll_open message to start a poll for viewers. */
   sendPollOpen: (pollId: string, options: string[], maxChoices: number) => void;
   /** Number of currently connected viewers. */
@@ -19,8 +17,6 @@ const describeStep = (step: PresenterStep): string => {
   switch (step.type) {
     case Action.SlideSync:
       return `Slide ${step.page}`;
-    case Action.HandsOn:
-      return `Hands-on: ${step.instruction}`;
     case Action.PollOpen:
       return `Poll: ${step.pollId}`;
   }
@@ -29,7 +25,6 @@ const describeStep = (step: PresenterStep): string => {
 /** Presenter control panel that drives the presentation sequence via step navigation. */
 export const PresenterPanel = ({
   sendSlideSync,
-  sendHandsOn,
   sendPollOpen,
   viewerCount,
 }: PresenterPanelProps): ReactNode => {
@@ -44,15 +39,12 @@ export const PresenterPanel = ({
         case Action.SlideSync:
           sendSlideSync(step.page);
           break;
-        case Action.HandsOn:
-          sendHandsOn(step.instruction, step.placeholder);
-          break;
         case Action.PollOpen:
           sendPollOpen(step.pollId, step.options, step.maxChoices);
           break;
       }
     },
-    [sendSlideSync, sendHandsOn, sendPollOpen],
+    [sendSlideSync, sendPollOpen],
   );
 
   /** Navigates to a specific step index. */

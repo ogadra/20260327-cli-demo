@@ -7,8 +7,8 @@ vi.mock("./sequence", async () => {
   return {
     defaultSequence: [
       { type: Action.SlideSync, page: 0 },
-      { type: Action.HandsOn, instruction: "Run echo", placeholder: "echo hello" },
       { type: Action.SlideSync, page: 1 },
+      { type: Action.SlideSync, page: 2 },
     ],
   };
 });
@@ -16,11 +16,9 @@ vi.mock("./sequence", async () => {
 /** Creates a fresh set of props with mock send functions for each test. */
 const createProps = (): PresenterPanelProps & {
   sendSlideSync: Mock;
-  sendHandsOn: Mock;
   sendPollOpen: Mock;
 } => ({
   sendSlideSync: vi.fn(),
-  sendHandsOn: vi.fn(),
   sendPollOpen: vi.fn(),
   viewerCount: 0,
 });
@@ -64,12 +62,11 @@ describe("PresenterPanel", () => {
     expect(screen.getByRole("button", { name: "Next" }).hasAttribute("disabled")).toBe(false);
   });
 
-  /** Verify that advancing calls sendHandsOn for the hands_on step. */
-  it("advances step and calls sendHandsOn on next", async () => {
+  /** Verify that advancing calls sendSlideSync for the next step. */
+  it("advances step and calls sendSlideSync on next", async () => {
     await renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(props.sendHandsOn).toHaveBeenCalledWith("Run echo", "echo hello");
-    expect(props.sendHandsOn).toHaveBeenCalledTimes(1);
+    expect(props.sendSlideSync).toHaveBeenCalledWith(1);
     expect(screen.getByText(/Step 2 \/ 3/)).toBeTruthy();
   });
 
@@ -94,8 +91,7 @@ describe("PresenterPanel", () => {
   it("advances step on ArrowRight key", async () => {
     await renderPanel();
     fireEvent.keyDown(window, { key: "ArrowRight" });
-    expect(props.sendHandsOn).toHaveBeenCalledWith("Run echo", "echo hello");
-    expect(props.sendHandsOn).toHaveBeenCalledTimes(1);
+    expect(props.sendSlideSync).toHaveBeenCalledWith(1);
     expect(screen.getByText(/Step 2 \/ 3/)).toBeTruthy();
   });
 
@@ -134,12 +130,5 @@ describe("PresenterPanel", () => {
   it("displays step description for slide_sync step", async () => {
     await renderPanel();
     expect(screen.getByText("Slide 0")).toBeTruthy();
-  });
-
-  /** Verify that hands_on step shows the correct description. */
-  it("displays step description for hands_on step", async () => {
-    await renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByText("Hands-on: Run echo")).toBeTruthy();
   });
 });
